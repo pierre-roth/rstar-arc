@@ -1,8 +1,3 @@
-# Copyright (c) Microsoft Corporation.
-# Licensed under the MIT license.
-# Adapted from https://github.com/MARIO-Math-Reasoning/Super_MARIO
-import random
-from typing import List, Optional, Literal
 from enum import Enum, EnumMeta
 from dataclasses import dataclass, field
 
@@ -29,7 +24,7 @@ class StrEnum(Enum, metaclass=StrEnumMeta):
         return hash(str(self))
 
 
-def ChoiceEnum(choices: List[str]):
+def ChoiceEnum(choices: list[str]):
     """return the Enum class used to enforce list of choices"""
     return StrEnum("Choices", {k: k for k in choices})
 
@@ -53,21 +48,22 @@ class BaseConfig:
     mode: SEARCH_CHOICES = field(
         default="mcts", metadata={"help": "search mode for inference"}
     )
-    model_dir: Optional[str] = field(
+    model_dir: str | None = field(
         default=None, metadata={"help": "llm model dir"}
     )
-    reward_model_dir: Optional[str] = field(
+    reward_model_dir: str | None = field(
         default=None, metadata={"help": "reward model dir"}
     )
-    few_shot_path: Optional[str] = field(
+    few_shot_path: str | None = field(
         default=None, metadata={"help": "few shot data json"}
     )
-    prompt_path: Optional[str] = field(
+    prompt_path: str | None = field(
         default=None, metadata={"help": "prompt config json"}
     )
     num_few_shot: int = field(
         default=0, metadata={"help": "the number of few-shot examples"}
     )
+
     # prompt args
     prompt_wrap: PROMPT_CHOICES = field(
         default="rstar", metadata={"help": "prompt wrap type"}
@@ -78,6 +74,7 @@ class BaseConfig:
     step_delim: str = field(
         default="\n", metadata={"help": "delimiter between two steps"}
     )
+
     # vllm args
     temperature: float = field(
         default=0.7, metadata={"help": "control diversity of llm generation"}
@@ -97,19 +94,20 @@ class BaseConfig:
     max_tokens: int = field(
         default=2048, metadata={"help": "Maximum number of tokens to generate per output sequence."}
     )
+
     # seed: Optional[int] = field(
     #     default=random.randint(1, 100000), metadata={"help": "seed of llm generation for reproducible"}
     # )
-    seed: Optional[int] = field(
+    seed: int | None = field(
         default=None, metadata={"help": "seed of llm generation for reproducible"}
     )
-    swap_space: Optional[int] = field(
+    swap_space: int | None = field(
         default=8, metadata={"help": "swap space for vllm"}
     )
     n_generate_sample: int = field(
         default=1, metadata={"help": "how many samples generated for each step. B2 in paper."}
     )
-    stop: Optional[List[str]] = field(
+    stop: list[str] | None = field(
         default=None, metadata={"help": "possible stop tokens for each step"}
     )
     step_beam_width: int = field(
@@ -142,10 +140,12 @@ class BaseConfig:
     is_sampling: bool = field(
         default=False, metadata={"help": "solution generation in mcts"}
     )
+
     # offline inferene args
     prune: bool = field(
         default=False, metadata={"help": "prune the tree in a complete mcts tree"}
     )
+
     # other args
     batch_size: int = field(
         default=-1, metadata={"help": "batch size for batch inference"}

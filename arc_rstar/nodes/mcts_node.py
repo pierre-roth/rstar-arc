@@ -1,15 +1,14 @@
-import numpy as np
-from typing import Optional, Dict, Any, List, Type
-from pydantic import BaseModel, PrivateAttr, field_validator
 from .base_node import BaseNode
+import numpy as np
 
 
 class MCTSNode(BaseNode):
-    c_puct: float = 2
-    inited: bool = False
-
-    __visit_count: int = PrivateAttr(default=0)
-    __value_sum: float = PrivateAttr(default=0)
+    def __init__(self):
+        super().__init__()
+        self.c_puct = 2
+        self.inited = False
+        self.__visit_count = 0
+        self.__value_sum = 0
 
     def q_value(self) -> float:
         if self.__visit_count == 0:
@@ -29,7 +28,7 @@ class MCTSNode(BaseNode):
         self.__visit_count += 1
         self.__value_sum += value
 
-    def update_recursive(self, value: float, start_node: Type[BaseNode]) -> None:
+    def update_recursive(self, value: float, start_node: BaseNode) -> None:
         if isinstance(value, list):
             value = float(value[0])
         self.update(value)
@@ -46,4 +45,3 @@ class MCTSNode(BaseNode):
         else:
             u_value = self.c_puct * np.sqrt(np.log(self.parent.visit_count()) / (self.visit_count()))
         return q_value + u_value
-
