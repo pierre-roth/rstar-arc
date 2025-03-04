@@ -13,7 +13,7 @@ TIME_LIMIT="" # No time limit by default
 VERSION=1  # Default to mark1.py
 TASK_INDEX=1
 MAX_ITERATIONS=5
-MODEL="Qwen/Qwen2.5-Coder-1.5B-Instruct"
+MODEL="Qwen/Qwen2.5-Coder-7B-Instruct"
 EVAL=false
 HINT=""
 VERBOSE=true
@@ -104,7 +104,7 @@ cat > "${TEMP_SCRIPT}" << EOL
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=${CPUS}
 #SBATCH --gres=gpu:${GPUS}
-#SBATCH --constraint='rtx_3090|a100_80gb|rtx_a6000'
+#SBATCH --constraint='rtx_3090'
 EOL
 
 # Add optional SBATCH parameters if provided
