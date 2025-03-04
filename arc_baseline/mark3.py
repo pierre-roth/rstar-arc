@@ -10,7 +10,7 @@ import numpy as np
 import warnings
 from typing import List, Dict, Tuple, Optional, Any, Union
 from dataclasses import dataclass
-from vllm import LLM
+from vllm import LLM, SamplingParams
 
 # Suppress PyTorch/TF warnings that aren't helpful
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -184,7 +184,10 @@ class CodeGenerator:
 
         try:
             # Generate code using the LLM
-            outputs = self.llm.generate(prompts=[prompt])
+            # Find this line:
+
+            params = SamplingParams(max_tokens=2048, temperature=0.15)
+            outputs = self.llm.generate(prompt, params)
             full_response = outputs[0].outputs[0].text
 
             if not full_response:
@@ -192,6 +195,7 @@ class CodeGenerator:
 
             self.log(f"\nFull output received")
             self.log(full_response)
+            self.log("\n\n")
 
             # Clean the generated code
             code = self._clean_generated_code(full_response)
