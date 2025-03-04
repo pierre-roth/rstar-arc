@@ -298,7 +298,7 @@ def generate_solution_code(task, args, iteration=0, past=None):
             dtype=args.dtype
         )
 
-        outputs = llm.generate(prompts=[prompt], stop_sequences=["```"])
+        outputs = llm.generate(prompts=[prompt])
         full_response = outputs[0].outputs[0].text
 
         if not full_response:
@@ -307,7 +307,8 @@ def generate_solution_code(task, args, iteration=0, past=None):
         log(f"\nFull output received", args.verbose)
 
         # Add the closing code block marker if it's missing
-        if not full_response.strip().endswith("```"):
+        # This ensures we capture complete code blocks even if the LLM doesn't finish them
+        if "```python" in full_response and not full_response.strip().endswith("```"):
             full_response += "\n```"
 
         # Clean the generated code
