@@ -8,7 +8,7 @@ import numpy as np
 from vllm import LLM
 
 # Simple configuration
-DEFAULT_MODEL = "Qwen/Qwen2.5-Coder-1.5B-Instruct"
+DEFAULT_MODEL = "Qwen/Qwen2.5-Coder-7B-Instruct"
 OUTPUT_BASE_PATH = "/itet-stor/piroth/net_scratch/outputs"
 MODEL_BASE_PATH = "/itet-stor/piroth/net_scratch/models"
 DATA_BASE_PATH = "/itet-stor/piroth/net_scratch/data"
