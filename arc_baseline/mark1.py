@@ -1,11 +1,5 @@
 import sys
 import os
-
-current_dir = os.path.dirname(os.path.abspath(__file__))
-parent_dir = os.path.dirname(current_dir)
-sys.path.append(parent_dir)
-
-from global_config import *
 from vllm import LLM
 
 import re
@@ -19,6 +13,17 @@ import warnings
 # Suppress PyTorch/TF warnings that aren't helpful
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=FutureWarning)
+
+
+OUTPUT_BASE_PATH = "/itet-stor/piroth/net_scratch/outputs"
+MODEL_BASE_PATH = "/itet-stor/piroth/net_scratch/models"
+DATA_BASE_PATH = "/itet-stor/piroth/net_scratch/data"
+DATA_SAMPLE_BASE_PATH = "/itet-stor/piroth/net_scratch/rstar-arc/data_sample"
+
+DEFAULT_POLICY_LLM = "Qwen/Qwen2.5-Coder-1.5B-Instruct"
+DEFAULT_PP_LLM = "Qwen/Qwen2.5-Coder-1.5B-Instruct"
+
+DEFAULT_VERBOSE = True
 
 DEFAULT_MAX_ITERATIONS = 3
 
