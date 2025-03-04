@@ -191,6 +191,7 @@ class CodeGenerator:
                 raise ValueError("No code output received from LLM.")
 
             self.log(f"\nFull output received")
+            self.log(full_response)
 
             # Clean the generated code
             code = self._clean_generated_code(full_response)
@@ -262,7 +263,6 @@ class CodeGenerator:
             "</code>\n\n"
 
             "## Your Solution (must be enclosed in <code></code> tags):\n\n"
-            "<code>"
         )
 
         return prompt
