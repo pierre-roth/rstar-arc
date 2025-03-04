@@ -10,6 +10,7 @@ NODE_LIST=""  # No specific nodes by default
 TIME_LIMIT="" # No time limit by default
 
 # Default application parameters
+VERSION=1
 TASK_INDEX=1
 MAX_ITERATIONS=5
 MODEL="Qwen/Qwen2.5-Coder-1.5B-Instruct"
@@ -21,6 +22,10 @@ DTYPE="float16"  # Default to float16 which works on older GPUs like TITAN RTX
 # Parse named command line arguments
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --version=*)
+      VERSION="${1#*=}"
+      shift
+      ;;
     --mem=*)
       MEM="${1#*=}"
       shift
@@ -99,6 +104,7 @@ cat > "${TEMP_SCRIPT}" << EOL
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=${CPUS}
 #SBATCH --gres=gpu:${GPUS}
+#SBATCH --constraint='geforce_rtx_3090'
 EOL
 
 # Add optional SBATCH parameters if provided
@@ -163,7 +169,7 @@ conda activate \${CONDA_ENV}
 echo "Conda environment activated"
 
 # Build command with all parameters
-CMD="python \${PROJECT_DIR}/arc_baseline/mark1.py --task-index=${TASK_INDEX} --max-iterations=${MAX_ITERATIONS} --output-dir=\${OUTPUT_DIR} --model='${MODEL}' --gpus=${GPUS} --dtype=${DTYPE}"
+CMD="python \${PROJECT_DIR}/arc_baseline/mark\${VERSION}.py --task-index=${TASK_INDEX} --max-iterations=${MAX_ITERATIONS} --output-dir=\${OUTPUT_DIR} --model='${MODEL}' --gpus=${GPUS} --dtype=${DTYPE}"
 
 # Add optional parameters
 if [ ! -z "${HINT}" ]; then
