@@ -3,12 +3,12 @@ import numpy as np
 
 
 class MCTSNode(BaseNode):
-    def __init__(self):
+    def __init__(self, c_puct=2, inited=False, visit_count=0, value_sum=0):
         super().__init__()
-        self.c_puct = 2
+        self.c_puct = c_puct
         self.inited = False
-        self.__visit_count = 0
-        self.__value_sum = 0
+        self.__visit_count = visit_count
+        self.__value_sum = value_sum
 
     def q_value(self) -> float:
         if self.__visit_count == 0:
@@ -45,3 +45,4 @@ class MCTSNode(BaseNode):
         else:
             u_value = self.c_puct * np.sqrt(np.log(self.parent.visit_count()) / (self.visit_count()))
         return q_value + u_value
+

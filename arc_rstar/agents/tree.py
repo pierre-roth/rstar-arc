@@ -40,3 +40,12 @@ class BaseTree:
             if node.has_children():
                 candidates.extend(node.children)
         return states
+
+
+def code_execution():
+    pass
+
+
+def code_run():
+    pass
+
