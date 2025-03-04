@@ -196,7 +196,9 @@ def create_prompt(task, past_results=None, hint=""):
         "## Instructions\n"
         "1. Write a Python function `solve(grid)` that takes a 2D grid of integers and returns the transformed grid\n"
         "2. The function should implement the transformation demonstrated in the examples\n"
-        "3. Return just the Python code - no explanations\n\n"
+        "3. Don't forget to close the python code block\n"
+        "4. Return just the Python code - no explanations except as a python comment\n\n"
+        
         "```python\n"
     )
 
@@ -291,3 +293,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
