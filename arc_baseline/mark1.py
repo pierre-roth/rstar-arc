@@ -46,6 +46,8 @@ def parse_args():
                         help='Number of GPUs to use for the LLM')
     parser.add_argument('--output-dir', type=str, default=os.path.join(OUTPUT_BASE_PATH, "arc_results"),
                         help='Directory to store any output files')
+    parser.add_argument('--dtype', type=str, default='float16',
+                        help='Data type for model (float16, bfloat16) - use float16 for older GPUs')
     return parser.parse_args()
 
 
@@ -261,7 +263,8 @@ def generate_solution_code(task, args, iteration=0, past=None):
         llm = LLM(
             model=args.model,
             download_dir=os.path.join(MODEL_BASE_PATH, "policy"),
-            tensor_parallel_size=args.gpus
+            tensor_parallel_size=args.gpus,
+            dtype=args.dtype  # Add this parameter
         )
 
         outputs = llm.generate(prompts=[prompt])

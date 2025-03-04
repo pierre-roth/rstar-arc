@@ -16,6 +16,7 @@ MODEL="Qwen/Qwen2.5-Coder-1.5B-Instruct"
 EVAL=false
 HINT=""
 VERBOSE=true
+DTYPE="float16"  # Default to float16 which works on older GPUs like TITAN RTX
 
 # Parse named command line arguments
 while [[ $# -gt 0 ]]; do
@@ -64,6 +65,10 @@ while [[ $# -gt 0 ]]; do
       HINT="${1#*=}"
       shift
       ;;
+    --dtype=*)
+      DTYPE="${1#*=}"
+      shift
+      ;;
     --eval)
       EVAL=true
       shift
@@ -76,7 +81,8 @@ while [[ $# -gt 0 ]]; do
       echo "Unknown parameter: $1"
       echo "Usage: sbatch $0 [--mem=20G] [--cpus=4] [--gpus=1] [--partition=partition_name]"
       echo "  [--exclude=node1,node2] [--nodelist=node1,node2] [--time=HH:MM:SS]"
-      echo "  [--task=1] [--iter=5] [--model=Qwen/Qwen2.5-Coder-1.5B-Instruct] [--hint=\"your hint\"] [--eval] [--verbose]"
+      echo "  [--task=1] [--iter=5] [--model=Qwen/Qwen2.5-Coder-1.5B-Instruct] [--hint=\"your hint\"] "
+      echo "  [--eval] [--verbose] [--dtype=float16]"
       exit 1
       ;;
   esac
@@ -148,6 +154,7 @@ echo "Task Index: ${TASK_INDEX}"
 echo "Max Iterations: ${MAX_ITERATIONS}"
 echo "Output Directory: \${OUTPUT_DIR}"
 echo "LLM Model: ${MODEL}"
+echo "Model dtype: ${DTYPE}"
 if [[ ! -z "${HINT}" ]]; then echo "Hint: ${HINT}"; fi
 
 # Activate conda
@@ -156,7 +163,7 @@ conda activate \${CONDA_ENV}
 echo "Conda environment activated"
 
 # Build command with all parameters
-CMD="python \${PROJECT_DIR}/arc_baseline/mark1.py --task-index=${TASK_INDEX} --max-iterations=${MAX_ITERATIONS} --output-dir=\${OUTPUT_DIR} --model='${MODEL}' --gpus=${GPUS}"
+CMD="python \${PROJECT_DIR}/mark1.py --task-index=${TASK_INDEX} --max-iterations=${MAX_ITERATIONS} --output-dir=\${OUTPUT_DIR} --model='${MODEL}' --gpus=${GPUS} --dtype=${DTYPE}"
 
 # Add optional parameters
 if [ ! -z "${HINT}" ]; then
