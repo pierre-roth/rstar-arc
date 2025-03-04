@@ -3,9 +3,9 @@
 # Default SLURM resource values
 MEM="20G"
 CPUS=4
-GPUS=1
+GPUS=2
 PARTITION=""  # Default partition (empty means use the default)
-EXCLUDE="tikgpu10,tikgpu08"    # No nodes excluded by default
+EXCLUDE="tikgpu08,tikgpu10"  # Exclude these nodes by default
 NODE_LIST=""  # No specific nodes by default
 TIME_LIMIT="" # No time limit by default
 
@@ -104,6 +104,7 @@ cat > "${TEMP_SCRIPT}" << EOL
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=${CPUS}
 #SBATCH --gres=gpu:${GPUS}
+#SBATCH --constraint='geforce_rtx_3090'
 EOL
 
 # Add optional SBATCH parameters if provided
