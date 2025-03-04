@@ -163,7 +163,7 @@ conda activate \${CONDA_ENV}
 echo "Conda environment activated"
 
 # Build command with all parameters
-CMD="python \${PROJECT_DIR}/mark1.py --task-index=${TASK_INDEX} --max-iterations=${MAX_ITERATIONS} --output-dir=\${OUTPUT_DIR} --model='${MODEL}' --gpus=${GPUS} --dtype=${DTYPE}"
+CMD="python \${PROJECT_DIR}/arc_baseline/mark1.py --task-index=${TASK_INDEX} --max-iterations=${MAX_ITERATIONS} --output-dir=\${OUTPUT_DIR} --model='${MODEL}' --gpus=${GPUS} --dtype=${DTYPE}"
 
 # Add optional parameters
 if [ ! -z "${HINT}" ]; then
