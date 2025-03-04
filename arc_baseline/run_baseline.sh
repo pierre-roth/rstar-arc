@@ -1,11 +1,11 @@
 #!/bin/bash
 
 # Default SLURM resource values
-MEM="20G"
-CPUS=4
+MEM="128G"
+CPUS=16
 GPUS=1
 PARTITION=""  # Default partition (empty means use the default)
-EXCLUDE="tikgpu08,tikgpu10"  # Exclude these nodes by default
+EXCLUDE=""  # Exclude these nodes by default
 NODE_LIST=""  # No specific nodes by default
 TIME_LIMIT="" # No time limit by default
 
@@ -13,7 +13,7 @@ TIME_LIMIT="" # No time limit by default
 VERSION=1  # Default to mark1.py
 TASK_INDEX=1
 MAX_ITERATIONS=5
-MODEL="Qwen/Qwen2.5-Coder-7B-Instruct"
+MODEL="Qwen/Qwen2.5-Coder-32B-Instruct"
 EVAL=false
 HINT=""
 VERBOSE=true
@@ -104,8 +104,10 @@ cat > "${TEMP_SCRIPT}" << EOL
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=${CPUS}
 #SBATCH --gres=gpu:${GPUS}
-#SBATCH --constraint='geforce_rtx_3090'
+#SBATCH --constraint='a100'
 EOL
+
+# GPU names: geforce_rtx_3090,rtx_a6000, a100
 
 # Add optional SBATCH parameters if provided
 if [[ ! -z "${PARTITION}" ]]; then
