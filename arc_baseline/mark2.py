@@ -14,6 +14,7 @@ MODEL_BASE_PATH = "/itet-stor/piroth/net_scratch/models"
 DATA_BASE_PATH = "/itet-stor/piroth/net_scratch/data"
 DATA_SAMPLE_BASE_PATH = "/itet-stor/piroth/net_scratch/rstar-arc/data_sample"
 
+DEFAULT_VERBOSE = True
 DEFAULT_MAX_ITERATIONS = 3
 
 
@@ -28,6 +29,7 @@ def parse_args():
     parser.add_argument('--hint', type=str, default='', help='Hint for the LLM')
     parser.add_argument('--output-dir', type=str, default=os.path.join(OUTPUT_BASE_PATH, "arc_results"), help='Directory to store any output files')
     parser.add_argument('--dtype', type=str, default='float16', help='Data type for model')
+    parser.add_argument('--verbose', action='store_true', default=DEFAULT_VERBOSE, help=f'Print detailed progress information (default: {DEFAULT_VERBOSE})')
     return parser.parse_args()
 
 
