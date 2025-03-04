@@ -17,7 +17,7 @@ MODEL="Qwen/Qwen2.5-Coder-1.5B-Instruct"
 EVAL=false
 HINT=""
 VERBOSE=true
-DTYPE="bfloat16" # set to float16 if not specifying 3090 or newer
+DTYPE="float16" # bfloat16 only supported in compute 8.0 and above
 
 # Parse named command line arguments
 while [[ $# -gt 0 ]]; do
