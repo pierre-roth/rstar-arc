@@ -10,14 +10,14 @@ NODE_LIST=""  # No specific nodes by default
 TIME_LIMIT="" # No time limit by default
 
 # Default application parameters
-VERSION=1
+VERSION=1  # Default to mark1.py
 TASK_INDEX=1
 MAX_ITERATIONS=5
 MODEL="Qwen/Qwen2.5-Coder-1.5B-Instruct"
 EVAL=false
 HINT=""
 VERBOSE=true
-DTYPE="float16"  # Default to float16 which works on older GPUs like TITAN RTX
+DTYPE="bfloat16" # set to float16 if not specifying 3090 or newer
 
 # Parse named command line arguments
 while [[ $# -gt 0 ]]; do
@@ -75,7 +75,7 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     --eval)
-      EVAL=true
+      EVAL=true  # Corrected: Set to true when flag is present
       shift
       ;;
     --verbose)
@@ -84,7 +84,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     *)
       echo "Unknown parameter: $1"
-      echo "Usage: sbatch $0 [--mem=20G] [--cpus=4] [--gpus=1] [--partition=partition_name]"
+      echo "Usage: $0 [--version=1] [--mem=20G] [--cpus=4] [--gpus=1] [--partition=partition_name]"
       echo "  [--exclude=node1,node2] [--nodelist=node1,node2] [--time=HH:MM:SS]"
       echo "  [--task=1] [--iter=5] [--model=Qwen/Qwen2.5-Coder-1.5B-Instruct] [--hint=\"your hint\"] "
       echo "  [--eval] [--verbose] [--dtype=float16]"
@@ -104,7 +104,6 @@ cat > "${TEMP_SCRIPT}" << EOL
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=${CPUS}
 #SBATCH --gres=gpu:${GPUS}
-#SBATCH --constraint='geforce_rtx_3090'
 EOL
 
 # Add optional SBATCH parameters if provided
@@ -156,6 +155,7 @@ if [[ ! -z "${NODE_LIST}" ]]; then echo "Node list: ${NODE_LIST}"; fi
 if [[ ! -z "${TIME_LIMIT}" ]]; then echo "Time limit: ${TIME_LIMIT}"; fi
 echo ""
 echo "===== Application Parameters ====="
+echo "Version: mark${VERSION}.py"
 echo "Task Index: ${TASK_INDEX}"
 echo "Max Iterations: ${MAX_ITERATIONS}"
 echo "Output Directory: \${OUTPUT_DIR}"
@@ -169,7 +169,7 @@ conda activate \${CONDA_ENV}
 echo "Conda environment activated"
 
 # Build command with all parameters
-CMD="python \${PROJECT_DIR}/arc_baseline/mark\${VERSION}.py --task-index=${TASK_INDEX} --max-iterations=${MAX_ITERATIONS} --output-dir=\${OUTPUT_DIR} --model='${MODEL}' --gpus=${GPUS} --dtype=${DTYPE}"
+CMD="python \${PROJECT_DIR}/arc_baseline/mark${VERSION}.py --task-index=${TASK_INDEX} --max-iterations=${MAX_ITERATIONS} --output-dir=\${OUTPUT_DIR} --model='${MODEL}' --gpus=${GPUS} --dtype=${DTYPE}"
 
 # Add optional parameters
 if [ ! -z "${HINT}" ]; then
