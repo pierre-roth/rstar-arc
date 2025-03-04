@@ -104,7 +104,7 @@ cat > "${TEMP_SCRIPT}" << EOL
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=${CPUS}
 #SBATCH --gres=gpu:${GPUS}
-#SBATCH --constraint='geforce_rtx_3090|rtx_a6000'
+#SBATCH --constraint='geforce_rtx_3090'
 EOL
 
 # Add optional SBATCH parameters if provided
