@@ -17,7 +17,7 @@ MODEL="Qwen/Qwen2.5-Coder-1.5B-Instruct"
 EVAL=false
 HINT=""
 VERBOSE=true
-DTYPE="float16" # bfloat16 only supported in compute 8.0 and above otherwise use float16
+DTYPE="bfloat16" # bfloat16 only supported in compute 8.0 and above otherwise use float16
 
 # Parse named command line arguments
 while [[ $# -gt 0 ]]; do
@@ -104,7 +104,7 @@ cat > "${TEMP_SCRIPT}" << EOL
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=${CPUS}
 #SBATCH --gres=gpu:${GPUS}
-
+#SBATCH --constraint='rtx_3090|a100_80gb|rtx_a6000'
 EOL
 
 # Add optional SBATCH parameters if provided
