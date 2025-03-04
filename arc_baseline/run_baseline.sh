@@ -3,7 +3,7 @@
 # Default SLURM resource values
 MEM="128G"
 CPUS=16
-GPUS=1
+GPUS=2
 PARTITION=""  # Default partition (empty means use the default)
 EXCLUDE=""  # Exclude these nodes by default
 NODE_LIST=""  # No specific nodes by default
