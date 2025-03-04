@@ -17,8 +17,8 @@ import numpy as np
 import warnings
 
 # Suppress PyTorch/TF warnings that aren't helpful
-# warnings.filterwarnings("ignore", category=UserWarning)
-# warnings.filterwarnings("ignore", category=FutureWarning)
+warnings.filterwarnings("ignore", category=UserWarning)
+warnings.filterwarnings("ignore", category=FutureWarning)
 
 DEFAULT_MAX_ITERATIONS = 3
 
@@ -98,42 +98,47 @@ def load_arc_task(file_path, verbose=DEFAULT_VERBOSE):
 
 def clean_generated_code(text):
     """Extracts Python code from the model's output, handling various formats."""
-    # First, try to extract a Python code block
-    code_block_pattern = r"```python(.*?)```"
+    # First, check if the text is empty or None
+    if not text:
+        return ""
+
+    # Remove any invalid characters that might cause syntax errors
+    # This includes emojis and other special characters
+    text = re.sub(r'[^\x00-\x7F]+', '', text)
+
+    # Try to extract a Python code block
+    code_block_pattern = r"```(?:python)?(.*?)```"
     code_blocks = re.findall(code_block_pattern, text, flags=re.DOTALL)
+
     if code_blocks:
         # Return the longest code block
         code = max(code_blocks, key=len).strip()
-        # Ensure the code has a solve function
-        if not re.search(r'def\s+solve\s*\(', code):
-            # Add a wrapper solve function if needed
-            code = _add_solve_function_wrapper(code)
-        return code
+    else:
+        # If no code block is found, just try to clean up the text
+        code = text.strip()
 
-    # If no code block is found, just try to clean up the text
-    cleaned = text.strip()
-
-    # Remove markdown-style code block markers without language
-    cleaned = re.sub(r"```\s*\n", "", cleaned)
-    cleaned = re.sub(r"\n\s*```", "", cleaned)
+        # Remove markdown-style code block markers without language
+        code = re.sub(r"```\s*\n", "", code)
+        code = re.sub(r"\n\s*```", "", code)
 
     # Ensure the code has a solve function
-    if not re.search(r'def\s+solve\s*\(', cleaned):
-        cleaned = _add_solve_function_wrapper(cleaned)
+    if not re.search(r'def\s+solve\s*\(', code):
+        # Add a wrapper solve function if needed
+        code = _add_solve_function_wrapper(code)
 
     # Remove any JSON imports that might cause confusion
-    if 'import json' in cleaned and 'from' not in cleaned:
-        cleaned = re.sub(r'import\s+json\s*', '', cleaned)
+    if 'import json' in code and 'from' not in code:
+        code = re.sub(r'import\s+json\s*', '', code)
 
     # Fix common issues with JSON handling
-    if 'json.loads(sys.stdin)' in cleaned:
-        cleaned = cleaned.replace('json.loads(sys.stdin)', 'json.loads(sys.stdin.read())')
+    if 'json.loads(sys.stdin)' in code:
+        code = code.replace('json.loads(sys.stdin)', 'json.loads(sys.stdin.read())')
 
     # Ensure the code has necessary imports
-    if 'sys' in cleaned and 'import sys' not in cleaned:
-        cleaned = f"import sys\n{cleaned}"
+    if 'sys' in code and 'import sys' not in code:
+        code = f"import sys\n{code}"
 
-    return cleaned
+    return code
 
 
 def _add_solve_function_wrapper(code):
@@ -227,7 +232,7 @@ def generate_solution_code(task, args, iteration=0, past=None):
     # Generate task analysis to help the model
     task_with_analysis = analyze_task(task)
 
-    # Base prompt
+    # Base prompt with clear example
     prompt = (
         "# ARC Challenge Task\n\n"
         "You are given examples of input and output grids from the Abstraction and Reasoning Corpus (ARC). "
@@ -245,15 +250,41 @@ def generate_solution_code(task, args, iteration=0, past=None):
     if hint:
         prompt += f"## Hint\n{hint}\n\n"
 
-    # Final instructions
+    # Final instructions with clear example
     prompt += (
         "## Instructions\n"
-        "1. Write a Python function that implements the transformation rule\n"
-        "2. Your solution should implement a function 'def solve(grid:list[list[int]]) -> list[list[int]]'\n"
+        "1. Write a Python function called 'solve' that takes a grid (2D list of integers) and returns the transformed grid\n"
+        "2. Your solution must implement the function: def solve(grid: list[list[int]]) -> list[list[int]]\n"
         "3. Focus on identifying patterns like: rotations, reflections, translations, color changes, etc.\n"
         "4. Make your code robust to handle different grid sizes if appropriate\n"
-        "5. Provide ONLY executable Python code with no explanations (I will run your code directly)\n\n"
-        "## Solution (Python)"
+        "5. DO NOT use emojis, special characters, or any non-ASCII characters in your code\n"
+        "6. DO NOT try to handle JSON directly - the input/output is already handled by the framework\n"
+        "7. Return ONLY executable Python code with no explanations\n\n"
+
+        "## Example of Correct Solution Format:\n\n"
+        "```python\n"
+        "def solve(grid):\n"
+        "    # Create a new grid that is 3x the size in both dimensions\n"
+        "    height = len(grid)\n"
+        "    width = len(grid[0])\n"
+        "    \n"
+        "    # Initialize the new grid with zeros\n"
+        "    new_height = height * 3\n"
+        "    new_width = width * 3\n"
+        "    new_grid = [[0 for _ in range(new_width)] for _ in range(new_height)]\n"
+        "    \n"
+        "    # Copy the pattern to each of the 9 sub-grids\n"
+        "    for i in range(height):\n"
+        "        for j in range(width):\n"
+        "            for di in range(3):\n"
+        "                for dj in range(3):\n"
+        "                    new_grid[i + height*di][j + width*dj] = grid[i][j]\n"
+        "    \n"
+        "    return new_grid\n"
+        "```\n\n"
+
+        "## Your Solution:\n\n"
+        "```python"
     )
 
     log(f"Sending prompt to LLM: {args.model}", args.verbose)
@@ -264,16 +295,20 @@ def generate_solution_code(task, args, iteration=0, past=None):
             model=args.model,
             download_dir=os.path.join(MODEL_BASE_PATH, "policy"),
             tensor_parallel_size=args.gpus,
-            dtype=args.dtype  # Add this parameter
+            dtype=args.dtype
         )
 
-        outputs = llm.generate(prompts=[prompt])
+        outputs = llm.generate(prompts=[prompt], stop_sequences=["```"])
         full_response = outputs[0].outputs[0].text
 
         if not full_response:
             raise ValueError("No code output received from LLM.")
 
         log(f"\nFull output received", args.verbose)
+
+        # Add the closing code block marker if it's missing
+        if not full_response.strip().endswith("```"):
+            full_response += "\n```"
 
         # Clean the generated code
         code = clean_generated_code(full_response)
