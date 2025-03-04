@@ -13,11 +13,11 @@ TIME_LIMIT="" # No time limit by default
 VERSION=1  # Default to mark1.py
 TASK_INDEX=1
 MAX_ITERATIONS=5
-MODEL="Qwen/Qwen2.5-Coder-1.5B-Instruct"
+MODEL="Qwen/Qwen2.5-Coder-7B-Instruct"
 EVAL=false
 HINT=""
 VERBOSE=true
-DTYPE="float16" # bfloat16 only supported in compute 8.0 and above otherwise use float16
+DTYPE="bfloat16" # bfloat16 only supported in compute 8.0 and above otherwise use float16
 
 # Parse named command line arguments
 while [[ $# -gt 0 ]]; do
@@ -104,7 +104,7 @@ cat > "${TEMP_SCRIPT}" << EOL
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=${CPUS}
 #SBATCH --gres=gpu:${GPUS}
-#CommentSBATCH --constraint='geforce_rtx_3090|rtx_a6000'
+#SBATCH --constraint='geforce_rtx_3090|rtx_a6000'
 EOL
 
 # Add optional SBATCH parameters if provided
@@ -203,3 +203,4 @@ sbatch "${TEMP_SCRIPT}"
 
 # Remove the temporary script
 rm "${TEMP_SCRIPT}"
+
