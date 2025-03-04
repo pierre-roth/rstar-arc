@@ -244,6 +244,7 @@ def main():
     print(f"Loading LLM: {args.model}")
     llm = LLM(
         model=args.model,
+        download_dir=os.path.join(MODEL_BASE_PATH, "policy"),
         tensor_parallel_size=args.gpus,
         dtype=args.dtype
     )
