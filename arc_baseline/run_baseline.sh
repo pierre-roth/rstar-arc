@@ -3,7 +3,7 @@
 # Default SLURM resource values
 MEM="20G"
 CPUS=4
-GPUS=2
+GPUS=1
 PARTITION=""  # Default partition (empty means use the default)
 EXCLUDE="tikgpu08,tikgpu10"  # Exclude these nodes by default
 NODE_LIST=""  # No specific nodes by default
@@ -13,11 +13,11 @@ TIME_LIMIT="" # No time limit by default
 VERSION=1  # Default to mark1.py
 TASK_INDEX=1
 MAX_ITERATIONS=5
-MODEL="Qwen/Qwen2.5-Coder-7B-Instruct"
+MODEL="Qwen/Qwen2.5-Coder-1.5B-Instruct"
 EVAL=false
 HINT=""
 VERBOSE=true
-DTYPE="bfloat16" # bfloat16 only supported in compute 8.0 and above otherwise use float16
+DTYPE="float16" # bfloat16 only supported in compute 8.0 and above otherwise use float16
 
 # Parse named command line arguments
 while [[ $# -gt 0 ]]; do
@@ -104,7 +104,7 @@ cat > "${TEMP_SCRIPT}" << EOL
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=${CPUS}
 #SBATCH --gres=gpu:${GPUS}
-#SBATCH --constraint='geforce_rtx_3090|rtx_a6000'
+#CommentSBATCH --constraint='geforce_rtx_3090|rtx_a6000'
 EOL
 
 # Add optional SBATCH parameters if provided
