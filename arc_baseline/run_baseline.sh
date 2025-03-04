@@ -5,15 +5,17 @@ MEM="20G"
 CPUS=4
 GPUS=1
 PARTITION=""  # Default partition (empty means use the default)
-EXCLUDE=""    # No nodes excluded by default
+EXCLUDE="tikgpu10,tikgpu08"    # No nodes excluded by default
 NODE_LIST=""  # No specific nodes by default
 TIME_LIMIT="" # No time limit by default
 
 # Default application parameters
 TASK_INDEX=1
 MAX_ITERATIONS=5
-LLM_MODEL="qwen2.5-coder:7b"
+MODEL="Qwen/Qwen2.5-Coder-1.5B-Instruct"
+EVAL=false
 HINT=""
+VERBOSE=true
 
 # Parse named command line arguments
 while [[ $# -gt 0 ]]; do
@@ -54,23 +56,27 @@ while [[ $# -gt 0 ]]; do
       MAX_ITERATIONS="${1#*=}"
       shift
       ;;
-    --output=*)
-      OUTPUT_SUFFIX="${1#*=}"
-      shift
-      ;;
     --model=*)
-      LLM_MODEL="${1#*=}"
+      MODEL="${1#*=}"
       shift
       ;;
     --hint=*)
       HINT="${1#*=}"
       shift
       ;;
+    --eval)
+      EVAL=true
+      shift
+      ;;
+    --verbose)
+      VERBOSE=true
+      shift
+      ;;
     *)
       echo "Unknown parameter: $1"
       echo "Usage: sbatch $0 [--mem=20G] [--cpus=4] [--gpus=1] [--partition=partition_name]"
       echo "  [--exclude=node1,node2] [--nodelist=node1,node2] [--time=HH:MM:SS]"
-      echo "  [--task=1] [--iter=5] [--output=task1] [--model=qwen2.5-coder:7b] [--hint=\"your hint\"]"
+      echo "  [--task=1] [--iter=5] [--model=Qwen/Qwen2.5-Coder-1.5B-Instruct] [--hint=\"your hint\"] [--eval] [--verbose]"
       exit 1
       ;;
   esac
@@ -81,8 +87,8 @@ TEMP_SCRIPT=$(mktemp)
 cat > "${TEMP_SCRIPT}" << EOL
 #!/bin/bash
 #SBATCH --mail-type=NONE
-#SBATCH --output=/itet-stor/${USER}/net_scratch/cluster/jobs/%j.out
-#SBATCH --error=/itet-stor/${USER}/net_scratch/cluster/jobs/%j.err
+#SBATCH --output=/itet-stor/${USER}/net_scratch/outputs/jobs/%j.out
+#SBATCH --error=/itet-stor/${USER}/net_scratch/outputs/jobs/%j.err
 #SBATCH --mem=${MEM}
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=${CPUS}
@@ -111,19 +117,15 @@ cat >> "${TEMP_SCRIPT}" << EOL
 
 # Set environment variables
 ETH_USERNAME=${USER}
-PROJECT_DIR=/itet-stor/\${ETH_USERNAME}/net_scratch/arc_solver
+PROJECT_DIR=/itet-stor/\${ETH_USERNAME}/net_scratch/rstar-arc
 CONDA_ENV=arc-solver
-OLLAMA_DIR=/itet-stor/\${ETH_USERNAME}/net_scratch/bin
-OLLAMA_MODELS_PATH=/itet-stor/\${ETH_USERNAME}/net_scratch/ollama_models
-OUTPUT_DIR=\${PROJECT_DIR}/results
-
-# Create required directories
-mkdir -p \${PROJECT_DIR}/jobs
-mkdir -p \${OLLAMA_MODELS_PATH}
-mkdir -p \${OUTPUT_DIR}
+OUTPUT_DIR=/itet-stor/\${ETH_USERNAME}/net_scratch/outputs
 
 # Exit on errors
 set -o errexit
+
+# Create jobs directory if it doesn't exist
+mkdir -p /itet-stor/\${ETH_USERNAME}/net_scratch/outputs/jobs
 
 # Log basic information and parameters
 echo "===== Job Configuration ====="
@@ -145,7 +147,7 @@ echo "===== Application Parameters ====="
 echo "Task Index: ${TASK_INDEX}"
 echo "Max Iterations: ${MAX_ITERATIONS}"
 echo "Output Directory: \${OUTPUT_DIR}"
-echo "LLM Model: ${LLM_MODEL}"
+echo "LLM Model: ${MODEL}"
 if [[ ! -z "${HINT}" ]]; then echo "Hint: ${HINT}"; fi
 
 # Activate conda
@@ -153,40 +155,28 @@ eval "\$(/itet-stor/\${ETH_USERNAME}/net_scratch/conda/bin/conda shell.bash hook
 conda activate \${CONDA_ENV}
 echo "Conda environment activated"
 
-# Test and fix Ollama binary permissions
-if [ ! -x "\${OLLAMA_DIR}/ollama" ]; then
-    echo "Fixing Ollama permissions..."
-    chmod +x \${OLLAMA_DIR}/ollama
+# Build command with all parameters
+CMD="python \${PROJECT_DIR}/arc_solver.py --task-index=${TASK_INDEX} --max-iterations=${MAX_ITERATIONS} --output-dir=\${OUTPUT_DIR} --model='${MODEL}' --gpus=${GPUS}"
+
+# Add optional parameters
+if [ ! -z "${HINT}" ]; then
+    CMD="\${CMD} --hint=\"${HINT}\""
 fi
 
-# Set Ollama model directory and start server
-export OLLAMA_MODELS=\${OLLAMA_MODELS_PATH}
-echo "Starting Ollama server..."
-\${OLLAMA_DIR}/ollama serve &
-OLLAMA_PID=\$!
-sleep 15
+if ${EVAL}; then
+    CMD="\${CMD} --eval"
+fi
 
-# Pull model and run script
-echo "Pulling model: ${LLM_MODEL}"
-\${OLLAMA_DIR}/ollama pull ${LLM_MODEL}
-echo "Running Python script..."
-cd \${PROJECT_DIR}
-
-# Build command with all parameters
-CMD="python arc_solver_baseline.py --task-index ${TASK_INDEX} --max-iterations ${MAX_ITERATIONS} --output-dir \${OUTPUT_DIR} --llm ${LLM_MODEL}"
-
-# Add hint only if provided
-if [ ! -z "${HINT}" ]; then
-    CMD="\${CMD} --hint \"${HINT}\""
+if ${VERBOSE}; then
+    CMD="\${CMD} --verbose"
 fi
 
 # Execute the command
 echo "Executing: \${CMD}"
+cd \${PROJECT_DIR}
 eval \${CMD}
 
 # Cleanup
-echo "Stopping Ollama server..."
-kill \${OLLAMA_PID}
 echo "Finished at: \$(date)"
 exit 0
 EOL
