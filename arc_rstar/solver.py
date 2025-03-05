@@ -1,12 +1,11 @@
+from config import Config
+from arc_rstar.llms import PolicyModel, ProcessPreferenceModel
+
+
 class Solver:
-    def __init__(self):
-        pass
-
-    def create_rm(self):
-        pass
-
-    def create_llm(self):
-        pass
+    def __init__(self, config: Config):
+        self.policy = PolicyModel(config)
+        self.preference = ProcessPreferenceModel(config)
 
     def generator_next(self):
         pass
@@ -35,6 +34,6 @@ class Solver:
     def output(self):
         pass
 
-    def solve(self):
+    def solve(self, agent):
         pass
 

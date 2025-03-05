@@ -1,5 +1,5 @@
 import json
-from arc_rstar.config import Config
+from config import Config
 
 
 class Grid:
