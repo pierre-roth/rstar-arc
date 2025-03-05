@@ -1,4 +1,5 @@
 import json
+from arc_rstar.config import Config
 
 
 class Grid:
@@ -37,8 +38,9 @@ class Example:
 
 
 class ARCTask:
-    def __init__(self, path):
+    def __init__(self, path, config: Config):
         self.path = path
+        self.config = config
         self.name = path.split("/")[-1].split(".")[0]
         self.train_data = []
         self.test_data = []
@@ -112,4 +114,5 @@ class ARCTask:
             result.append(str(example))
 
         return "\n".join(result)
+
 

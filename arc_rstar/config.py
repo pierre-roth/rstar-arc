@@ -3,6 +3,7 @@ from dataclasses import field
 
 class Config:
     def __init__(self):
+        self.verbose = False
         # paths
         self.policy_model_dir = None
         self.process_preference_model_dir = None
@@ -13,6 +14,8 @@ class Config:
 
 
         self.seed = 0
+
+
 
 
 
