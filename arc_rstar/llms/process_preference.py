@@ -3,16 +3,24 @@ from vllm import LLM, SamplingParams
 
 
 class ProcessPreferenceModel:
-    def __init__(self, config: Config):
+    def __init__(self, config: Config, terminal_guided=False):
         self.config = config
-        self.llm = LLM(
-            model=config.pp_model,
-            download_dir=config.pp_model_dir,
-            tensor_parallel_size=config.gpus,
-            dtype=config.dtype
-        )
+        self.llm = None
+        self.tg = terminal_guided
 
-    def generate(self, prompt):
+    def init_llm(self):
+        if not self.tg:
+            self.llm = LLM(
+                model=self.config.pp_model,
+                download_dir=self.config.pp_model_dir,
+                tensor_parallel_size=self.config.gpus,
+                dtype=self.config.dtype
+            )
+        else:
+            pass
+
+    def score(self, node):
         sampling_params = SamplingParams(temperature=self.config.temperature)
-        return self.llm.generate(prompt, sampling_params)
+        return self.llm.generate(node, sampling_params)
+
 

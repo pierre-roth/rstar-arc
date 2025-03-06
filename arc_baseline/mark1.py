@@ -258,7 +258,8 @@ def generate_solution_code(task, args, iteration=0, past=None):
     # Final instructions with clear example
     prompt += (
         "## Instructions\n"
-        "1. Write a Python function called 'solve' that takes a grid (2D list of integers) and returns the transformed grid\n"
+        "1. Write a Python function called 'solve' that takes a grid (2D list of integers) and returns the transformed "
+        "grid\n"
         "2. Your solution must implement the function: def solve(grid: list[list[int]]) -> list[list[int]]\n"
         "3. Focus on identifying patterns like: rotations, reflections, translations, color changes, etc.\n"
         "4. Make your code robust to handle different grid sizes if appropriate\n"
@@ -743,3 +744,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

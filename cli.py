@@ -23,13 +23,20 @@ class CLI:
         parser.add_argument('--max-tokens', type=int, default=DEFAULT_MAX_TOKENS,
                             help=f'Maximum number of tokens per step for policy LLM (default: {DEFAULT_MAX_TOKENS})')
 
-
-        # Process Preference LLM choices
-
+        # search mode
+        parser.add_argument('--search-mode', type=str, default=DEFAULT_SEARCH_MODE,
+                            help=f'Search mode for inference (default: {DEFAULT_SEARCH_MODE})')
 
         # MCTS parameters
-        parser.add_argument('--max-depth', type=int, default=DEFAULT_MAX_ITERATIONS,
-                            help=f'Maximum number of fix iterations allowed (default: {DEFAULT_MAX_ITERATIONS})')
+        parser.add_argument('--max-depth', type=int, default=DEFAULT_MAX_DEPTH,
+                            help=f'Maximum number of depth iterations allowed (default: {DEFAULT_MAX_DEPTH})')
+        
+        parser.add_argument('--max-iterations', type=int, default=DEFAULT_MAX_ITERATIONS,
+                            help=f'Maximum number of iterations allowed (default: {DEFAULT_MAX_ITERATIONS})')
+        
+        # Beam search parameters
+        parser.add_argument('--beam-width', type=int, default=DEFAULT_BEAM_WIDTH,
+                            help=f'Width of the beam for beam search (default: {DEFAULT_BEAM_WIDTH})')
 
         parser.add_argument('--data-folder', action='store_true', default=False,
                             help=f'Evaluation tasks instead of training? (default: {False})')
@@ -37,8 +44,12 @@ class CLI:
         # verbosity
         parser.add_argument('--verbose', action='store_true', default=DEFAULT_VERBOSE,
                             help=f'Print detailed progress information (default: {DEFAULT_VERBOSE})')
+        
         # task choice
-        parser.add_argument('--task-name', type=str, default='67a3c6ac',
+        parser.add_argument('--task-index', type=int, default=1,
+                            help=f'Index of the task to use (default: 1)')
+                            
+        parser.add_argument('--task-name', type=str, default='',
                             help='Specific task name to use (overrides task-index)')
 
         parser.add_argument('--all-tasks', action='store_true', default=False,
@@ -47,14 +58,30 @@ class CLI:
         parser.add_argument('--gpus', type=int, default=1,
                             help='Number of GPUs to use for the LLM')
 
+        # temperature
+        parser.add_argument('--temperature', type=float, default=0.0,
+                            help='Temperature for LLM sampling (default: 0.0)')
+
         parser.add_argument('--dtype', type=str, default='float16',
                             help='Data type for model (float16, bfloat16) - use float16 for older GPUs')
 
-        parser.add_argument('--deterministic', type=bool, default=False,
+        parser.add_argument('--deterministic', action='store_true', default=False,
                             help='Set seed everywhere for deterministic reproducibility')
 
         parser.add_argument('--seed', type=int, default=42,
                             help='Seed for reproducibility')
+        
+        parser.add_argument('--output-dir', type=str, default=OUTPUT_BASE_PATH,
+                            help=f'Directory to store output files (default: {OUTPUT_BASE_PATH})')
+        
+        parser.add_argument('--config-file', type=str, default='',
+                            help='Path to configuration file')
+                            
+        parser.add_argument('--hint', type=str, default='',
+                            help='Hint to provide to the model')
+                            
+        parser.add_argument('--eval', action='store_true', default=False,
+                            help='Run in evaluation mode')
 
         return parser.parse_args()
 
@@ -93,17 +120,5 @@ class CLI:
     @staticmethod
     def create_config(args: argparse.Namespace) -> Config:
         """Create a Config object from command line arguments."""
-        return Config(policy_model=args.policy_model,
-                      process_preference_model=args.process_preference_model,
-                      max_tokens=args.max_tokens,
-                      max_depth=args.max_depth,
-                      eval=args.eval,
-                      verbose=args.verbose,
-                      task_index=args.task_index,
-                      task_name=args.task_name,
-                      hint=args.hint,
-                      all_tasks=args.all_tasks,
-                      gpus=args.gpus,
-                      output_dir=args.output_dir,
-                      dtype=args.dtype)
+        return Config(args)
 

@@ -12,12 +12,24 @@ TIME_LIMIT="" # No time limit by default
 # Default application parameters
 TASK_INDEX=1
 MAX_ITERATIONS=5
+TASK_NAME=""
 POLICY_MODEL="Qwen/Qwen2.5-Coder-7B-Instruct"
 PP_MODEL="Qwen/Qwen2.5-Coder-7B-Instruct"
 EVAL=false
 HINT=""
 VERBOSE=true
 DTYPE="bfloat16" # bfloat16 only supported in compute 8.0 and above otherwise use float16
+OUTPUT_DIR=""
+SEARCH_MODE="beam_search"
+MAX_DEPTH=10
+TEMPERATURE=0.0
+SEED=42
+ALL_TASKS=false
+CONFIG_FILE=""
+MAX_TOKENS=2048
+DATA_FOLDER=false
+DETERMINISTIC=false
+BEAM_WIDTH=3
 
 # Parse named command line arguments
 while [[ $# -gt 0 ]]; do
@@ -54,12 +66,20 @@ while [[ $# -gt 0 ]]; do
       TASK_INDEX="${1#*=}"
       shift
       ;;
+    --task-name=*)
+      TASK_NAME="${1#*=}"
+      shift
+      ;;
     --iter=*)
       MAX_ITERATIONS="${1#*=}"
       shift
       ;;
-    --model=*)
-      MODEL="${1#*=}"
+    --policy-model=*)
+      POLICY_MODEL="${1#*=}"
+      shift
+      ;;
+    --pp-model=*)
+      PP_MODEL="${1#*=}"
       shift
       ;;
     --hint=*)
@@ -70,20 +90,67 @@ while [[ $# -gt 0 ]]; do
       DTYPE="${1#*=}"
       shift
       ;;
+    --output-dir=*)
+      OUTPUT_DIR="${1#*=}"
+      shift
+      ;;
+    --search-mode=*)
+      SEARCH_MODE="${1#*=}"
+      shift
+      ;;
+    --max-depth=*)
+      MAX_DEPTH="${1#*=}"
+      shift
+      ;;
+    --temperature=*)
+      TEMPERATURE="${1#*=}"
+      shift
+      ;;
+    --seed=*)
+      SEED="${1#*=}"
+      shift
+      ;;
+    --max-tokens=*)
+      MAX_TOKENS="${1#*=}"
+      shift
+      ;;
+    --beam-width=*)
+      BEAM_WIDTH="${1#*=}"
+      shift
+      ;;
+    --config-file=*)
+      CONFIG_FILE="${1#*=}"
+      shift
+      ;;
     --eval)
-      EVAL=true  # Corrected: Set to true when flag is present
+      EVAL=true
       shift
       ;;
     --verbose)
       VERBOSE=true
       shift
       ;;
+    --all-tasks)
+      ALL_TASKS=true
+      shift
+      ;;
+    --data-folder)
+      DATA_FOLDER=true
+      shift
+      ;;
+    --deterministic)
+      DETERMINISTIC=true
+      shift
+      ;;
     *)
       echo "Unknown parameter: $1"
       echo "Usage: $0 [--mem=32G] [--cpus=4] [--gpus=1] [--partition=partition_name]"
       echo "  [--exclude=node1,node2] [--nodelist=node1,node2] [--time=HH:MM:SS]"
-      echo "  [--task=1] [--iter=5] [--model=Qwen/Qwen2.5-Coder-1.5B-Instruct] [--hint=\"your hint\"] "
-      echo "  [--eval] [--verbose] [--dtype=float16]"
+      echo "  [--task=1] [--task-name=task_name] [--iter=5] [--max-depth=10]"
+      echo "  [--policy-model=model_name] [--pp-model=model_name] [--hint=\"your hint\"]"
+      echo "  [--search-mode=beam_search] [--temperature=0.0] [--seed=42] [--max-tokens=2048]"
+      echo "  [--beam-width=3] [--output-dir=output_dir] [--config-file=config_file] [--all-tasks]"
+      echo "  [--data-folder] [--eval] [--verbose] [--dtype=float16] [--deterministic]"
       exit 1
       ;;
   esac
@@ -168,11 +235,25 @@ conda activate \${CONDA_ENV}
 echo "Conda environment activated"
 
 # Build command with all parameters
-CMD="python \${PROJECT_DIR}/arc_rstar/main.py --task-index=${TASK_INDEX} --max-iterations=${MAX_ITERATIONS} --output-dir=\${OUTPUT_DIR} --model='${MODEL}' --gpus=${GPUS} --dtype=${DTYPE}"
+CMD="python \${PROJECT_DIR}/main.py --task-index=${TASK_INDEX} --max-iterations=${MAX_ITERATIONS} --policy-model='${POLICY_MODEL}' --pp-model='${PP_MODEL}' --max-depth=${MAX_DEPTH} --gpus=${GPUS} --dtype=${DTYPE} --max-tokens=${MAX_TOKENS} --temperature=${TEMPERATURE} --seed=${SEED} --search-mode=${SEARCH_MODE} --beam-width=${BEAM_WIDTH}"
 
 # Add optional parameters
+if [ ! -z "${TASK_NAME}" ]; then
+    CMD="\${CMD} --task-name=${TASK_NAME}"
+fi
+
 if [ ! -z "${HINT}" ]; then
     CMD="\${CMD} --hint=\"${HINT}\""
+fi
+
+if [ ! -z "${OUTPUT_DIR}" ]; then
+    CMD="\${CMD} --output-dir=${OUTPUT_DIR}"
+else
+    CMD="\${CMD} --output-dir=\${OUTPUT_DIR}"
+fi
+
+if [ ! -z "${CONFIG_FILE}" ]; then
+    CMD="\${CMD} --config-file=${CONFIG_FILE}"
 fi
 
 if ${EVAL}; then
@@ -181,6 +262,18 @@ fi
 
 if ${VERBOSE}; then
     CMD="\${CMD} --verbose"
+fi
+
+if ${ALL_TASKS}; then
+    CMD="\${CMD} --all-tasks"
+fi
+
+if ${DATA_FOLDER}; then
+    CMD="\${CMD} --data-folder"
+fi
+
+if ${DETERMINISTIC}; then
+    CMD="\${CMD} --deterministic"
 fi
 
 # Execute the command

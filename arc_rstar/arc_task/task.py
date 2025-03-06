@@ -1,9 +1,12 @@
 import json
+from typing import Dict, Any, List
 from config import Config
+import numpy as np
 
 
 class Grid:
     """Class representing a 2D grid of integers"""
+
     def __init__(self, grid: list[list[int]]):
         self.grid = grid
         self.rows = len(self.grid)
@@ -37,8 +40,8 @@ class Example:
         return result
 
 
-class ARCTask:
-    def __init__(self, path, config: Config):
+class ArcTask:
+    def __init__(self, path, config=None):
         self.path = path
         self.config = config
         self.name = path.split("/")[-1].split(".")[0]
@@ -115,4 +118,79 @@ class ARCTask:
 
         return "\n".join(result)
 
+    def get_initial_prompt(self) -> str:
+        """Generate the initial prompt for the task to feed into the LLM."""
+        prompt = [f"# ARC Task: {self.name}\n"]
+        prompt.append("## Training Examples\n")
 
+        for i, example in enumerate(self.train_data):
+            prompt.append(f"### Training Example {i + 1}")
+            prompt.append("Input:")
+            prompt.append("```")
+            prompt.append(str(example.input_grid))
+            prompt.append("```")
+            prompt.append("Output:")
+            prompt.append("```")
+            prompt.append(str(example.output_grid))
+            prompt.append("```\n")
+
+        prompt.append("## Test Example\n")
+
+        # For beam search, we'll use the first test example
+        if self.test_data:
+            prompt.append("Input:")
+            prompt.append("```")
+            prompt.append(str(self.test_data[0].input_grid))
+            prompt.append("```")
+
+        prompt.append("\nYour task is to solve this ARC problem by writing Python code step by step.")
+        prompt.append("Analyze the pattern in the training examples, then write code that transforms the test input to "
+                      "produce the correct output.")
+        prompt.append("Use numpy for grid manipulations and clearly explain your reasoning at each step.")
+        prompt.append("Define a function `solve(input_grid)` that returns the output grid.\n")
+        prompt.append("The input_grid will be provided as a numpy array. Your solution should return a numpy array as "
+                      "output_grid.")
+
+        return "\n".join(prompt)
+
+    def is_solved(self, state: Dict[str, Any]) -> bool:
+        """
+        Check if the task has been solved based on the state.
+        This will execute the Python code to see if it produces the correct output grid.
+        
+        Args:
+            state: The current state dictionary with text containing Python code
+            
+        Returns:
+            True if the solution produces the correct output grid, False otherwise
+        """
+        from arc_rstar.tools.python_tool import extract_python_code, execute_code_with_grid
+
+        text = state.get("text", "")
+
+        # Extract the Python code
+        code = extract_python_code(text)
+
+        if not code:
+            return False
+
+        # Execute the code with the test input
+        if not self.test_data:
+            return False
+
+        test_input = self.test_data[0].input_grid.grid
+        expected_output = self.test_data[0].output_grid.grid
+
+        result = execute_code_with_grid(code, test_input)
+
+        if not result.get('success', False) or 'grid' not in result:
+            return False
+
+        # Compare the output with the expected result
+        output_grid = result.get('grid')
+
+        # Convert to list of lists if it's a numpy array
+        if isinstance(output_grid, np.ndarray):
+            output_grid = output_grid.tolist()
+
+        return output_grid == expected_output
