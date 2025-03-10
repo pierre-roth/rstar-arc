@@ -1,15 +1,16 @@
 from typing import List, Dict, Any, Optional, Tuple
-import heapq
 import numpy as np
 from config import Config
 from .tree import Tree
 from .node import Node
 
+from arc_rstar.tools.python_tool import extract_python_code, execute_code_with_grid
+
 
 class BeamSearch(Tree):
     def __init__(self, config: Config):
         super().__init__(config)
-        self.beam_width = getattr(config, 'beam_width', 3)  # Default beam width of 3
+        self.beam_width = config.beam_width
         self.max_depth = config.max_depth
         self.best_node = None
         self.best_score = float('-inf')
@@ -59,8 +60,7 @@ class BeamSearch(Tree):
                     if score > self.best_score:
                         self.best_score = score
                         self.best_node = child
-            
-            # Sort candidates by score (heapq is min-heap, so we negate scores)
+
             sorted_candidates = sorted(candidates, key=lambda x: -x[0])
             
             # Select top-k candidates for the next beam
@@ -88,6 +88,7 @@ class BeamSearch(Tree):
         Returns:
             List of (state, score) tuples for candidate next steps
         """
+
         # Get the current state/prompt
         prompt = node.state["text"]
         
@@ -96,10 +97,7 @@ class BeamSearch(Tree):
         
         # Generate completions using the policy model
         completions = policy_model.generate(prompt)
-        
-        # Import Python code evaluation tool
-        from arc_rstar.tools.python_tool import extract_python_code, execute_code_with_grid
-        
+
         # Process completions into candidate states
         for i, completion in enumerate(completions):
             # Extract the generated text
