@@ -23,7 +23,8 @@ class Config:
         self.max_depth = args.max_depth
         self.max_iterations = args.max_iterations
 
-        self.data_folder = args.data_folder
+        # Use the data folder provided or default to training data
+        self.data_folder = args.data_folder if args.data_folder else DEFAULT_TRAINING_DATA_PATH
         self.task_index = args.task_index
         self.task_name = args.task_name
         self.all_tasks = args.all_tasks
@@ -38,7 +39,6 @@ class Config:
         
         self.output_dir = args.output_dir
         self.hint = args.hint if hasattr(args, 'hint') else ""
-        self.eval = args.eval if hasattr(args, 'eval') else False
         
         # Beam search specific parameters
         self.beam_width = args.beam_width if hasattr(args, 'beam_width') else DEFAULT_BEAM_WIDTH
@@ -69,5 +69,4 @@ class Config:
             print(f"Config saved to {file_path}")
         except Exception as e:
             print(f"Error saving config: {e}")
-            
 

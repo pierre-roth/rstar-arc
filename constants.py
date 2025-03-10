@@ -24,7 +24,11 @@ REFINE_END = "<end_of_refine>"
 OUTPUT_BASE_PATH = "/itet-stor/piroth/net_scratch/outputs"
 MODEL_BASE_PATH = "/itet-stor/piroth/net_scratch/models"
 DATA_BASE_PATH = "/itet-stor/piroth/net_scratch/data"
-DATA_SAMPLE_BASE_PATH = "/itet-stor/piroth/net_scratch/rstar-arc/data_sample"
+
+# Default paths for data
+DATA_SAMPLE_BASE_PATH = "data_sample"
+DEFAULT_TRAINING_DATA_PATH = "data_sample/training"
+DEFAULT_EVALUATION_DATA_PATH = "data_sample/evaluation"
 
 # Default model configurations
 DEFAULT_POLICY_LLM = "Qwen/Qwen2.5-Coder-7B-Instruct"

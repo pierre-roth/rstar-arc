@@ -20,6 +20,23 @@ def run_single_task(config, task_path=None):
         print(f"Unknown search mode: {config.search_mode}")
         sys.exit(1)
     
+    # If task_path is not provided but task_name is, find the task file
+    if task_path is None and config.task_name:
+        # Find the task in the data folder
+        task_file = f"{config.task_name}.json"
+        task_path = os.path.join(config.data_folder, task_file)
+        
+        if not os.path.exists(task_path):
+            print(f"Error: Task file '{task_path}' not found.")
+            sys.exit(1)
+        
+        if config.verbose:
+            print(f"Using task file: {task_path}")
+    elif task_path is None:
+        # If no specific task path or name, use task_index to select from data folder
+        files = CLI.list_task_files(config.data_folder)
+        task_path = CLI.select_task_file(files, config.data_folder, config.task_index, config.verbose)
+    
     # Solve the task
     result = solver.solve(agent, task_path)
     
@@ -39,7 +56,11 @@ def run_single_task(config, task_path=None):
 
 def run_all_tasks(config):
     """Run the solver on all tasks in the specified folder."""
+    # Use data folder from config
     task_path = config.data_folder
+    
+    if config.verbose:
+        print(f"Processing all tasks in folder: {task_path}")
     
     files = CLI.list_task_files(task_path)
     

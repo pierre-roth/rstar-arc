@@ -15,7 +15,6 @@ MAX_ITERATIONS=5
 TASK_NAME=""
 POLICY_MODEL="Qwen/Qwen2.5-Coder-7B-Instruct"
 PP_MODEL="Qwen/Qwen2.5-Coder-7B-Instruct"
-EVAL=false
 HINT=""
 VERBOSE=true
 DTYPE="bfloat16" # bfloat16 only supported in compute 8.0 and above otherwise use float16
@@ -27,7 +26,7 @@ SEED=42
 ALL_TASKS=false
 CONFIG_FILE=""
 MAX_TOKENS=2048
-DATA_FOLDER=false
+DATA_FOLDER="data_sample/training"
 DETERMINISTIC=false
 BEAM_WIDTH=3
 
@@ -122,10 +121,6 @@ while [[ $# -gt 0 ]]; do
       CONFIG_FILE="${1#*=}"
       shift
       ;;
-    --eval)
-      EVAL=true
-      shift
-      ;;
     --verbose)
       VERBOSE=true
       shift
@@ -134,8 +129,8 @@ while [[ $# -gt 0 ]]; do
       ALL_TASKS=true
       shift
       ;;
-    --data-folder)
-      DATA_FOLDER=true
+    --data-folder=*)
+      DATA_FOLDER="${1#*=}"
       shift
       ;;
     --deterministic)
@@ -150,7 +145,7 @@ while [[ $# -gt 0 ]]; do
       echo "  [--policy-model=model_name] [--pp-model=model_name] [--hint=\"your hint\"]"
       echo "  [--search-mode=beam_search] [--temperature=0.0] [--seed=42] [--max-tokens=2048]"
       echo "  [--beam-width=3] [--output-dir=output_dir] [--config-file=config_file] [--all-tasks]"
-      echo "  [--data-folder] [--eval] [--verbose] [--dtype=float16] [--deterministic]"
+      echo "  [--data-folder=data_path] [--verbose] [--dtype=float16] [--deterministic]"
       exit 1
       ;;
   esac
@@ -225,7 +220,8 @@ echo "===== Application Parameters ====="
 echo "Task Index: ${TASK_INDEX}"
 echo "Max Iterations: ${MAX_ITERATIONS}"
 echo "Output Directory: \${OUTPUT_DIR}"
-echo "LLM Model: ${MODEL}"
+echo "Policy Model: ${POLICY_MODEL}"
+echo "PP Model: ${PP_MODEL}"
 echo "Model dtype: ${DTYPE}"
 if [[ ! -z "${HINT}" ]]; then echo "Hint: ${HINT}"; fi
 
@@ -256,9 +252,6 @@ if [ ! -z "${CONFIG_FILE}" ]; then
     CMD="\${CMD} --config-file=${CONFIG_FILE}"
 fi
 
-if ${EVAL}; then
-    CMD="\${CMD} --eval"
-fi
 
 if ${VERBOSE}; then
     CMD="\${CMD} --verbose"
@@ -268,9 +261,8 @@ if ${ALL_TASKS}; then
     CMD="\${CMD} --all-tasks"
 fi
 
-if ${DATA_FOLDER}; then
-    CMD="\${CMD} --data-folder"
-fi
+# Always include data folder path
+CMD="\${CMD} --data-folder=${DATA_FOLDER}"
 
 if ${DETERMINISTIC}; then
     CMD="\${CMD} --deterministic"

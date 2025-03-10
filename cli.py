@@ -38,17 +38,17 @@ class CLI:
         parser.add_argument('--beam-width', type=int, default=DEFAULT_BEAM_WIDTH,
                             help=f'Width of the beam for beam search (default: {DEFAULT_BEAM_WIDTH})')
 
-        parser.add_argument('--data-folder', action='store_true', default=False,
-                            help=f'Evaluation tasks instead of training? (default: {False})')
+        parser.add_argument('--data-folder', type=str, default=DEFAULT_TRAINING_DATA_PATH,
+                            help=f'Path to the folder containing task JSON files (default: {DEFAULT_TRAINING_DATA_PATH})')
 
         # verbosity
         parser.add_argument('--verbose', action='store_true', default=DEFAULT_VERBOSE,
                             help=f'Print detailed progress information (default: {DEFAULT_VERBOSE})')
-        
+
         # task choice
         parser.add_argument('--task-index', type=int, default=1,
                             help=f'Index of the task to use (default: 1)')
-                            
+
         parser.add_argument('--task-name', type=str, default='',
                             help='Specific task name to use (overrides task-index)')
 
@@ -80,8 +80,6 @@ class CLI:
         parser.add_argument('--hint', type=str, default='',
                             help='Hint to provide to the model')
                             
-        parser.add_argument('--eval', action='store_true', default=False,
-                            help='Run in evaluation mode')
 
         return parser.parse_args()
 
