@@ -101,7 +101,7 @@ class BeamSearch(Tree):
         # Process completions into candidate states
         for i, completion in enumerate(completions):
             # Extract the generated text
-            generated_text = completion.text
+            generated_text = completion.outputs[0].text
             
             # Create a new state by extending the current prompt
             new_text = prompt + generated_text
