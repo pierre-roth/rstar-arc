@@ -83,9 +83,14 @@ class Solver:
 
     def _extract_solution(self, node) -> Dict[str, Any]:
         """Extract the solution from the node's state."""
-        # This is a placeholder - actual implementation would depend on how
-        # solutions are represented in your system
-        return {
-            "final_state": node.state,
-            "score": node.score if hasattr(node, "score") else node.value
-        }
+        # Use node's to_dict method if available for JSON serialization
+        if hasattr(node, 'to_dict'):
+            node_dict = node.to_dict()
+        else:
+            # Fallback for objects without to_dict method
+            node_dict = {
+                "final_state": node.state,
+                "score": node.score if hasattr(node, "score") else node.value
+            }
+        
+        return node_dict

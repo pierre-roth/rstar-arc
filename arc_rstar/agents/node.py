@@ -18,6 +18,21 @@ class Node:
         self.__visit_count = visit_count
         self.__value_sum = value_sum
         self.score = 0.0  # For beam search
+        
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert the node to a dictionary for JSON serialization."""
+        return {
+            "state": self.state,
+            "depth": self.depth,
+            "is_terminal": self.is_terminal,
+            "reward": self.reward,
+            "value": self.value,
+            "tag": self.tag,
+            "score": self.score,
+            "visit_count": self.__visit_count,
+            "q_value": self.q_value(),
+            # Don't include parent or children to avoid circular references
+        }
 
     def has_children(self) -> bool:
         return self.children != []

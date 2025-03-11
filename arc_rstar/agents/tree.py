@@ -34,12 +34,15 @@ class Tree(ABC):
         parent.children.append(child)
         return child
         
-    def get_path_to_node(self, node: Node) -> List[Node]:
-        """Get the path from root to the given node."""
+    def get_path_to_node(self, node: Node) -> List[Dict[str, Any]]:
+        """Get the path from root to the given node in a serializable format."""
         path = []
         current = node
         while current is not None:
-            path.append(current)
+            if hasattr(current, 'to_dict'):
+                path.append(current.to_dict())
+            else:
+                path.append({"state": current.state, "depth": current.depth})
             current = current.parent
         return path[::-1]  # Reverse to get root-to-node order
 
