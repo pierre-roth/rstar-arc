@@ -95,7 +95,33 @@ def run_all_tasks(config):
     return results
 
 
+def show_help():
+    """Show help information and parameter documentation"""
+    print("\nrSTAR-ARC: Self-play muTuAl Reasoning for ARC\n")
+    print("This program applies the rStar methodology to solve ARC (Abstraction and Reasoning Corpus) tasks.\n")
+    
+    print("Usage examples:")
+    print("  Local run:  python main.py --task-index=1 --verbose")
+    print("  Cluster run: ./run.sh --task=1 --gpus=1 --dtype=bfloat16 --verbose\n")
+    
+    print("Configuration:")
+    print("  You can specify parameters via:")
+    print("  1. Command line arguments")
+    print("  2. Config file (--config-file=config/example_config.yaml)")
+    print("  3. Default values from schema\n")
+    
+    # Show all available parameters
+    CLI.print_available_params()
+    
+    print("\nFor more information, check the README.md file.")
+
+
 if __name__ == '__main__':
+    # Check for help flag as a special case
+    if "--help" in sys.argv or "-h" in sys.argv:
+        show_help()
+        sys.exit(0)
+        
     args = CLI.parse_args()
     config = CLI.create_config(args)
 
