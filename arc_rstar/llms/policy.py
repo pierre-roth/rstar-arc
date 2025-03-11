@@ -16,11 +16,19 @@ class PolicyModel:
             return
             
         # For beam search, we need to generate multiple completions
+        
+        # When temperature is 0, this is greedy sampling and n must be 1
+        # Otherwise we can use beam_width for n
+        if self.config.temperature == 0:
+            actual_n = 1
+        else:
+            actual_n = self.config.beam_width
+            
         self.sampling_params = SamplingParams(
             temperature=self.config.temperature,
             top_p=0.95,
             max_tokens=self.config.max_tokens,
-            n=getattr(self.config, 'beam_width', 3)  # Number of candidates to generate
+            n=actual_n  # Number of candidates to generate
         )
         
         self.llm = LLM(
@@ -46,18 +54,8 @@ class PolicyModel:
         if not self.is_initialized:
             self.init_llm()
             
-        # Create sampling parameters based on whether we're overriding the number of completions
-        sampling_params = self.sampling_params
-        if n is not None:
-            sampling_params = SamplingParams(
-                temperature=self.config.temperature,
-                top_p=0.95,
-                max_tokens=self.config.max_tokens,
-                n=n
-            )
-            
         # Generate completions
-        outputs = self.llm.generate(prompt, sampling_params)
+        outputs = self.llm.generate(prompt, self.sampling_params)
         
         # Extract and return the completions
         return outputs

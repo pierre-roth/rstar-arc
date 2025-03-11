@@ -14,10 +14,13 @@
 - **Work done**: 
   - Research
   - Started breaking down code into classes and functions
+  - Getting a cold (again) in the first week of the project :(
 
 
 - **Issues and Questions**:
   - Probably LLM fine tuning and alignment needed before "Round 1" is feasible
   - Would a reasoning model help with making sense of longer prompts and possibly give answers that have the correct format more often?
+  - Discuss "step format" in more detail.
+  - 
 
 
