@@ -17,33 +17,8 @@ class ParamSchema:
     validation: Optional[Callable[[Any], bool]] = None
 
 
-# Environment detection
-def is_cluster_env() -> bool:
-    """Detect if running in a cluster environment"""
-    return os.environ.get("SLURM_JOB_ID") is not None
-
-
-# Define environment-aware paths
-def get_output_base_path() -> str:
-    if is_cluster_env():
-        return f"/itet-stor/{os.environ.get('USER', 'default')}/net_scratch/outputs"
-    return os.path.join(os.getcwd(), "outputs")
-
-
-def get_model_base_path() -> str:
-    if is_cluster_env():
-        return f"/itet-stor/{os.environ.get('USER', 'default')}/net_scratch/models"
-    return os.path.join(os.getcwd(), "models")
-
-
-def get_data_base_path() -> str:
-    if is_cluster_env():
-        return f"/itet-stor/{os.environ.get('USER', 'default')}/net_scratch/data"
-    return os.path.join(os.getcwd(), "data")
-
-
 # Define constants used throughout the application
-TIMEOUT_SECONDS = 60
+TIMEOUT_SECONDS = 15
 TIMEOUT_MESSAGE = f"Execution of the code snippet has timed out for exceeding {TIMEOUT_SECONDS} seconds."
 ERROR_COLOR = "red"
 TOO_MANY_CODE_ERRORS = "Too many consecutive steps have code errors."
@@ -64,9 +39,9 @@ REFINE_PASS = "I am sure that my answer is correct"
 REFINE_END = "<end_of_refine>"
 
 # Environment-aware base paths
-OUTPUT_BASE_PATH = get_output_base_path()
-MODEL_BASE_PATH = get_model_base_path()
-DATA_BASE_PATH = get_data_base_path()
+OUTPUT_BASE_PATH = f"/itet-stor/piroth/net_scratch/outputs"
+MODEL_BASE_PATH = f"/itet-stor/piroth/net_scratch/models"
+DATA_BASE_PATH = f"/itet-stor/piroth/net_scratch/data"
 
 # Default paths for data
 DATA_SAMPLE_BASE_PATH = "data_sample"
@@ -83,12 +58,13 @@ DEFAULT_VERBOSE = True
 DEFAULT_MAX_ITERATIONS = 5
 DEFAULT_MAX_DEPTH = 10
 DEFAULT_SEARCH_MODE = "beam_search"
-DEFAULT_TEMPERATURE = 0.0
+DEFAULT_TEMPERATURE = 0.3
 DEFAULT_SEED = 42
 DEFAULT_DTYPE = "float16"
 
 # Beam search specific configurations
 DEFAULT_BEAM_WIDTH = 3
+DEFAULT_BRANCHING_FACTOR = 3
 
 # Parameter schema definition
 PARAM_SCHEMA = [
@@ -250,7 +226,7 @@ PARAM_SCHEMA = [
         bash_flag="--temperature=", 
         default=DEFAULT_TEMPERATURE,
         type=float, 
-        help="Temperature for LLM sampling (default: 0.0)",
+        help=f"Temperature for LLM sampling (default: {DEFAULT_TEMPERATURE})",
         validation=lambda x: 0 <= x <= 1.0
     ),
     ParamSchema(
@@ -259,7 +235,7 @@ PARAM_SCHEMA = [
         bash_flag="--seed=", 
         default=DEFAULT_SEED,
         type=int, 
-        help="Seed for reproducibility",
+        help=f"Seed for reproducibility (default: {DEFAULT_SEED})",
     ),
     ParamSchema(
         name="all_tasks", 
@@ -313,7 +289,17 @@ PARAM_SCHEMA = [
         help=f"Width of the beam for beam search (default: {DEFAULT_BEAM_WIDTH})",
         validation=lambda x: x > 0
     ),
+    ParamSchema(
+        name="branching_factor", 
+        cli_flag="--branching-factor", 
+        bash_flag="--branching-factor=", 
+        default=DEFAULT_BRANCHING_FACTOR,
+        type=int, 
+        help=f"Number of candidates to generate at each step (default: {DEFAULT_BRANCHING_FACTOR})",
+        validation=lambda x: x > 0
+    ),
 ]
 
 # Create parameter lookup by name
 PARAM_BY_NAME = {param.name: param for param in PARAM_SCHEMA}
+

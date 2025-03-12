@@ -97,7 +97,7 @@ def extract_python_code(text):
     Returns:
         Extracted Python code
     """
-    # Look for code blocks in markdown format (```python ... ```)
+    # Look for code blocks in Markdown format (```python ... ```)
     code_block_pattern = r'```(?:python)?\s*([\s\S]*?)\s*```'
     code_blocks = re.findall(code_block_pattern, text)
     

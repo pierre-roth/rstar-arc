@@ -18,9 +18,24 @@
 
 
 - **Issues and Questions**:
-  - Probably LLM fine tuning and alignment needed before "Round 1" is feasible
+  - Probably LLM fine-tuning and alignment needed before "Round 1" is feasible
   - Would a reasoning model help with making sense of longer prompts and possibly give answers that have the correct format more often?
   - Discuss "step format" in more detail.
   - 
 
+
+### Week 2 (10.03.2025)
+
+- **Work planned**: 
+  - Finish coding up a bare-bones working version of "Round 1"
+  - Clean up code and make it as "extendable" as possible
+
+- **Work done**: 
+  - Decided on implementing a "one line per step" format
+  - 
+
+
+- **Issues and Questions**:
+  - How do I best handle arguments?
+  - 
 

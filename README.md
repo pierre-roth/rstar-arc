@@ -6,7 +6,7 @@
 The goal of this project is to apply the rStar-Math algorithm to the ARC dataset. 
 
 ## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+On some READMEs, you may see small images that convey metadata, such as whether all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
 
 ## Visuals
 ## Example: ARC task 00d62c1b

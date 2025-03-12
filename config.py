@@ -2,8 +2,8 @@ import argparse
 from typing import Optional, Union, List, Dict, Any
 import os
 import yaml
-from pydantic import BaseModel, Field, validator
-from schema import PARAM_BY_NAME, MODEL_BASE_PATH, DEFAULT_BEAM_WIDTH, DEFAULT_TRAINING_DATA_PATH
+from pydantic import BaseModel, Field, validator, field_validator
+from schema import PARAM_BY_NAME, MODEL_BASE_PATH, DEFAULT_BEAM_WIDTH, DEFAULT_BRANCHING_FACTOR, DEFAULT_TRAINING_DATA_PATH
 
 
 class ConfigModel(BaseModel):
@@ -48,6 +48,7 @@ class ConfigModel(BaseModel):
     
     # Beam search specific parameters
     beam_width: int = Field(default=PARAM_BY_NAME["beam_width"].default, gt=0)
+    branching_factor: int = Field(default=PARAM_BY_NAME["branching_factor"].default, gt=0)
     
     # SLURM parameters - not used in Python app, but included for completeness
     mem: Optional[str] = None
@@ -57,13 +58,13 @@ class ConfigModel(BaseModel):
     nodelist: Optional[str] = None
     time: Optional[str] = None
     
-    @validator('search_mode')
+    @field_validator('search_mode')
     def validate_search_mode(cls, v):
         if v.lower() not in ['beam_search', 'mcts']:
             raise ValueError(f"Search mode '{v}' not supported. Use 'beam_search' or 'mcts'.")
         return v
     
-    @validator('dtype')
+    @field_validator('dtype')
     def validate_dtype(cls, v):
         if v not in ['float16', 'bfloat16', 'float32']:
             raise ValueError(f"Data type '{v}' not supported. Use 'float16', 'bfloat16', or 'float32'.")
@@ -96,7 +97,7 @@ class Config:
         # Add computed fields
         self._model.policy_model_dir = os.path.join(MODEL_BASE_PATH, "policy")
         self._model.pp_model_dir = os.path.join(MODEL_BASE_PATH, "pp")
-    
+
     def _load_from_file(self, config_file: str) -> Dict[str, Any]:
         """Load configuration from YAML file."""
         try:
@@ -111,7 +112,7 @@ class Config:
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert config to dictionary for saving."""
-        return self._model.dict(exclude_none=True)
+        return self._model.model_dump(exclude_none=True)
         
     def save_to_file(self, file_path: str) -> None:
         """Save configuration to a YAML file."""
@@ -131,4 +132,3 @@ class Config:
             return getattr(self._model, name)
         except AttributeError:
             raise AttributeError(f"Config has no attribute '{name}'")
-

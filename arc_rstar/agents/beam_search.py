@@ -8,9 +8,19 @@ from arc_rstar.tools.python_tool import extract_python_code, execute_code_with_g
 
 
 class BeamSearch(Tree):
+    """
+    Beam Search implementation for ARC tasks.
+    
+    The search uses two key parameters:
+    - branching_factor: Number of candidates to generate at each node (exploration breadth)
+    - beam_width: Number of "best candidates" to keep after each step (pruning)
+    
+    This separation allows controlling generation diversity and search efficiency independently.
+    """
     def __init__(self, config: Config):
         super().__init__(config)
         self.beam_width = config.beam_width
+        self.branching_factor = config.branching_factor
         self.max_depth = config.max_depth
         self.best_node = None
         self.best_score = float('-inf')
@@ -56,7 +66,7 @@ class BeamSearch(Tree):
                     child.set_score(score)
                     candidates.append((score, child))
                     
-                    # Update best node if this is better
+                    # Update "best_node" if this is better
                     if score > self.best_score:
                         self.best_score = score
                         self.best_node = child

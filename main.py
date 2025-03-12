@@ -32,6 +32,7 @@ def run_single_task(config, task_path=None):
         
         if config.verbose:
             print(f"Using task file: {task_path}")
+
     elif task_path is None:
         # If no specific task path or name, use task_index to select from data folder
         files = CLI.list_task_files(config.data_folder)

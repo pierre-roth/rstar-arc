@@ -54,26 +54,26 @@ cat > "${TEMP_SCRIPT}" << EOL
 #SBATCH --mem=${MEM}
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=${CPUS}
-#SBATCH --gres=gpu:${GPUS}
+#SBATCH --gpus=gpu:${GPUS}
 #SBATCH --constraint='geforce_rtx_3090'
 EOL
 
 # GPU names: geforce_rtx_3090,rtx_a6000,a100
 
 # Add optional SBATCH parameters if provided
-if [[ ! -z "${PARTITION}" ]]; then
+if [[ -n "${PARTITION}" ]]; then
   echo "#SBATCH --partition=${PARTITION}" >> "${TEMP_SCRIPT}"
 fi
 
-if [[ ! -z "${EXCLUDE}" ]]; then
+if [[ -n "${EXCLUDE}" ]]; then
   echo "#SBATCH --exclude=${EXCLUDE}" >> "${TEMP_SCRIPT}"
 fi
 
-if [[ ! -z "${NODELIST}" ]]; then
+if [[ -n "${NODELIST}" ]]; then
   echo "#SBATCH --nodelist=${NODELIST}" >> "${TEMP_SCRIPT}"
 fi
 
-if [[ ! -z "${TIME}" ]]; then
+if [[ -n "${TIME}" ]]; then
   echo "#SBATCH --time=${TIME}" >> "${TEMP_SCRIPT}"
 fi
 

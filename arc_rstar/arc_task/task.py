@@ -96,13 +96,8 @@ class ArcTask:
 
     def __str__(self):
         """String representation of the ARCTask"""
-        result = []
-
-        result.append(f"ARCTask {self.name}")
-        result.append(f"Number of training examples: {len(self.train_data)}")
-        result.append(f"Number of test examples: {len(self.test_data)}")
-
-        result.append("\nTraining examples: ")
+        result = [f"ARCTask {self.name}", f"Number of training examples: {len(self.train_data)}",
+                  f"Number of test examples: {len(self.test_data)}", "\nTraining examples: "]
 
         # Add details for each training example
         for i, example in enumerate(self.train_data):
@@ -120,8 +115,7 @@ class ArcTask:
 
     def get_initial_prompt(self) -> str:
         """Generate the initial prompt for the task to feed into the LLM."""
-        prompt = [f"# ARC Task: {self.name}\n"]
-        prompt.append("## Training Examples\n")
+        prompt = [f"# ARC Task: {self.name}\n", "## Training Examples\n"]
 
         for i, example in enumerate(self.train_data):
             prompt.append(f"### Training Example {i + 1}")

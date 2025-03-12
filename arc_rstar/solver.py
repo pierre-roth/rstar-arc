@@ -12,6 +12,7 @@ class Solver:
         self.policy = PolicyModel(config)
         self.preference = ProcessPreferenceModel(config)
         self.policy.init_llm()  # Initialize the policy model
+        # self.preference.init_llm()  # Initialize the preference model
 
     def load_task(self, task_path: str) -> ArcTask:
         """Load an ARC task from the given path."""
@@ -25,6 +26,10 @@ class Solver:
         """
         Solve an ARC task using the provided agent.
         
+        For beam search, the key configuration parameters are:
+        - beam_width: Number of "best candidates" to keep after each step (pruning)
+        - branching_factor: Number of candidates to generate at each node (exploration)
+        
         Args:
             agent: The search agent to use (e.g., BeamSearch, MCTS)
             task_path: Path to the task JSON file
@@ -32,23 +37,9 @@ class Solver:
         Returns:
             Result dictionary with solution information
         """
+
         # Load the task if a path is provided
-        if task_path:
-            task = self.load_task(task_path)
-        else:
-            # Use task from index or task_name in config
-            task_path = self.config.data_folder
-
-            if self.config.task_name:
-                task_file = f"{self.config.task_name}.json"
-                task_path = os.path.join(task_path, task_file)
-            else:
-                # Get task by index
-                from cli import CLI
-                files = CLI.list_task_files(task_path)
-                task_path = CLI.select_task_file(files, task_path, self.config.task_index)
-
-            task = self.load_task(task_path)
+        task = self.load_task(task_path)
 
         # Run the search algorithm
         if self.config.verbose:

@@ -1,7 +1,7 @@
 import argparse
 import os
 import sys
-from typing import List, Dict, Any, Optional
+from typing import List, Any, Optional
 from config import Config
 from schema import PARAM_SCHEMA, PARAM_BY_NAME, DEFAULT_VERBOSE
 
