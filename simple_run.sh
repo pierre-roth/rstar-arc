@@ -73,3 +73,4 @@ sbatch "${TEMP_SCRIPT}"
 
 # Remove the temporary script
 rm "${TEMP_SCRIPT}"
+
