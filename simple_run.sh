@@ -11,7 +11,7 @@ cat > "${TEMP_SCRIPT}" << EOL
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=4
 #SBATCH --gpus=gpu:1
-#SBATCH --constraint='geforce_rtx_3090'
+#CommentSBATCH --constraint='geforce_rtx_3090'
 
 # Set environment variables
 ETH_USERNAME=${USER}

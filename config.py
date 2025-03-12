@@ -17,9 +17,9 @@ DEFAULT_EVALUATION_DATA_PATH = "data_sample/evaluation"
 
 DEFAULT_POLICY_LLM = "Qwen/Qwen2.5-Coder-7B-Instruct"
 DEFAULT_PP_LLM = "Qwen/Qwen2.5-Coder-7B-Instruct"
+
 DEFAULT_MAX_TOKENS = 2048
 DEFAULT_MAX_DEPTH = 10
-DEFAULT_MAX_ITERATIONS = 5
 DEFAULT_BEAM_WIDTH = 3
 DEFAULT_BRANCHING_FACTOR = 3
 DEFAULT_TEMPERATURE = 0.3
@@ -36,7 +36,6 @@ class DataType(Enum):
     """Enum for model data types"""
     FLOAT16 = "float16"
     BFLOAT16 = "bfloat16"
-    FLOAT32 = "float32"
 
 
 @dataclass
@@ -55,7 +54,6 @@ class Config:
     
     # Generation parameters
     max_depth: int = DEFAULT_MAX_DEPTH
-    max_iterations: int = DEFAULT_MAX_ITERATIONS
     
     # Data parameters
     data_folder: str = DEFAULT_TRAINING_DATA_PATH
@@ -121,9 +119,6 @@ class Config:
         
         if self.max_depth < 1:
             raise ValueError("max_depth must be greater than 0")
-            
-        if self.max_iterations < 1:
-            raise ValueError("max_iterations must be greater than 0")
             
         if self.max_tokens < 1:
             raise ValueError("max_tokens must be greater than 0")
