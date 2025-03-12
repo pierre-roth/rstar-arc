@@ -93,8 +93,6 @@ cat >> "${TEMP_SCRIPT}" << EOL
 ETH_USERNAME=${USER}
 PROJECT_DIR=/itet-stor/\${ETH_USERNAME}/net_scratch/rstar-arc
 CONDA_ENV=arc-solver
-CLUSTER_ENV="SLURM"
-export CLUSTER_ENV
 DEFAULT_OUTPUT_DIR=/itet-stor/\${ETH_USERNAME}/net_scratch/outputs
 
 # Exit on errors
