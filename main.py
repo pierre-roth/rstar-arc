@@ -108,7 +108,7 @@ def show_help():
     print("Configuration:")
     print("  You can specify parameters via:")
     print("  1. Command line arguments")
-    print("  2. Config file (--config-file=config/example_config.yaml)")
+    print("  2. Config file (--config-file=config/basic_beam_search.yaml)")
     print("  3. Default values from schema\n")
     
     # Show all available parameters

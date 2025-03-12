@@ -1,5 +1,5 @@
 import numpy as np
-from typing import Dict, List, Optional, Any, Union
+from typing import Optional, Any, Union
 
 
 class Node:
@@ -19,7 +19,7 @@ class Node:
         self.__value_sum = value_sum
         self.score = 0.0  # For beam search
         
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert the node to a dictionary for JSON serialization."""
         return {
             "state": self.state,
