@@ -16,7 +16,7 @@ max-tokens: 2048
 search-mode: "beam_search"  # Options: beam_search, mcts
 max-depth: 10
 max-iterations: 5
-temperature: 0.0
+temperature: 0.3
 beam-width: 3  # Number of best candidates to keep after each step
 branching-factor: 3  # Number of candidates to generate per node
 

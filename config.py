@@ -1,56 +1,89 @@
+from __future__ import annotations
 import argparse
-from typing import Optional, Union, List, Dict, Any
 import os
+import sys
 import yaml
-from pydantic import BaseModel, Field, validator, field_validator
-from schema import PARAM_BY_NAME, MODEL_BASE_PATH, DEFAULT_BEAM_WIDTH, DEFAULT_BRANCHING_FACTOR, DEFAULT_TRAINING_DATA_PATH
+from dataclasses import dataclass, field, asdict
+from typing import Optional, List, Dict, Any, Type, Callable, get_type_hints
+from enum import Enum, auto
 
 
-class ConfigModel(BaseModel):
-    """Configuration model with validation using pydantic"""
-    # Application parameters
-    verbose: bool = Field(default=PARAM_BY_NAME["verbose"].default)
+# Define default paths and values
+DEFAULT_MODEL_BASE_PATH = "/itet-stor/piroth/net_scratch/models"
+DEFAULT_OUTPUT_PATH = "/itet-stor/piroth/net_scratch/outputs"
+DEFAULT_DATA_SAMPLE_PATH = "data_sample"
+DEFAULT_TRAINING_DATA_PATH = "data_sample/training"
+DEFAULT_EVALUATION_DATA_PATH = "data_sample/evaluation"
+
+DEFAULT_POLICY_LLM = "Qwen/Qwen2.5-Coder-7B-Instruct"
+DEFAULT_PP_LLM = "Qwen/Qwen2.5-Coder-7B-Instruct"
+DEFAULT_MAX_TOKENS = 2048
+DEFAULT_MAX_DEPTH = 10
+DEFAULT_MAX_ITERATIONS = 5
+DEFAULT_BEAM_WIDTH = 3
+DEFAULT_BRANCHING_FACTOR = 3
+DEFAULT_TEMPERATURE = 0.3
+DEFAULT_SEED = 42
+
+
+class SearchMode(Enum):
+    """Enum for search modes"""
+    BEAM_SEARCH = "beam_search"
+    MCTS = "mcts"
+
+
+class DataType(Enum):
+    """Enum for model data types"""
+    FLOAT16 = "float16"
+    BFLOAT16 = "bfloat16"
+    FLOAT32 = "float32"
+
+
+@dataclass
+class Config:
+    """Unified configuration class for rStar-ARC"""
     
-    # Model paths
-    policy_model: str = Field(default=PARAM_BY_NAME["policy_model"].default)
-    pp_model: str = Field(default=PARAM_BY_NAME["pp_model"].default)
-    policy_model_dir: Optional[str] = None
-    pp_model_dir: Optional[str] = None
+    # Application parameters
+    verbose: bool = False
+    
+    # Model paths and settings
+    policy_model: str = DEFAULT_POLICY_LLM
+    pp_model: str = DEFAULT_PP_LLM
+    model_base_path: str = DEFAULT_MODEL_BASE_PATH
+    max_tokens: int = DEFAULT_MAX_TOKENS
+    dtype: DataType = DataType.FLOAT16
     
     # Generation parameters
-    max_tokens: int = Field(default=PARAM_BY_NAME["max_tokens"].default, gt=0)
-    max_depth: int = Field(default=PARAM_BY_NAME["max_depth"].default, gt=0)
-    max_iterations: int = Field(default=PARAM_BY_NAME["max_iterations"].default, gt=0)
+    max_depth: int = DEFAULT_MAX_DEPTH
+    max_iterations: int = DEFAULT_MAX_ITERATIONS
     
     # Data parameters
-    data_folder: str = Field(default=PARAM_BY_NAME["data_folder"].default)
-    task_index: int = Field(default=PARAM_BY_NAME["task_index"].default, gt=0)
-    task_name: str = Field(default=PARAM_BY_NAME["task_name"].default)
-    all_tasks: bool = Field(default=PARAM_BY_NAME["all_tasks"].default)
+    data_folder: str = DEFAULT_TRAINING_DATA_PATH
+    task_index: int = 1
+    task_name: str = ""
+    all_tasks: bool = False
     
     # Search parameters
-    search_mode: str = Field(default=PARAM_BY_NAME["search_mode"].default)
-    temperature: float = Field(
-        default=PARAM_BY_NAME["temperature"].default, 
-        ge=0.0, 
-        le=1.0
-    )
-    seed: int = Field(default=PARAM_BY_NAME["seed"].default)
-    deterministic: bool = Field(default=PARAM_BY_NAME["deterministic"].default)
+    search_mode: SearchMode = SearchMode.BEAM_SEARCH
+    temperature: float = DEFAULT_TEMPERATURE
+    seed: int = DEFAULT_SEED
+    deterministic: bool = False
+    
+    # BEAM search specific parameters
+    beam_width: int = DEFAULT_BEAM_WIDTH
+    branching_factor: int = DEFAULT_BRANCHING_FACTOR
     
     # Hardware parameters
-    gpus: int = Field(default=PARAM_BY_NAME["gpus"].default, ge=0)
-    dtype: str = Field(default=PARAM_BY_NAME["dtype"].default)
+    gpus: int = 1
     
     # Output parameters
-    output_dir: str = Field(default=PARAM_BY_NAME["output_dir"].default)
-    hint: str = Field(default=PARAM_BY_NAME["hint"].default)
+    output_dir: str = DEFAULT_OUTPUT_PATH
+    hint: str = ""
     
-    # Beam search specific parameters
-    beam_width: int = Field(default=PARAM_BY_NAME["beam_width"].default, gt=0)
-    branching_factor: int = Field(default=PARAM_BY_NAME["branching_factor"].default, gt=0)
+    # Config file
+    config_file: str = ""
     
-    # SLURM parameters - not used in Python app, but included for completeness
+    # SLURM parameters - not used in Python app directly
     mem: Optional[str] = None
     cpus: Optional[int] = None
     partition: Optional[str] = None
@@ -58,48 +91,137 @@ class ConfigModel(BaseModel):
     nodelist: Optional[str] = None
     time: Optional[str] = None
     
-    @field_validator('search_mode')
-    def validate_search_mode(cls, v):
-        if v.lower() not in ['beam_search', 'mcts']:
-            raise ValueError(f"Search mode '{v}' not supported. Use 'beam_search' or 'mcts'.")
-        return v
+    # Computed fields
+    policy_model_dir: Optional[str] = None
+    pp_model_dir: Optional[str] = None
     
-    @field_validator('dtype')
-    def validate_dtype(cls, v):
-        if v not in ['float16', 'bfloat16', 'float32']:
-            raise ValueError(f"Data type '{v}' not supported. Use 'float16', 'bfloat16', or 'float32'.")
-        return v
-
-
-class Config:
-    """Configuration manager that handles loading from different sources"""
+    def __post_init__(self):
+        """Initialize computed fields after instance creation"""
+        self.policy_model_dir = os.path.join(self.model_base_path, "policy")
+        self.pp_model_dir = os.path.join(self.model_base_path, "pp")
+        
+        # Handle enum values
+        if isinstance(self.search_mode, str):
+            try:
+                self.search_mode = SearchMode(self.search_mode)
+            except ValueError:
+                raise ValueError(f"Invalid search mode: {self.search_mode}. " 
+                               f"Valid options are: {[m.value for m in SearchMode]}")
+        
+        if isinstance(self.dtype, str):
+            try:
+                self.dtype = DataType(self.dtype)
+            except ValueError:
+                raise ValueError(f"Invalid dtype: {self.dtype}. "
+                               f"Valid options are: {[d.value for d in DataType]}")
+        
+        # Validate numeric fields
+        if self.task_index < 1:
+            raise ValueError("task_index must be greater than 0")
+        
+        if self.max_depth < 1:
+            raise ValueError("max_depth must be greater than 0")
+            
+        if self.max_iterations < 1:
+            raise ValueError("max_iterations must be greater than 0")
+            
+        if self.max_tokens < 1:
+            raise ValueError("max_tokens must be greater than 0")
+            
+        if self.beam_width < 1:
+            raise ValueError("beam_width must be greater than 0")
+            
+        if self.branching_factor < 1:
+            raise ValueError("branching_factor must be greater than 0")
+            
+        if not 0 <= self.temperature <= 1.0:
+            raise ValueError("temperature must be between 0 and 1")
     
-    def __init__(self, args: argparse.Namespace):
+    @classmethod
+    def from_args(cls, args: Optional[List[str]] = None) -> Config:
+        """Create configuration from command line arguments"""
+        parser = cls._create_argument_parser()
+        parsed_args = parser.parse_args(args)
+        
         # Start with empty config
         config_data = {}
         
-        # First load config from file if provided
-        if hasattr(args, 'config_file') and args.config_file:
-            config_data.update(self._load_from_file(args.config_file))
+        # First load from config file if provided
+        if parsed_args.config_file:
+            config_data.update(cls._load_from_file(parsed_args.config_file))
         
-        # Then override with command line arguments
-        for param_name in PARAM_BY_NAME:
-            # Skip SLURM-specific parameters
-            if param_name in ['mem', 'cpus', 'partition', 'exclude', 'nodelist', 'time']:
+        # Then override with command line arguments (but only if they're explicitly provided)
+        for key, value in vars(parsed_args).items():
+            if value is not None and key in cls.__annotations__:
+                config_data[key] = value
+        
+        # Create config instance
+        return cls(**config_data)
+    
+    @classmethod
+    def _create_argument_parser(cls) -> argparse.ArgumentParser:
+        """Create argument parser based on Config fields"""
+        parser = argparse.ArgumentParser(description='rSTAR meets ARC')
+        
+        # Get type hints for all fields
+        hints = get_type_hints(cls)
+        
+        # For each field in the dataclass
+        for field_name, field_def in cls.__dataclass_fields__.items():
+            # Skip private fields and computed fields
+            if field_name.startswith('_') or field_name in ['policy_model_dir', 'pp_model_dir']:
                 continue
                 
-            if hasattr(args, param_name) and getattr(args, param_name) is not None:
-                config_data[param_name] = getattr(args, param_name)
+            # Determine CLI flag name (convert snake_case to kebab-case)
+            flag_name = f"--{field_name.replace('_', '-')}"
+            
+            # Get field type and default
+            field_type = hints.get(field_name, Any)
+            default_value = field_def.default
+            
+            # Special case for enum types
+            if hasattr(field_type, '__origin__') and field_type.__origin__ is Optional:
+                # Handle Optional[Type]
+                inner_type = field_type.__args__[0]
+                if issubclass(inner_type, Enum):
+                    field_type = str
+                    help_text = f"{field_def.metadata.get('help', '')} Options: {[e.value for e in inner_type]}"
+                else:
+                    field_type = inner_type
+                    help_text = field_def.metadata.get('help', '')
+            elif issubclass(field_type, Enum):
+                field_type = str
+                help_text = f"{field_def.metadata.get('help', '')} Options: {[e.value for e in field_type]}"
+            else:
+                help_text = field_def.metadata.get('help', '')
+            
+            # Boolean fields are flags
+            if field_type is bool:
+                parser.add_argument(
+                    flag_name,
+                    action='store_true',
+                    default=default_value,
+                    help=help_text
+                )
+            else:
+                # Skip SLURM parameters in Python CLI
+                if field_name in ['mem', 'cpus', 'partition', 'exclude', 'nodelist', 'time']:
+                    continue
+                    
+                # Regular argument
+                parser.add_argument(
+                    flag_name,
+                    type=field_type if field_type is not Any else str,
+                    default=default_value,
+                    help=help_text,
+                    required=False
+                )
         
-        # Initialize pydantic model with data
-        self._model = ConfigModel(**config_data)
-        
-        # Add computed fields
-        self._model.policy_model_dir = os.path.join(MODEL_BASE_PATH, "policy")
-        self._model.pp_model_dir = os.path.join(MODEL_BASE_PATH, "pp")
-
-    def _load_from_file(self, config_file: str) -> Dict[str, Any]:
-        """Load configuration from YAML file."""
+        return parser
+    
+    @staticmethod
+    def _load_from_file(config_file: str) -> Dict[str, Any]:
+        """Load configuration from YAML file"""
         try:
             with open(config_file, 'r') as f:
                 config_data = yaml.safe_load(f) or {}
@@ -109,13 +231,19 @@ class Config:
         except Exception as e:
             print(f"Error loading config file: {e}")
             return {}
-
+    
     def to_dict(self) -> Dict[str, Any]:
-        """Convert config to dictionary for saving."""
-        return self._model.model_dump(exclude_none=True)
+        """Convert config to dictionary, handling enum values"""
+        data = {}
+        for key, value in asdict(self).items():
+            if isinstance(value, Enum):
+                data[key] = value.value
+            else:
+                data[key] = value
+        return data
         
     def save_to_file(self, file_path: str) -> None:
-        """Save configuration to a YAML file."""
+        """Save configuration to a YAML file"""
         try:
             # Convert underscores back to dashes for YAML
             data = {k.replace('_', '-'): v for k, v in self.to_dict().items()}
@@ -126,9 +254,97 @@ class Config:
         except Exception as e:
             print(f"Error saving config: {e}")
     
-    def __getattr__(self, name):
-        """Delegate attribute access to the pydantic model."""
-        try:
-            return getattr(self._model, name)
-        except AttributeError:
-            raise AttributeError(f"Config has no attribute '{name}'")
+    def list_task_files(self) -> List[str]:
+        """List all JSON files in the data folder"""
+        if not os.path.isdir(self.data_folder):
+            print(f"Error: Directory '{self.data_folder}' not found. Please check your ARC data directory.")
+            sys.exit(1)
+
+        files = sorted([f for f in os.listdir(self.data_folder) if f.endswith('.json')],
+                     key=lambda x: x.lower())
+
+        if not files:
+            print(f"No JSON files found in directory '{self.data_folder}'.")
+            sys.exit(1)
+
+        if self.verbose:
+            print(f"Found {len(files)} JSON files in '{self.data_folder}'")
+        return files
+
+    def select_task_file(self) -> str:
+        """Select a task file based on configuration"""
+        # If task_name is provided, use it
+        if self.task_name:
+            task_file = f"{self.task_name}.json"
+            task_path = os.path.join(self.data_folder, task_file)
+            
+            if not os.path.exists(task_path):
+                print(f"Error: Task file '{task_path}' not found.")
+                sys.exit(1)
+            
+            if self.verbose:
+                print(f"Using task file: {task_path}")
+            return task_path
+        
+        # Otherwise use task_index
+        files = self.list_task_files()
+        
+        if self.task_index < 1 or self.task_index > len(files):
+            print(f"Error: Task index {self.task_index} is out of range (1-{len(files)})")
+            sys.exit(1)
+
+        chosen_file = os.path.join(self.data_folder, files[self.task_index - 1])
+        if self.verbose:
+            print(f"Selected file by index: {chosen_file}")
+
+        return chosen_file
+    
+    @staticmethod
+    def print_help() -> None:
+        """Print help information with example usage"""
+        print("\nrSTAR-ARC: Self-play muTuAl Reasoning for ARC\n")
+        print("This program applies the rStar methodology to solve ARC (Abstraction and Reasoning Corpus) tasks.\n")
+        
+        print("Usage examples:")
+        print("  Local run:  python main.py --task-index=1 --verbose")
+        print("  Cluster run: ./run.sh --task=1 --gpus=1 --dtype=bfloat16 --verbose\n")
+        
+        print("Configuration:")
+        print("  You can specify parameters via:")
+        print("  1. Command line arguments")
+        print("  2. Config file (--config-file=config/basic_beam_search.yaml)")
+        print("  3. Default values\n")
+        
+        # Generate parameter help dynamically
+        print("Available parameters:")
+        print("-" * 60)
+        
+        # Get the parser to extract help text
+        parser = Config._create_argument_parser()
+        
+        # Group parameters by category
+        categories = {
+            "SLURM Parameters": ['mem', 'cpus', 'partition', 'exclude', 'nodelist', 'time'],
+            "Model Parameters": ['policy-model', 'pp-model', 'max-tokens', 'model-base-path', 'dtype'],
+            "Task Parameters": ['task-index', 'task-name', 'all-tasks', 'data-folder'],
+            "Search Parameters": ['search-mode', 'max-depth', 'max-iterations', 'beam-width', 
+                                 'branching-factor', 'temperature', 'deterministic'],
+            "Output Parameters": ['output-dir', 'verbose', 'hint'],
+            "System Parameters": ['gpus', 'seed'],
+            "Config Parameters": ['config-file']
+        }
+        
+        for category, param_names in categories.items():
+            print(f"\n{category}:")
+            for action in parser._actions:
+                # Skip the help action
+                if action.dest == 'help':
+                    continue
+                    
+                # Check if this action belongs to the current category
+                param_name = action.dest.replace('_', '-')
+                if param_name in param_names:
+                    default_str = f" (default: {action.default})" if action.default is not None else ""
+                    print(f"  {action.option_strings[0]:<20} {action.help}{default_str}")
+        
+        print("\nFor more information, check the README.md file.")

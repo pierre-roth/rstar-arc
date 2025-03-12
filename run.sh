@@ -1,24 +1,33 @@
 #!/bin/bash
 
-# Import parameter schema
-source <(python3 -c "
-import sys
-from schema import PARAM_SCHEMA
-# Generate bash parameter defaults
-for param in PARAM_SCHEMA:
-    name = param.name.upper()
-    if param.is_flag:
-        # Boolean flags need special handling
-        print(f'{name}=false')
-        if param.default:
-            print(f'{name}=true')
-    else:
-        # Regular parameters
-        if isinstance(param.default, str):
-            print(f'{name}=\"{param.default}\"')
-        else:
-            print(f'{name}={param.default}')
-")
+# Set default values
+MEM="32G"
+CPUS=4
+GPUS=1
+PARTITION=""
+EXCLUDE=""
+NODELIST=""
+TIME=""
+VERBOSE=false
+ALL_TASKS=false
+DETERMINISTIC=false
+TASK_INDEX=1
+TASK_NAME=""
+MAX_ITERATIONS=5
+MAX_DEPTH=10
+POLICY_MODEL="Qwen/Qwen2.5-Coder-7B-Instruct"
+PP_MODEL="Qwen/Qwen2.5-Coder-7B-Instruct"
+MAX_TOKENS=2048
+SEARCH_MODE="beam_search"
+BEAM_WIDTH=3
+TEMPERATURE=0.3
+SEED=42
+DTYPE="float16"
+OUTPUT_DIR=""
+HINT=""
+CONFIG_FILE=""
+DATA_FOLDER="data_sample/training"
+BRANCHING_FACTOR=3
 
 # Parse named command line arguments
 while [[ $# -gt 0 ]]; do
@@ -143,6 +152,7 @@ PYTHON_ARGS+=(--search-mode="${SEARCH_MODE}")
 PYTHON_ARGS+=(--max-depth="${MAX_DEPTH}")
 PYTHON_ARGS+=(--max-iterations="${MAX_ITERATIONS}")
 PYTHON_ARGS+=(--beam-width="${BEAM_WIDTH}")
+PYTHON_ARGS+=(--branching-factor="${BRANCHING_FACTOR}")
 PYTHON_ARGS+=(--temperature="${TEMPERATURE}")
 PYTHON_ARGS+=(--seed="${SEED}")
 
@@ -201,4 +211,3 @@ sbatch "${TEMP_SCRIPT}"
 
 # Remove the temporary script
 rm "${TEMP_SCRIPT}"
-
