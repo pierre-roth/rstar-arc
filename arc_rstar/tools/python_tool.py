@@ -5,7 +5,7 @@ import contextlib
 import numpy as np
 import re
 import signal
-from constants import TIMEOUT_SECONDS, TIMEOUT_MESSAGE
+from config import TIMEOUT_SECONDS, TIMEOUT_MESSAGE
 
 
 class TimeoutException(Exception):
