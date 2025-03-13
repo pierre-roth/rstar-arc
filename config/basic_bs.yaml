@@ -3,7 +3,7 @@
 
 # Task parameters
 data-folder: "data_sample/training"
-task-name: "00d62c1b"
+task-name: "ac0a08a4"
 
 # Model parameters
 policy-model: "Qwen/Qwen2.5-Coder-7B-Instruct"
@@ -19,7 +19,7 @@ branching-factor: 3  # Number of candidates to generate per node
 
 # System parameters
 gpus: 1
-dtype: "float16"  # Options: float16, bfloat16
+dtype: "bfloat16"  # Options: float16, bfloat16
 seed: 42
 
 # Runtime parameters

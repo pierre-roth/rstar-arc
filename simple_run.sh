@@ -9,7 +9,7 @@
 #CommentSBATCH --exclude=tikgpu10,tikgpu[06-09]
 #CommentSBATCH --nodelist=tikgpu01 # Specify that it should run on this particular node
 #CommentSBATCH --account=tik-internal
-#CommentSBATCH --constraint='geforce_rtx_3090'
+#SBATCH --constraint='geforce_rtx_3090'
 #Comment interesting GPU names: geforce_rtx_3090,rtx_a6000,a100
 
 
