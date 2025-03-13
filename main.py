@@ -3,7 +3,7 @@ import json
 import sys
 from arc_rstar.agents import BeamSearch, MCTS
 from arc_rstar.solver import Solver
-from config import Config, SearchMode
+from config import Config
 
 
 def run_single_task(config, task_path=None):
@@ -11,9 +11,9 @@ def run_single_task(config, task_path=None):
     solver = Solver(config)
     
     # Create the appropriate agent based on search_mode
-    if config.search_mode == SearchMode.BEAM_SEARCH:
+    if config.search_mode == "bs":
         agent = BeamSearch(config)
-    elif config.search_mode == SearchMode.MCTS:
+    elif config.search_mode == "mcts":
         agent = MCTS(config)
     else:
         print(f"Unknown search mode: {config.search_mode}")
@@ -81,11 +81,6 @@ def run_all_tasks(config):
 
 
 if __name__ == '__main__':
-    # Check for help flag as a special case
-    if "--help" in sys.argv or "-h" in sys.argv:
-        Config.print_help()
-        sys.exit(0)
-        
     # Create config from command line arguments
     config = Config.from_args()
 

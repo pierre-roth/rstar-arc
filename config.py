@@ -3,8 +3,8 @@ import argparse
 import os
 import sys
 import yaml
-from dataclasses import dataclass, field, asdict
-from typing import Optional, List, Dict, Any, Type, Callable, get_type_hints
+from dataclasses import dataclass, field, asdict, fields
+from typing import Optional, Any, Type, Callable, get_type_hints
 from enum import Enum
 
 # Define default paths and values
@@ -48,12 +48,6 @@ REFINE_PASS = "I am sure that my answer is correct"
 REFINE_END = "<end_of_refine>"
 
 
-class SearchMode(Enum):
-    """Enum for search modes"""
-    BEAM_SEARCH = "beam_search"
-    MCTS = "mcts"
-
-
 @dataclass
 class Config:
     """Unified configuration class for rStar-ARC"""
@@ -78,7 +72,7 @@ class Config:
     all_tasks: bool = False
 
     # Search parameters
-    search_mode: SearchMode = SearchMode.BEAM_SEARCH
+    search_mode: str = "bs"
     temperature: float = DEFAULT_TEMPERATURE
     seed: int = DEFAULT_SEED
     deterministic: bool = False
@@ -103,6 +97,7 @@ class Config:
     partition: Optional[str] = None
     exclude: Optional[str] = None
     nodelist: Optional[str] = None
+    constraint: Optional[str] = None
     time: Optional[str] = None
 
     # Computed fields
@@ -115,44 +110,8 @@ class Config:
         self.policy_model_dir = os.path.join(self.model_base_path, "policy")
         self.pp_model_dir = os.path.join(self.model_base_path, "pp")
 
-        # Handle enum values
-        self._convert_string_to_enum()
-        
-        # Validate numeric values
-        self._validate_numeric_fields()
-
-    def _convert_string_to_enum(self):
-        """Convert string values to enum types"""
-        # Handle search mode enum
-        if isinstance(self.search_mode, str):
-            try:
-                self.search_mode = SearchMode(self.search_mode)
-            except ValueError:
-                raise ValueError(f"Invalid search mode: {self.search_mode}. "
-                                 f"Valid options are: {[m.value for m in SearchMode]}")
-
-    def _validate_numeric_fields(self):
-        """Validate numeric fields have acceptable values"""
-        if self.task_index < 1:
-            raise ValueError("task_index must be greater than 0")
-
-        if self.max_depth < 1:
-            raise ValueError("max_depth must be greater than 0")
-
-        if self.max_tokens < 1:
-            raise ValueError("max_tokens must be greater than 0")
-
-        if self.beam_width < 1:
-            raise ValueError("beam_width must be greater than 0")
-
-        if self.branching_factor < 1:
-            raise ValueError("branching_factor must be greater than 0")
-
-        if not 0 <= self.temperature <= 1.0:
-            raise ValueError("temperature must be between 0 and 1")
-
     @classmethod
-    def from_args(cls, args: Optional[List[str]] = None) -> Config:
+    def from_args(cls, args: Optional[list[str]] = None) -> Config:
         """Create configuration from command line arguments"""
         parser = cls._create_argument_parser()
         parsed_args = parser.parse_args(args)
@@ -181,7 +140,10 @@ class Config:
         hints = get_type_hints(cls)
 
         # For each field in the dataclass
-        for field_name, field_def in cls.__dataclass_fields__.items():
+        for field_obj in fields(cls):
+            field_name = field_obj.name
+            field_def = field_obj
+
             # Skip private fields and computed fields
             if field_name.startswith('_') or field_name in ['policy_model_dir', 'pp_model_dir']:
                 continue
@@ -197,7 +159,7 @@ class Config:
             help_text, processed_type = cls._process_field_type(field_type, field_def)
 
             # Skip SLURM parameters in Python CLI
-            if field_name in ['mem', 'cpus', 'partition', 'exclude', 'nodelist', 'time']:
+            if field_name in ['mem', 'cpus', 'partition', 'exclude', 'nodelist', 'time', 'constraint']:
                 continue
 
             # Add argument to parser
@@ -251,7 +213,7 @@ class Config:
             )
 
     @staticmethod
-    def _load_from_file(config_file: str) -> Dict[str, Any]:
+    def _load_from_file(config_file: str) -> dict[str, Any]:
         """Load configuration from YAML file"""
         try:
             # Check if file exists
@@ -272,29 +234,7 @@ class Config:
             print(f"Error loading config file: {e}")
             return {}
 
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert config to dictionary, handling enum values"""
-        data = {}
-        for key, value in asdict(self).items():
-            if isinstance(value, Enum):
-                data[key] = value.value
-            else:
-                data[key] = value
-        return data
-
-    def save_to_file(self, file_path: str) -> None:
-        """Save configuration to a YAML file"""
-        try:
-            # Convert underscores back to dashes for YAML
-            data = {k.replace('_', '-'): v for k, v in self.to_dict().items()}
-
-            with open(file_path, 'w') as f:
-                yaml.dump(data, f, default_flow_style=False)
-            print(f"Config saved to {file_path}")
-        except Exception as e:
-            print(f"Error saving config: {e}")
-
-    def list_task_files(self) -> List[str]:
+    def list_task_files(self) -> list[str]:
         """List all JSON files in the data folder"""
         if not os.path.isdir(self.data_folder):
             print(f"Error: Directory '{self.data_folder}' not found. Please check your ARC data directory.")
@@ -339,57 +279,3 @@ class Config:
 
         return chosen_file
 
-    @staticmethod
-    def print_help() -> None:
-        """Print help information with example usage"""
-        print("\nrSTAR-ARC: Self-play muTuAl Reasoning for ARC\n")
-        print("This program applies the rStar methodology to solve ARC (Abstraction and Reasoning Corpus) tasks.\n")
-
-        print("Usage examples:")
-        print("  Local run:  python main.py --task-index=1 --verbose")
-        print("  Cluster run: ./run.sh --task=1 --gpus=1 --dtype=bfloat16 --verbose\n")
-
-        print("Configuration:")
-        print("  You can specify parameters via:")
-        print("  1. Command line arguments")
-        print("  2. Config file (--config-file=config/basic_bs.yaml)")
-        print("  3. Default values\n")
-
-        Config._print_parameter_categories()
-
-    @staticmethod
-    def _print_parameter_categories():
-        """Print all parameters grouped by category"""
-        # Get the parser to extract help text
-        parser = Config._create_argument_parser()
-
-        # Define parameter categories for better organization
-        categories = {
-            "SLURM Parameters": ['mem', 'cpus', 'partition', 'exclude', 'nodelist', 'time'],
-            "Model Parameters": ['policy-model', 'pp-model', 'max-tokens', 'model-base-path', 'dtype'],
-            "Task Parameters": ['task-index', 'task-name', 'all-tasks', 'data-folder'],
-            "Search Parameters": ['search-mode', 'max-depth', 'beam-width', 'branching-factor',
-                                'temperature', 'deterministic'],
-            "Output Parameters": ['output-dir', 'verbose', 'hint'],
-            "System Parameters": ['gpus', 'seed'],
-            "Config Parameters": ['config-file']
-        }
-
-        print("Available parameters:")
-        print("-" * 60)
-
-        # Print each category with its parameters
-        for category, param_names in categories.items():
-            print(f"\n{category}:")
-            for action in parser._actions:
-                # Skip the help action
-                if action.dest == 'help':
-                    continue
-
-                # Check if this action belongs to the current category
-                param_name = action.dest.replace('_', '-')
-                if param_name in param_names:
-                    default_str = f" (default: {action.default})" if action.default is not None else ""
-                    print(f"  {action.option_strings[0]:<20} {action.help}{default_str}")
-
-        print("\nFor more information, check the README.md file.")
