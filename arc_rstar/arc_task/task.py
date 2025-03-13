@@ -41,7 +41,7 @@ class Example:
 
 
 class ArcTask:
-    def __init__(self, path, config=None):
+    def __init__(self, path, config: Config):
         self.path = path
         self.config = config
         self.name = path.split("/")[-1].split(".")[0]
