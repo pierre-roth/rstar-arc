@@ -17,7 +17,7 @@ class Solver:
     def load_task(self, task_path: str) -> ArcTask:
         """Load an ARC task from the given path."""
         # Create ArcTask from JSON file
-        task = ArcTask(task_path)
+        task = ArcTask(task_path, self.config)
         if self.config.verbose:
             print(f"Loaded task: {task_path}")
         return task
