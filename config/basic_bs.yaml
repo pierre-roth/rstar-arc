@@ -2,10 +2,8 @@
 # All parameters are optional and will override defaults
 
 # Task parameters
-task-index: 1
 data-folder: "data_sample/training"
-# Uncomment to use a specific task
-# task-name: "00d62c1b"
+task-name: "00d62c1b"
 
 # Model parameters
 policy-model: "Qwen/Qwen2.5-Coder-7B-Instruct"
@@ -15,14 +13,13 @@ max-tokens: 2048
 # Search parameters
 search-mode: "beam_search"  # Options: beam_search, mcts
 max-depth: 10
-max-iterations: 5
 temperature: 0.3
 beam-width: 3  # Number of best candidates to keep after each step
 branching-factor: 3  # Number of candidates to generate per node
 
 # System parameters
 gpus: 1
-dtype: "float16"  # Options: float16, bfloat16, float32
+dtype: "float16"  # Options: float16, bfloat16
 seed: 42
 
 # Runtime parameters

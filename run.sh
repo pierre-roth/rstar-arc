@@ -58,8 +58,8 @@ TEMP_SCRIPT=$(mktemp)
 cat > "${TEMP_SCRIPT}" << EOL
 #!/bin/bash
 #SBATCH --mail-type=NONE
-#SBATCH --output=/itet-stor/${USER}/net_scratch/outputs/jobs/%j.out
-#SBATCH --error=/itet-stor/${USER}/net_scratch/outputs/jobs/%j.err
+#SBATCH --output=/itet-stor/piroth/net_scratch/outputs/jobs/%j.out
+#SBATCH --error=/itet-stor/piroth/net_scratch/outputs/jobs/%j.err
 #SBATCH --mem=${MEM}
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=${CPUS}

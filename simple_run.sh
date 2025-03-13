@@ -9,7 +9,8 @@
 #CommentSBATCH --exclude=tikgpu10,tikgpu[06-09]
 #CommentSBATCH --nodelist=tikgpu01 # Specify that it should run on this particular node
 #CommentSBATCH --account=tik-internal
-#CommentSBATCH --constraint='titan_rtx|tesla_v100|titan_xp|a100_80gb'
+#CommentSBATCH --constraint='geforce_rtx_3090'
+#Comment interesting GPU names: geforce_rtx_3090,rtx_a6000,a100
 
 
 ETH_USERNAME=piroth
@@ -34,7 +35,7 @@ echo "Conda activated"
 cd ${DIRECTORY}
 
 # Execute your code
-python main.py --config basic_beam_search.yaml
+python main.py --config basic_bs.yaml
 
 # Send more noteworthy information to the output log
 echo "Finished at: $(date)"
