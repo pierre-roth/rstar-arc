@@ -225,10 +225,9 @@ class Config:
             field_name = field_obj.name
             field_def = field_obj
 
-            # Skip private fields, computed fields, and SLURM parameters
+            # Skip private fields and computed fields
             if (field_name.startswith('_') or 
-                field_name in ['policy_model_dir', 'pp_model_dir'] or
-                field_name in ['mem', 'cpus', 'partition', 'exclude', 'nodelist', 'time', 'constraint']):
+                field_name in ['policy_model_dir', 'pp_model_dir']):
                 continue
 
             # Convert snake_case field names to kebab-case for CLI flags
