@@ -47,7 +47,6 @@ python \${PROJECT_DIR}/main.py \\
   --max-tokens=2048 \\
   --search-mode="beam_search" \\
   --max-depth=10 \\
-  --max-iterations=5 \\
   --beam-width=3 \\
   --branching-factor=3 \\
   --temperature=0.3 \\
