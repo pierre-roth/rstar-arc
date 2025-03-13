@@ -8,9 +8,9 @@ class Grid:
     """Class representing a 2D grid of integers"""
 
     def __init__(self, grid: list[list[int]]):
-        self.grid = grid
-        self.rows = len(self.grid)
-        self.columns = len(self.grid[0])
+        self.grid: list[list[int]] = grid
+        self.rows: int = len(self.grid)
+        self.columns: int = len(self.grid[0])
 
         # enforce that all rows have the same number of columns
         assert all(len(row) == self.columns for row in self.grid)

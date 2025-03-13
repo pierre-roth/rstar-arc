@@ -4,6 +4,7 @@ import sys
 from arc_rstar.agents import BeamSearch, MCTS
 from arc_rstar.solver import Solver
 from config import Config
+from datetime import datetime
 
 
 def run_single_task(config: Config, task_path=None):
@@ -30,7 +31,7 @@ def run_single_task(config: Config, task_path=None):
     if config.output_dir:
         os.makedirs(config.output_dir, exist_ok=True)
         task_name = os.path.basename(task_path).split('.')[0] if task_path else f"task_{config.task_index}"
-        output_path = os.path.join(config.output_dir, f"{task_name}_{config.search_mode}_result.json")
+        output_path = os.path.join(config.output_dir, f"{task_name}_{config.search_mode}_result_{datetime.now()}.json")
 
         with open(output_path, 'w') as f:
             json.dump(result, f, indent=2)

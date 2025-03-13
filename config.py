@@ -5,275 +5,381 @@ import sys
 import yaml
 from dataclasses import dataclass, field, asdict, fields
 from typing import Optional, Any, Type, Callable, get_type_hints
-from enum import Enum
 
-# Define default paths and values
-DEFAULT_MODEL_BASE_PATH = "/itet-stor/piroth/net_scratch/models"
-DEFAULT_OUTPUT_PATH = "/itet-stor/piroth/net_scratch/outputs"
-DEFAULT_DATA_SAMPLE_PATH = "data_sample"
-DEFAULT_TRAINING_DATA_PATH = "data_sample/training"
-DEFAULT_EVALUATION_DATA_PATH = "data_sample/evaluation"
+###########################################
+# DEFAULT CONFIGURATION VALUES
+###########################################
 
-DEFAULT_POLICY_LLM = "Qwen/Qwen2.5-Coder-7B-Instruct"
-DEFAULT_PP_LLM = "Qwen/Qwen2.5-Coder-7B-Instruct"
+# Default paths for models, outputs and data
+# These paths are used if not overridden by command line or config file
+DEFAULT_MODEL_BASE_PATH = "/itet-stor/piroth/net_scratch/models"  # Base directory for models
+DEFAULT_OUTPUT_PATH = "/itet-stor/piroth/net_scratch/outputs"     # Where results will be saved
+DEFAULT_DATA_SAMPLE_PATH = "data_sample"                          # Root folder for ARC data
+DEFAULT_TRAINING_DATA_PATH = "data_sample/training"               # Training data location
+DEFAULT_EVALUATION_DATA_PATH = "data_sample/evaluation"           # Evaluation data location
 
-DEFAULT_MAX_TOKENS = 2048
-DEFAULT_MAX_DEPTH = 10
-DEFAULT_BEAM_WIDTH = 3
-DEFAULT_BRANCHING_FACTOR = 3
-DEFAULT_TEMPERATURE = 0.3
-DEFAULT_SEED = 42
+# Default model names - identifies which language models to use
+DEFAULT_POLICY_LLM = "Qwen/Qwen2.5-Coder-7B-Instruct"  # Policy model (generates reasoning steps)
+DEFAULT_PP_LLM = "Qwen/Qwen2.5-Coder-7B-Instruct"      # Process Preference Model (evaluates steps)
 
-# Timeouts
-TIMEOUT_SECONDS = 15
+# Default hyperparameters
+DEFAULT_MAX_TOKENS = 2048       # Maximum tokens for model generation
+DEFAULT_MAX_DEPTH = 10          # Maximum depth of search tree (max steps)
+DEFAULT_BEAM_WIDTH = 3          # Width of beam in beam search (solutions to track)
+DEFAULT_BRANCHING_FACTOR = 3    # Number of child nodes to expand per parent
+DEFAULT_TEMPERATURE = 0.3       # Sampling temperature (lower = more deterministic)
+DEFAULT_SEED = 42               # Random seed for reproducibility
+
+###########################################
+# EXECUTION SETTINGS
+###########################################
+
+# Code execution timeout settings
+TIMEOUT_SECONDS = 15  # Maximum time allowed for code execution
 TIMEOUT_MESSAGE = f"Execution of the code snippet has timed out for exceeding {TIMEOUT_SECONDS} seconds."
 
-# Error messages
-ERROR_COLOR = "red"
+# Error message constants
+ERROR_COLOR = "red"  # Color for error messages in output
 TOO_MANY_CODE_ERRORS = "Too many consecutive steps have code errors."
 TOO_MANY_STEPS = "Fail to solve the problem within limited steps."
 NO_VALID_CHILD = "Fail to generate parsable text for next step."
 
-# Output format tags
-OUTPUT = "<o>"
-OUTPUT_END = "<end_of_output>"
-STEP_END = "<end_of_step>"
-CODE = "<code>"
-CODE_TAG = "Now print the final answer"
-CODE_END = "<end_of_code>"
-ANSWER = "<answer>"
-ANSWER_END = "<end_of_answer>"
-REFINE = "<refine>"
-REFINE_PASS = "I am sure that my answer is correct"
-REFINE_END = "<end_of_refine>"
+###########################################
+# OUTPUT FORMAT MARKERS
+###########################################
+# These tags are used to parse the model's output into structured sections
+
+# Step output markers
+OUTPUT = "<o>"                  # Begins an output section
+OUTPUT_END = "<end_of_output>"  # Ends an output section
+STEP_END = "<end_of_step>"      # Marks the end of a reasoning step
+
+# Code section markers
+CODE = "<code>"                 # Begins a code section
+CODE_TAG = "Now print the final answer"  # Indicates code that produces final answer
+CODE_END = "<end_of_code>"      # Ends a code section
+
+# Answer markers
+ANSWER = "<answer>"             # Begins the final answer section
+ANSWER_END = "<end_of_answer>"  # Ends the final answer section
+
+# Refinement markers (for solution verification)
+REFINE = "<refine>"             # Begins a solution refinement section
+REFINE_PASS = "I am sure that my answer is correct"  # Indicates a confident solution
+REFINE_END = "<end_of_refine>"  # Ends a refinement section
 
 
 @dataclass
 class Config:
-    """Unified configuration class for rStar-ARC"""
+    """
+    Unified configuration class for rStar-ARC
+    
+    This class handles all configuration aspects of the rStar-ARC system:
+    - Loading config from YAML files and command-line arguments
+    - Providing default values
+    - Processing and validating configuration options
+    """
 
-    # Application parameters
-    verbose: bool = True
+    ###########################################
+    # APPLICATION PARAMETERS
+    ###########################################
+    verbose: bool = True  # Controls logging verbosity
+    
+    ###########################################
+    # MODEL CONFIGURATION
+    ###########################################
+    # Language model selection
+    policy_model: str = DEFAULT_POLICY_LLM    # Model that generates reasoning steps
+    pp_model: str = DEFAULT_PP_LLM            # Process Preference Model for evaluating steps
+    
+    # Model loading settings
+    model_base_path: str = DEFAULT_MODEL_BASE_PATH  # Base path where models are stored
+    max_tokens: int = DEFAULT_MAX_TOKENS      # Maximum tokens for generation
+    dtype: str = "bfloat16"                   # Data type for model (affects precision/speed)
 
-    # Model paths and settings
-    policy_model: str = DEFAULT_POLICY_LLM
-    pp_model: str = DEFAULT_PP_LLM
-    model_base_path: str = DEFAULT_MODEL_BASE_PATH
-    max_tokens: int = DEFAULT_MAX_TOKENS
-    dtype: str = "bfloat16"
-
-    # Generation parameters
-    max_depth: int = DEFAULT_MAX_DEPTH
-
-    # Data parameters
-    data_folder: str = DEFAULT_TRAINING_DATA_PATH
-    task_index: int = 1
-    task_name: str = ""
-    all_tasks: bool = False
-
-    # Search parameters
-    search_mode: str = "bs"
-    temperature: float = DEFAULT_TEMPERATURE
-    seed: int = DEFAULT_SEED
-    deterministic: bool = False
-
+    ###########################################
+    # GENERATION PARAMETERS
+    ###########################################
+    max_depth: int = DEFAULT_MAX_DEPTH  # Maximum number of reasoning steps
+    
+    ###########################################
+    # DATA CONFIGURATION
+    ###########################################
+    data_folder: str = DEFAULT_TRAINING_DATA_PATH  # Path to ARC task data
+    task_index: int = 1    # Index of task to run (1-based indexing)
+    task_name: str = ""    # Name of specific task (overrides task_index if provided)
+    all_tasks: bool = False  # Whether to run all tasks in data_folder
+    
+    ###########################################
+    # SEARCH ALGORITHM PARAMETERS
+    ###########################################
+    search_mode: str = "bs"  # Search algorithm - "bs" for beam search, "mcts" for Monte Carlo Tree Search
+    temperature: float = DEFAULT_TEMPERATURE  # Sampling temperature for LLM generation
+    seed: int = DEFAULT_SEED                  # Random seed for reproducibility
+    deterministic: bool = False               # Whether to enforce deterministic behavior
+    
     # BEAM search specific parameters
-    beam_width: int = DEFAULT_BEAM_WIDTH
-    branching_factor: int = DEFAULT_BRANCHING_FACTOR
-
-    # Hardware parameters
-    gpus: int = 1
-
-    # Output parameters
-    output_dir: str = DEFAULT_OUTPUT_PATH
-    hint: str = ""
-
-    # Config file
-    config_file: str = ""
-
-    # SLURM parameters - not used in Python app directly
-    mem: Optional[str] = None
-    cpus: Optional[int] = None
-    partition: Optional[str] = None
-    exclude: Optional[str] = None
-    nodelist: Optional[str] = None
-    constraint: Optional[str] = None
-    time: Optional[str] = None
-
-    # Computed fields
-    policy_model_dir: Optional[str] = None
-    pp_model_dir: Optional[str] = None
-
+    beam_width: int = DEFAULT_BEAM_WIDTH          # Number of top-scoring beams to track
+    branching_factor: int = DEFAULT_BRANCHING_FACTOR  # Number of children to generate per step
+    
+    ###########################################
+    # HARDWARE CONFIGURATION
+    ###########################################
+    gpus: int = 1  # Number of GPUs to use
+    
+    ###########################################
+    # OUTPUT CONFIGURATION
+    ###########################################
+    output_dir: str = DEFAULT_OUTPUT_PATH  # Directory to save results
+    hint: str = ""  # Optional hint to provide to the solver
+    
+    ###########################################
+    # CONFIG FILE
+    ###########################################
+    config_file: str = ""  # Path to YAML config file
+    
+    ###########################################
+    # SLURM PARAMETERS
+    ###########################################
+    # These parameters are used by the SLURM script, not directly by the Python application
+    mem: Optional[str] = None          # Memory allocation for SLURM
+    cpus: Optional[int] = None         # Number of CPUs for SLURM
+    partition: Optional[str] = None    # SLURM partition to use
+    exclude: Optional[str] = None      # Nodes to exclude
+    nodelist: Optional[str] = None     # Specific nodes to use
+    constraint: Optional[str] = None   # Hardware constraints
+    time: Optional[str] = None         # Time limit for job
+    
+    ###########################################
+    # COMPUTED FIELDS
+    ###########################################
+    # These are calculated automatically in __post_init__
+    policy_model_dir: Optional[str] = None  # Full path to policy model
+    pp_model_dir: Optional[str] = None      # Full path to PP model
+    
     def __post_init__(self):
-        """Initialize computed fields after instance creation"""
-        # Set computed model directories
+        """
+        Initialize computed fields after instance creation
+        
+        This method runs automatically after the dataclass is instantiated,
+        calculating derived values based on the provided configuration.
+        """
+        # Set computed model directories based on model_base_path
         self.policy_model_dir = os.path.join(self.model_base_path, "policy")
         self.pp_model_dir = os.path.join(self.model_base_path, "pp")
 
     @classmethod
     def from_args(cls, args: Optional[list[str]] = None) -> Config:
-        """Create configuration from command line arguments"""
+        """
+        Create a configuration from command line arguments
+        
+        This method:
+        1. Parses command line arguments
+        2. Loads configuration from YAML file (if specified)
+        3. Overrides file settings with command line arguments
+        
+        Args:
+            args: Command line arguments to parse (uses sys.argv if None)
+            
+        Returns:
+            Configured Config instance
+        """
+        # Create and use argument parser
         parser = cls._create_argument_parser()
         parsed_args = parser.parse_args(args)
 
-        # Start with empty config
+        # Start with empty config dictionary
         config_data = {}
 
-        # First load from config file if provided
+        # First load from config file if provided (lower priority)
         if parsed_args.config_file:
             config_data.update(cls._load_from_file(parsed_args.config_file))
 
-        # Then override with command line arguments (but only if they're explicitly provided)
+        # Then override with command line arguments (higher priority)
+        # Only use explicitly provided arguments (not default values from argparse)
         for key, value in vars(parsed_args).items():
             if value is not None and key in cls.__annotations__:
                 config_data[key] = value
 
-        # Create config instance
+        # Create and return config instance with the merged settings
         return cls(**config_data)
 
     @classmethod
     def _create_argument_parser(cls) -> argparse.ArgumentParser:
-        """Create argument parser based on Config fields"""
+        """
+        Create an argument parser with all configuration options
+        
+        This method dynamically builds a command-line parser based on the
+        Config class fields, converting them to appropriate CLI arguments.
+        
+        Returns:
+            Configured ArgumentParser instance
+        """
         parser = argparse.ArgumentParser(description='rSTAR meets ARC')
 
-        # Get type hints for all fields
+        # Get type information for all fields using Python's typing system
         hints = get_type_hints(cls)
 
-        # For each field in the dataclass
+        # Process each field in the dataclass to create corresponding CLI arguments
         for field_obj in fields(cls):
             field_name = field_obj.name
             field_def = field_obj
 
-            # Skip private fields and computed fields
-            if field_name.startswith('_') or field_name in ['policy_model_dir', 'pp_model_dir']:
+            # Skip private fields, computed fields, and SLURM parameters
+            if (field_name.startswith('_') or 
+                field_name in ['policy_model_dir', 'pp_model_dir'] or
+                field_name in ['mem', 'cpus', 'partition', 'exclude', 'nodelist', 'time', 'constraint']):
                 continue
 
-            # Determine CLI flag name (convert snake_case to kebab-case)
+            # Convert snake_case field names to kebab-case for CLI flags
             flag_name = f"--{field_name.replace('_', '-')}"
 
-            # Get field type and default
+            # Get the field's type and default value
             field_type = hints.get(field_name, Any)
             default_value = field_def.default
+            help_text = field_def.metadata.get('help', '')
 
-            # Handle special field types
-            help_text, processed_type = cls._process_field_type(field_type, field_def)
+            # Handle Optional types by extracting the inner type
+            if hasattr(field_type, '__origin__') and field_type.__origin__ is Optional:
+                field_type = field_type.__args__[0]
 
-            # Skip SLURM parameters in Python CLI
-            if field_name in ['mem', 'cpus', 'partition', 'exclude', 'nodelist', 'time', 'constraint']:
-                continue
-
-            # Add argument to parser
-            cls._add_argument_to_parser(parser, flag_name, processed_type, default_value, help_text, field_name)
+            # Add argument to parser based on its type
+            if field_type is bool:
+                # Boolean fields are handled as flags (--verbose instead of --verbose True)
+                parser.add_argument(
+                    flag_name,
+                    action='store_true',
+                    default=default_value,
+                    help=help_text
+                )
+            else:
+                # All other argument types
+                parser.add_argument(
+                    flag_name,
+                    # Use the field's type, defaulting to str for Any or unknown types
+                    type=field_type if field_type is not Any else str,
+                    default=default_value,
+                    help=help_text,
+                    required=False
+                )
 
         return parser
 
     @staticmethod
-    def _process_field_type(field_type, field_def):
-        """Process field type and generate help text"""
-        help_text = field_def.metadata.get('help', '')
-        
-        # Special case for enum types
-        if hasattr(field_type, '__origin__') and field_type.__origin__ is Optional:
-            # Handle Optional[Type]
-            inner_type = field_type.__args__[0]
-            if hasattr(inner_type, '__mro__') and Enum in inner_type.__mro__:
-                # Format enum options for help text
-                enum_options = [e.value for e in inner_type]
-                help_text = f"{help_text} Options: {enum_options}"
-                return help_text, str
-            else:
-                return help_text, inner_type
-        elif hasattr(field_type, '__mro__') and Enum in field_type.__mro__:
-            # Format enum options for help text
-            enum_options = [e.value for e in field_type]
-            help_text = f"{help_text} Options: {enum_options}"
-            return help_text, str
-        else:
-            return help_text, field_type
-
-    @staticmethod
-    def _add_argument_to_parser(parser, flag_name, field_type, default_value, help_text, field_name):
-        """Add the appropriate argument type to the parser"""
-        # Boolean fields are flags
-        if field_type is bool:
-            parser.add_argument(
-                flag_name,
-                action='store_true',
-                default=default_value,
-                help=help_text
-            )
-        else:
-            # Regular argument
-            parser.add_argument(
-                flag_name,
-                type=field_type if field_type is not Any else str,
-                default=default_value,
-                help=help_text,
-                required=False
-            )
-
-    @staticmethod
     def _load_from_file(config_file: str) -> dict[str, Any]:
-        """Load configuration from YAML file"""
+        """
+        Load configuration settings from a YAML file
+        
+        This method:
+        1. Checks if the file exists (in current directory or config/ subfolder)
+        2. Loads and parses the YAML content
+        3. Converts kebab-case keys to snake_case for Python compatibility
+        
+        Args:
+            config_file: Path to the YAML configuration file
+            
+        Returns:
+            Dictionary of configuration values
+        """
         try:
-            # Check if file exists
+            # Check if file exists at the specified path
             if not os.path.exists(config_file):
-                # Try with config/ prefix
+                # If not, try looking in the config/ directory
                 if os.path.exists(f"config/{config_file}"):
                     config_file = f"config/{config_file}"
                 else:
                     print(f"Warning: Config file not found: {config_file}")
                     return {}
                 
+            # Read and parse the YAML file
             with open(config_file, 'r') as f:
                 config_data = yaml.safe_load(f) or {}
 
-            # Convert dashed keys to underscore
+            # Convert kebab-case keys (like "model-name") to snake_case (like "model_name")
+            # This ensures compatibility with Python variable naming conventions
             return {k.replace('-', '_'): v for k, v in config_data.items()}
+            
         except Exception as e:
             print(f"Error loading config file: {e}")
             return {}
 
     def list_task_files(self) -> list[str]:
-        """List all JSON files in the data folder"""
+        """
+        List all JSON task files in the configured data folder
+        
+        This method:
+        1. Verifies the data directory exists
+        2. Finds all JSON files in the directory
+        3. Sorts them alphabetically (case-insensitive)
+        
+        Returns:
+            List of JSON filenames (without directory path)
+            
+        Raises:
+            SystemExit: If directory doesn't exist or no JSON files are found
+        """
+        # Verify the data directory exists
         if not os.path.isdir(self.data_folder):
             print(f"Error: Directory '{self.data_folder}' not found. Please check your ARC data directory.")
             sys.exit(1)
 
+        # Get all JSON files and sort them alphabetically (case-insensitive)
         files = sorted([f for f in os.listdir(self.data_folder) if f.endswith('.json')],
                        key=lambda x: x.lower())
 
+        # Ensure we found at least one file
         if not files:
             print(f"No JSON files found in directory '{self.data_folder}'.")
             sys.exit(1)
 
+        # Report number of files if in verbose mode
         if self.verbose:
             print(f"Found {len(files)} JSON files in '{self.data_folder}'")
+            
         return files
 
     def select_task_file(self) -> str:
-        """Select a task file based on configuration"""
-        # If task_name is provided, use it
+        """
+        Select a specific ARC task file based on configuration
+        
+        This method determines which task file to use based on:
+        1. First, specific task name if provided (task_name)
+        2. Otherwise, task index if provided (task_index)
+        
+        Returns:
+            Full path to the selected task file
+            
+        Raises:
+            SystemExit: If the requested task file doesn't exist
+        """
+        # PRIORITY 1: If a specific task name is provided, use it directly
         if self.task_name:
-            task_file = f"{self.task_name}.json"
+            # Convert task name to filename with .json extension
+            task_file = f"{self.task_name}.json" 
             task_path = os.path.join(self.data_folder, task_file)
 
+            # Verify the file exists
             if not os.path.exists(task_path):
                 print(f"Error: Task file '{task_path}' not found.")
                 sys.exit(1)
 
+            # Report selected file if in verbose mode
             if self.verbose:
                 print(f"Using task file: {task_path}")
             return task_path
 
-        # Otherwise use task_index
+        # PRIORITY 2: Use task_index to select from available files
         files = self.list_task_files()
 
+        # Verify index is in valid range (1-based indexing)
         if self.task_index < 1 or self.task_index > len(files):
             print(f"Error: Task index {self.task_index} is out of range (1-{len(files)})")
             sys.exit(1)
 
+        # Select the file by index (adjusting for 0-based list indexing)
         chosen_file = os.path.join(self.data_folder, files[self.task_index - 1])
+        
+        # Report selected file if in verbose mode
         if self.verbose:
             print(f"Selected file by index: {chosen_file}")
 
