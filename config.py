@@ -5,7 +5,7 @@ import sys
 import yaml
 from dataclasses import dataclass, field, asdict
 from typing import Optional, List, Dict, Any, Type, Callable, get_type_hints
-from enum import Enum, auto
+from enum import Enum
 
 # Define default paths and values
 DEFAULT_MODEL_BASE_PATH = "/itet-stor/piroth/net_scratch/models"
@@ -117,10 +117,19 @@ class Config:
 
     def __post_init__(self):
         """Initialize computed fields after instance creation"""
+        # Set computed model directories
         self.policy_model_dir = os.path.join(self.model_base_path, "policy")
         self.pp_model_dir = os.path.join(self.model_base_path, "pp")
 
         # Handle enum values
+        self._convert_string_to_enum()
+        
+        # Validate numeric values
+        self._validate_numeric_fields()
+
+    def _convert_string_to_enum(self):
+        """Convert string values to enum types"""
+        # Handle search mode enum
         if isinstance(self.search_mode, str):
             try:
                 self.search_mode = SearchMode(self.search_mode)
@@ -128,6 +137,7 @@ class Config:
                 raise ValueError(f"Invalid search mode: {self.search_mode}. "
                                  f"Valid options are: {[m.value for m in SearchMode]}")
 
+        # Handle data type enum
         if isinstance(self.dtype, str):
             try:
                 self.dtype = DataType(self.dtype)
@@ -135,7 +145,8 @@ class Config:
                 raise ValueError(f"Invalid dtype: {self.dtype}. "
                                  f"Valid options are: {[d.value for d in DataType]}")
 
-        # Validate numeric fields
+    def _validate_numeric_fields(self):
+        """Validate numeric fields have acceptable values"""
         if self.task_index < 1:
             raise ValueError("task_index must be greater than 0")
 
@@ -196,50 +207,76 @@ class Config:
             field_type = hints.get(field_name, Any)
             default_value = field_def.default
 
-            # Special case for enum types
-            if hasattr(field_type, '__origin__') and field_type.__origin__ is Optional:
-                # Handle Optional[Type]
-                inner_type = field_type.__args__[0]
-                if issubclass(inner_type, Enum):
-                    field_type = str
-                    help_text = f"{field_def.metadata.get('help', '')} Options: {[e.value for e in inner_type]}"
-                else:
-                    field_type = inner_type
-                    help_text = field_def.metadata.get('help', '')
-            elif issubclass(field_type, Enum):
-                field_type = str
-                help_text = f"{field_def.metadata.get('help', '')} Options: {[e.value for e in field_type]}"
-            else:
-                help_text = field_def.metadata.get('help', '')
+            # Handle special field types
+            help_text, processed_type = cls._process_field_type(field_type, field_def)
 
-            # Boolean fields are flags
-            if field_type is bool:
-                parser.add_argument(
-                    flag_name,
-                    action='store_true',
-                    default=default_value,
-                    help=help_text
-                )
-            else:
-                # Skip SLURM parameters in Python CLI
-                if field_name in ['mem', 'cpus', 'partition', 'exclude', 'nodelist', 'time']:
-                    continue
+            # Skip SLURM parameters in Python CLI
+            if field_name in ['mem', 'cpus', 'partition', 'exclude', 'nodelist', 'time']:
+                continue
 
-                # Regular argument
-                parser.add_argument(
-                    flag_name,
-                    type=field_type if field_type is not Any else str,
-                    default=default_value,
-                    help=help_text,
-                    required=False
-                )
+            # Add argument to parser
+            cls._add_argument_to_parser(parser, flag_name, processed_type, default_value, help_text, field_name)
 
         return parser
+
+    @staticmethod
+    def _process_field_type(field_type, field_def):
+        """Process field type and generate help text"""
+        help_text = field_def.metadata.get('help', '')
+        
+        # Special case for enum types
+        if hasattr(field_type, '__origin__') and field_type.__origin__ is Optional:
+            # Handle Optional[Type]
+            inner_type = field_type.__args__[0]
+            if hasattr(inner_type, '__mro__') and Enum in inner_type.__mro__:
+                # Format enum options for help text
+                enum_options = [e.value for e in inner_type]
+                help_text = f"{help_text} Options: {enum_options}"
+                return help_text, str
+            else:
+                return help_text, inner_type
+        elif hasattr(field_type, '__mro__') and Enum in field_type.__mro__:
+            # Format enum options for help text
+            enum_options = [e.value for e in field_type]
+            help_text = f"{help_text} Options: {enum_options}"
+            return help_text, str
+        else:
+            return help_text, field_type
+
+    @staticmethod
+    def _add_argument_to_parser(parser, flag_name, field_type, default_value, help_text, field_name):
+        """Add the appropriate argument type to the parser"""
+        # Boolean fields are flags
+        if field_type is bool:
+            parser.add_argument(
+                flag_name,
+                action='store_true',
+                default=default_value,
+                help=help_text
+            )
+        else:
+            # Regular argument
+            parser.add_argument(
+                flag_name,
+                type=field_type if field_type is not Any else str,
+                default=default_value,
+                help=help_text,
+                required=False
+            )
 
     @staticmethod
     def _load_from_file(config_file: str) -> Dict[str, Any]:
         """Load configuration from YAML file"""
         try:
+            # Check if file exists
+            if not os.path.exists(config_file):
+                # Try with config/ prefix
+                if os.path.exists(f"config/{config_file}"):
+                    config_file = f"config/{config_file}"
+                else:
+                    print(f"Warning: Config file not found: {config_file}")
+                    return {}
+                
             with open(config_file, 'r') as f:
                 config_data = yaml.safe_load(f) or {}
 
@@ -332,25 +369,30 @@ class Config:
         print("  2. Config file (--config-file=config/basic_bs.yaml)")
         print("  3. Default values\n")
 
-        # Generate parameter help dynamically
-        print("Available parameters:")
-        print("-" * 60)
+        Config._print_parameter_categories()
 
+    @staticmethod
+    def _print_parameter_categories():
+        """Print all parameters grouped by category"""
         # Get the parser to extract help text
         parser = Config._create_argument_parser()
 
-        # Group parameters by category
+        # Define parameter categories for better organization
         categories = {
             "SLURM Parameters": ['mem', 'cpus', 'partition', 'exclude', 'nodelist', 'time'],
             "Model Parameters": ['policy-model', 'pp-model', 'max-tokens', 'model-base-path', 'dtype'],
             "Task Parameters": ['task-index', 'task-name', 'all-tasks', 'data-folder'],
             "Search Parameters": ['search-mode', 'max-depth', 'beam-width', 'branching-factor',
-                                  'temperature', 'deterministic'],
+                                'temperature', 'deterministic'],
             "Output Parameters": ['output-dir', 'verbose', 'hint'],
             "System Parameters": ['gpus', 'seed'],
             "Config Parameters": ['config-file']
         }
 
+        print("Available parameters:")
+        print("-" * 60)
+
+        # Print each category with its parameters
         for category, param_names in categories.items():
             print(f"\n{category}:")
             for action in parser._actions:
