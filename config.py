@@ -54,12 +54,6 @@ class SearchMode(Enum):
     MCTS = "mcts"
 
 
-class DataType(Enum):
-    """Enum for model data types"""
-    FLOAT16 = "float16"
-    BFLOAT16 = "bfloat16"
-
-
 @dataclass
 class Config:
     """Unified configuration class for rStar-ARC"""
@@ -72,7 +66,7 @@ class Config:
     pp_model: str = DEFAULT_PP_LLM
     model_base_path: str = DEFAULT_MODEL_BASE_PATH
     max_tokens: int = DEFAULT_MAX_TOKENS
-    dtype: DataType = DataType.FLOAT16
+    dtype: str = "bfloat16"
 
     # Generation parameters
     max_depth: int = DEFAULT_MAX_DEPTH
@@ -136,14 +130,6 @@ class Config:
             except ValueError:
                 raise ValueError(f"Invalid search mode: {self.search_mode}. "
                                  f"Valid options are: {[m.value for m in SearchMode]}")
-
-        # Handle data type enum
-        if isinstance(self.dtype, str):
-            try:
-                self.dtype = DataType(self.dtype)
-            except ValueError:
-                raise ValueError(f"Invalid dtype: {self.dtype}. "
-                                 f"Valid options are: {[d.value for d in DataType]}")
 
     def _validate_numeric_fields(self):
         """Validate numeric fields have acceptable values"""
