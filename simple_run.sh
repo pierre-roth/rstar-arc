@@ -1,73 +1,43 @@
 #!/bin/bash
-
-# Create temporary SBATCH script with fixed parameters
-TEMP_SCRIPT=$(mktemp)
-cat > "${TEMP_SCRIPT}" << EOL
-#!/bin/bash
-#SBATCH --mail-type=NONE
-#SBATCH --output=/itet-stor/${USER}/net_scratch/outputs/jobs/%j.out
-#SBATCH --error=/itet-stor/${USER}/net_scratch/outputs/jobs/%j.err
+#SBATCH --mail-type=NONE # mail configuration: NONE, BEGIN, END, FAIL, REQUEUE, ALL
+#SBATCH --output=/itet-stor/piroth/net_scratch/outputs/jobs/%j.out # where to store the output (%j is the JOBID), subdirectory "jobs" must exist
+#SBATCH --error=/itet-stor/piroth/net_scratch/outputs/jobs/%j.err # where to store error messages
 #SBATCH --mem=32G
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=4
-#SBATCH --gpus=gpu:1
-#CommentSBATCH --constraint='geforce_rtx_3090'
+#SBATCH --gres=gpu:1
+#CommentSBATCH --exclude=tikgpu10,tikgpu[06-09]
+#CommentSBATCH --nodelist=tikgpu01 # Specify that it should run on this particular node
+#CommentSBATCH --account=tik-internal
+#CommentSBATCH --constraint='titan_rtx|tesla_v100|titan_xp|a100_80gb'
 
-# Set environment variables
-ETH_USERNAME=${USER}
-PROJECT_DIR=/itet-stor/\${ETH_USERNAME}/net_scratch/rstar-arc
-CONDA_ENV=arc-solver
-DEFAULT_OUTPUT_DIR=/itet-stor/\${ETH_USERNAME}/net_scratch/outputs
+
+ETH_USERNAME=piroth
+PROJECT_NAME=rstar-arc
+DIRECTORY=/itet-stor/${ETH_USERNAME}/net_scratch/${PROJECT_NAME}
+CONDA_ENVIRONMENT=arc-solver
 
 # Exit on errors
 set -o errexit
 
-# Create jobs directory if it doesn't exist
-mkdir -p /itet-stor/\${ETH_USERNAME}/net_scratch/outputs/jobs
 
-# Log basic information
-echo "Running on node: \$(hostname)"
-echo "In directory: \$(pwd)"
-echo "Starting on: \$(date)"
-echo "SLURM_JOB_ID: \${SLURM_JOB_ID}"
+# Send some noteworthy information to the output log
+echo "Running on node: $(hostname)"
+echo "In directory: $(pwd)"
+echo "Starting on: $(date)"
+echo "SLURM_JOB_ID: ${SLURM_JOB_ID}"
 
-# Activate conda
-eval "\$(/itet-stor/\${ETH_USERNAME}/net_scratch/conda/bin/conda shell.bash hook)"
-conda activate \${CONDA_ENV}
-echo "Conda environment activated"
 
-# Execute the Python script with fixed parameters
-cd \${PROJECT_DIR}
+[[ -f /itet-stor/${ETH_USERNAME}/net_scratch/conda/bin/conda ]] && eval "$(/itet-stor/${ETH_USERNAME}/net_scratch/conda/bin/conda shell.bash hook)"
+conda activate ${CONDA_ENVIRONMENT}
+echo "Conda activated"
+cd ${DIRECTORY}
 
-python \${PROJECT_DIR}/main.py \\
-  --task-index=1 \\
-  --task-name="ac0a08a4" \\
-  --policy-model="Qwen/Qwen2.5-Coder-7B-Instruct" \\
-  --pp-model="Qwen/Qwen2.5-Coder-7B-Instruct" \\
-  --max-tokens=2048 \\
-  --search-mode="beam_search" \\
-  --max-depth=10 \\
-  --beam-width=3 \\
-  --branching-factor=3 \\
-  --temperature=0.3 \\
-  --seed=42 \\
-  --gpus=1 \\
-  --dtype="float16" \\
-  --output-dir="\${DEFAULT_OUTPUT_DIR}" \\
-  --data-folder="data_sample/training" \\
-  --verbose
+# Execute your code
+python main.py --config basic_beam_search.yaml
 
-# Cleanup
-echo "Finished at: \$(date)"
+# Send more noteworthy information to the output log
+echo "Finished at: $(date)"
+
+# End the script with exit code 0
 exit 0
-EOL
-
-# Make the temporary script executable
-chmod +x "${TEMP_SCRIPT}"
-
-# Execute the script with sbatch
-sbatch "${TEMP_SCRIPT}"
-
-# Remove the temporary script
-rm "${TEMP_SCRIPT}"
-
