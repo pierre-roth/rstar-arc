@@ -186,22 +186,33 @@ class Config:
         # Create and use argument parser
         parser = cls._create_argument_parser()
         parsed_args = parser.parse_args(args)
+        args_dict = vars(parsed_args)
 
-        # Start with empty config dictionary
-        config_data = {}
+        # Start with defaults from the dataclass
+        config_data = {field.name: field.default for field in fields(cls) 
+                      if field.name not in ['policy_model_dir', 'pp_model_dir']}
+        
+        # First load from config file if provided (overrides defaults)
+        if args_dict.get("config_file"):
+            yaml_config = cls._load_from_file(args_dict["config_file"])
+            print(f"DEBUG - YAML config loaded: {yaml_config}")
+            config_data.update(yaml_config)
 
-        # First load from config file if provided (lower priority)
-        if parsed_args.config_file:
-            config_data.update(cls._load_from_file(parsed_args.config_file))
-
-        # Then override with command line arguments (higher priority)
-        # Only use explicitly provided arguments (not default values from argparse)
-        for key, value in vars(parsed_args).items():
+        # Get a list of arguments that were explicitly provided on the command line
+        provided_args = set()
+        if args:
+            for i, arg in enumerate(args):
+                if arg.startswith('--'):
+                    arg_name = arg[2:].replace('-', '_')  # Convert from kebab-case to snake_case
+                    provided_args.add(arg_name)
+        
+        # Then override with command line arguments (highest priority), but only if explicitly provided
+        for key, value in args_dict.items():
             if key == "config_file":
                 continue  # Skip config_file, we've already processed it
-                
-            # Only include explicitly set values (not default values)
-            if value is not None and key in cls.__annotations__:
+            
+            # Only include values from arguments that were explicitly provided
+            if key in provided_args and key in cls.__annotations__:
                 print(f"DEBUG - Setting from CLI args: {key}={value}")
                 config_data[key] = value
 
@@ -243,7 +254,6 @@ class Config:
 
             # Get the field's type and default value
             field_type = hints.get(field_name, Any)
-            default_value = None  # Don't set default values in argparse
             help_text = field_def.metadata.get('help', '')
 
             # Handle Optional types by extracting the inner type
@@ -252,13 +262,24 @@ class Config:
 
             # Add argument to parser based on its type
             if field_type is bool:
-                # Boolean fields are handled as flags (--verbose instead of --verbose True)
-                # Use "store_true" without default to detect if argument is explicitly provided
-                parser.add_argument(
+                # For boolean args, add both --flag and --no-flag options
+                # This makes the CLI intent explicit for boolean values
+                group = parser.add_mutually_exclusive_group()
+                
+                # The --flag option sets the value to True
+                group.add_argument(
                     flag_name,
                     action='store_true',
                     dest=field_name,
-                    help=help_text
+                    help=f"{help_text} (enable)"
+                )
+                
+                # The --no-flag option sets the value to False
+                group.add_argument(
+                    f"--no-{field_name.replace('_', '-')}",
+                    action='store_false',
+                    dest=field_name,
+                    help=f"{help_text} (disable)"
                 )
             else:
                 # All other argument types
@@ -267,7 +288,7 @@ class Config:
                     # Use the field's type, defaulting to str for Any or unknown types
                     type=field_type if field_type is not Any else str,
                     dest=field_name,
-                    default=None,  # Don't set default - we'll detect if explicitly provided
+                    default=None,  # This is fine - we're checking if the arg was provided in from_args
                     help=help_text,
                     required=False
                 )
