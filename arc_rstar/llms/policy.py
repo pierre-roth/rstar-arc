@@ -18,7 +18,8 @@ class PolicyModel:
             model=self.config.policy_model,
             download_dir=self.config.policy_model_dir,
             tensor_parallel_size=self.config.gpus,
-            dtype=self.config.dtype
+            dtype=self.config.dtype,
+            max_model_len=self.config.max_model_len
         )
 
         self.is_initialized = True

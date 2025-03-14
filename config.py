@@ -92,6 +92,7 @@ class Config:
     model_base_path: str = DEFAULT_MODEL_BASE_PATH  # Base path where models are stored
     max_tokens: int = DEFAULT_MAX_TOKENS  # Maximum tokens for generation
     dtype: str = "bfloat16"  # Data type for model (affects precision/speed)
+    max_model_len: int = 65536  # Affects the context window size
 
     ###########################################
     # GENERATION PARAMETERS
@@ -148,6 +149,7 @@ class Config:
     nodelist: Optional[str] = None  # Specific nodes to use
     constraint: Optional[str] = None  # Hardware constraints
     time: Optional[str] = None  # Time limit for job
+    job_id: int = int(os.getenv("SLURM_JOB_ID", 0))
 
     ###########################################
     # COMPUTED FIELDS
