@@ -3,7 +3,7 @@
 
 # Task parameters
 data-folder: "data_sample/training"
-task-name: "ac0a08a4"
+task-name: "8be77c9e"
 
 # Model parameters
 policy-model: "Qwen/Qwen2.5-Coder-7B-Instruct"

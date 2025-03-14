@@ -3,7 +3,7 @@
 
 # Task parameters
 data-folder: "data_sample/training"
-task-name: "ac0a08a4"
+task-name: "8be77c9e"
 
 # Model parameters
 policy-model: "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B"
