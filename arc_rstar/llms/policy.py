@@ -43,7 +43,8 @@ class PolicyModel:
             top_p=0.95,
             max_tokens=self.config.max_tokens,
             n=self.config.branching_factor,  # Number of candidates to generate
-            stop=[STEP_END, CODE_END]
+            stop=[STEP_END, CODE_END],
+            include_stop_str_in_output=True
         )
 
         request_outputs = self.llm.generate([prompt], sampling_params=sampling_params)

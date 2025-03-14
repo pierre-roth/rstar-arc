@@ -197,8 +197,17 @@ class Config:
         # Then override with command line arguments (higher priority)
         # Only use explicitly provided arguments (not default values from argparse)
         for key, value in vars(parsed_args).items():
+            if key == "config_file":
+                continue  # Skip config_file, we've already processed it
+                
+            # Only include explicitly set values (not default values)
             if value is not None and key in cls.__annotations__:
+                print(f"DEBUG - Setting from CLI args: {key}={value}")
                 config_data[key] = value
+
+        print(f"DEBUG - Final config:")
+        for key in sorted(config_data.keys()):
+            print(f"  {key}: {config_data[key]}")
 
         # Create and return config instance with the merged settings
         return cls(**config_data)
@@ -234,7 +243,7 @@ class Config:
 
             # Get the field's type and default value
             field_type = hints.get(field_name, Any)
-            default_value = field_def.default
+            default_value = None  # Don't set default values in argparse
             help_text = field_def.metadata.get('help', '')
 
             # Handle Optional types by extracting the inner type
@@ -244,10 +253,11 @@ class Config:
             # Add argument to parser based on its type
             if field_type is bool:
                 # Boolean fields are handled as flags (--verbose instead of --verbose True)
+                # Use "store_true" without default to detect if argument is explicitly provided
                 parser.add_argument(
                     flag_name,
                     action='store_true',
-                    default=default_value,
+                    dest=field_name,
                     help=help_text
                 )
             else:
@@ -256,7 +266,8 @@ class Config:
                     flag_name,
                     # Use the field's type, defaulting to str for Any or unknown types
                     type=field_type if field_type is not Any else str,
-                    default=default_value,
+                    dest=field_name,
+                    default=None,  # Don't set default - we'll detect if explicitly provided
                     help=help_text,
                     required=False
                 )
@@ -295,7 +306,14 @@ class Config:
 
             # Convert kebab-case keys (like "model-name") to snake_case (like "model_name")
             # This ensures compatibility with Python variable naming conventions
-            return {k.replace('-', '_'): v for k, v in config_data.items()}
+            result = {k.replace('-', '_'): v for k, v in config_data.items()}
+            
+            # Debug the loaded configuration
+            print(f"DEBUG - Loaded from {config_file}:")
+            for k, v in result.items():
+                print(f"  {k}: {v}")
+                
+            return result
 
         except Exception as e:
             print(f"Error loading config file: {e}")
@@ -350,8 +368,11 @@ class Config:
         Raises:
             SystemExit: If the requested task file doesn't exist
         """
+        # Debug info
+        print(f"DEBUG - In select_task_file: task_name='{self.task_name}', task_index={self.task_index}")
+        
         # PRIORITY 1: If a specific task name is provided, use it directly
-        if self.task_name:
+        if self.task_name and self.task_name.strip():
             # Convert task name to filename with .json extension
             task_file = f"{self.task_name}.json"
             task_path = os.path.join(self.data_folder, task_file)

@@ -12,10 +12,15 @@ def run_single_task(config: Config, task_path=None):
     """Run the solver on a single task."""
     solver = Solver(config)
 
-    # Create the appropriate agent based on search_mode
-    if config.search_mode == "bs":
+    # Normalize search_mode value to handle different input formats
+    search_mode = config.search_mode.lower()
+    if search_mode == "bs" or search_mode == "beam_search" or search_mode == "beam":
+        if config.verbose:
+            print(f"Using Beam Search mode")
         agent = BeamSearch(config)
-    elif config.search_mode == "mcts":
+    elif search_mode == "mcts" or search_mode == "monte_carlo" or search_mode == "monte-carlo":
+        if config.verbose:
+            print(f"Using Monte Carlo Tree Search mode")
         agent = MCTS(config)
     else:
         print(f"Unknown search mode: {config.search_mode}")
