@@ -24,6 +24,7 @@ def extract_python_code(text, verbose=False):
     
     if verbose:
         print(f"Extracting code from text ({len(text)} characters)")
+        print(f"Text to extract from: {text}")
         
     # Check if text contains the markers
     if CODE not in text:
