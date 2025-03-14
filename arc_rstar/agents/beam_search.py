@@ -33,6 +33,7 @@ class BeamSearch:
             print(f"Starting beam search for task: {task.name}")
             print(
                 f"Beam width: {self.beam_width}, Branching factor: {self.branching_factor}, Max depth: {self.max_depth}")
+            print(f"\n\nInitial prompt: {prompt} \n\n\n")
 
         # Initialize beam with just the root node
         beam = [self.root]
