@@ -1,6 +1,5 @@
-from run_tasks import *
+from run_tasks import run_all_tasks, run_single_task
 from config import Config
-
 
 if __name__ == '__main__':
     # Create config from command line arguments
@@ -12,4 +11,3 @@ if __name__ == '__main__':
         run_single_task(config)
 
     print("Done!")
-

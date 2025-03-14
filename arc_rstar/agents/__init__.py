@@ -1,10 +1,5 @@
-from .tree import Tree
-from .beam_search import BeamSearch
-from .mcts import MCTS
+from arc_rstar.agents.node import Node
+from arc_rstar.agents.beam_search import BeamSearch
+from arc_rstar.agents.mcts import MCTS
 
-
-__all__ = [
-    'Tree',
-    'BeamSearch',
-    'MCTS',
-]
+__all__ = ['Node', 'BeamSearch', 'MCTS']

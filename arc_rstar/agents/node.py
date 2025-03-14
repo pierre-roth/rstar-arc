@@ -1,38 +1,14 @@
-import numpy as np
-from typing import Optional, Any, Union
+from config import Config, CODE_END
 
 
 class Node:
-    def __init__(self, c_puct=2, inited=False, visit_count=0, value_sum=0):
+    def __init__(self, config: Config):
+        self.config = config
         self.state = {"text": "", "extra_info": ""}
         self.parent = None
         self.children = []
         self.depth = 0
-        self.is_terminal = False
         self.reward = 0
-        self.value = 0
-        self.tag = "0"
-        self.consecutive_errors = 0
-        self.c_puct = c_puct
-        self.inited = False
-        self.__visit_count = visit_count
-        self.__value_sum = value_sum
-        self.score = 0.0  # For beam search
-        
-    def to_dict(self) -> dict[str, Any]:
-        """Convert the node to a dictionary for JSON serialization."""
-        return {
-            "state": self.state,
-            "depth": self.depth,
-            "is_terminal": self.is_terminal,
-            "reward": self.reward,
-            "value": self.value,
-            "tag": self.tag,
-            "score": self.score,
-            "visit_count": self.__visit_count,
-            "q_value": self.q_value(),
-            # Don't include parent or children to avoid circular references
-        }
 
     def has_children(self) -> bool:
         return self.children != []
@@ -40,43 +16,71 @@ class Node:
     def is_root(self) -> bool:
         return self.parent is None
 
-    def q_value(self) -> float:
-        if self.__visit_count == 0:
-            return 0
-        return self.__value_sum / self.__visit_count
+    def is_terminal(self) -> bool:
+        return self.get_text().count(CODE_END) > 1
 
-    def visit_count(self) -> int:
-        return self.__visit_count
+    def add_child(self, child: "Node"):
+        self.children.append(child)
+        child.parent = self
+        child.depth = self.depth + 1
 
-    def update_visit_count(self, count: int) -> None:
-        self.__visit_count = count
-
-    def update(self, value: float) -> None:
-        if self.inited is False:
-            self.inited = True
-            self.value = value
-        self.__visit_count += 1
-        self.__value_sum += value
-
-    def update_recursive(self, value: float, start_node: 'Node') -> None:
-        if isinstance(value, list):
-            value = float(value[0])
-        self.update(value)
-        if self.tag == start_node.tag:
-            return
-        self.parent.update_recursive(value, start_node)
-
-    def puct(self) -> float:
-        if not self.parent:
-            return 0
-        q_value = self.q_value() if self.visit_count() > 0 else 0
-        if self.parent.visit_count() == 0 or self.visit_count() == 0:
-            u_value = 0
-        else:
-            u_value = self.c_puct * np.sqrt(np.log(self.parent.visit_count()) / (self.visit_count()))
-        return q_value + u_value
+    # validate nodes based on whether the python code runs
+    def valid(self, task) -> bool:
+        from arc_rstar.tools.python_tool import extract_python_code, execute_code_with_grid
         
-    def set_score(self, score: float) -> None:
-        """Set the score for beam search."""
-        self.score = score
+        try:
+            # Try to extract the code
+            code = extract_python_code(self.get_text())
+            
+            # Use the first training example to validate
+            if task.training_examples:
+                example = task.training_examples[0]
+                test_input = example.input_grid.grid
+                
+                # Just check if execution works, not if result is correct
+                execute_code_with_grid(code, test_input)
+                return True
+            return True
+        except Exception as e:
+            if self.config.verbose:
+                print(f"Node validation failed: {str(e)}")
+            return False
 
+    # recursively collect all the text up to the root (root text is in front)
+    def get_text(self) -> str:
+        text = self.state["text"]
+        if not self.is_root():
+            text = self.parent.get_text() + "\n" + text
+        return text
+
+    def generate_children(self, policy_model, pp_model, task) -> list["Node"]:
+        prompt = self.get_text()
+        if self.config.verbose:
+            print(f"Generating children for node at depth {self.depth}")
+        
+        child_texts = policy_model.generate(prompt)
+        if self.config.verbose:
+            print(f"Generated {len(child_texts)} candidate continuations")
+        
+        valid_children = []
+        for i, child_text in enumerate(child_texts):
+            child = Node(self.config)
+            child.state["text"] = child_text
+            
+            # Check if the node is valid before adding it
+            if child.valid(task):
+                child.reward = pp_model.score(child)
+                self.add_child(child)
+                valid_children.append(child)
+                if self.config.verbose:
+                    print(f"Child {i+1}/{len(child_texts)} is valid with reward {child.reward:.4f}")
+            else:
+                if self.config.verbose:
+                    print(f"Child {i+1}/{len(child_texts)} is invalid and will be discarded")
+        
+        if not valid_children and self.config.verbose:
+            print("WARNING: No valid children were generated!")
+        elif self.config.verbose:
+            print(f"Added {len(valid_children)}/{len(child_texts)} valid children")
+            
+        return valid_children

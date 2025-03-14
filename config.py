@@ -13,22 +13,23 @@ from typing import Optional, Any, Type, Callable, get_type_hints
 # Default paths for models, outputs and data
 # These paths are used if not overridden by command line or config file
 DEFAULT_MODEL_BASE_PATH = "/itet-stor/piroth/net_scratch/models"  # Base directory for models
-DEFAULT_OUTPUT_PATH = "/itet-stor/piroth/net_scratch/outputs"     # Where results will be saved
-DEFAULT_DATA_SAMPLE_PATH = "data_sample"                          # Root folder for ARC data
-DEFAULT_TRAINING_DATA_PATH = "data_sample/training"               # Training data location
-DEFAULT_EVALUATION_DATA_PATH = "data_sample/evaluation"           # Evaluation data location
+DEFAULT_OUTPUT_PATH = "/itet-stor/piroth/net_scratch/outputs"  # Where results will be saved
+DEFAULT_DATA_SAMPLE_PATH = "data_sample"  # Root folder for ARC data
+DEFAULT_TRAINING_DATA_PATH = "data_sample/training"  # Training data location
+DEFAULT_EVALUATION_DATA_PATH = "data_sample/evaluation"  # Evaluation data location
 
 # Default model names - identifies which language models to use
 DEFAULT_POLICY_LLM = "Qwen/Qwen2.5-Coder-7B-Instruct"  # Policy model (generates reasoning steps)
-DEFAULT_PP_LLM = "Qwen/Qwen2.5-Coder-7B-Instruct"      # Process Preference Model (evaluates steps)
+DEFAULT_PP_LLM = "Qwen/Qwen2.5-Coder-7B-Instruct"  # Process Preference Model (evaluates steps)
 
 # Default hyperparameters
-DEFAULT_MAX_TOKENS = 2048       # Maximum tokens for model generation
-DEFAULT_MAX_DEPTH = 10          # Maximum depth of search tree (max steps)
-DEFAULT_BEAM_WIDTH = 3          # Width of beam in beam search (solutions to track)
-DEFAULT_BRANCHING_FACTOR = 3    # Number of child nodes to expand per parent
-DEFAULT_TEMPERATURE = 0.3       # Sampling temperature (lower = more deterministic)
-DEFAULT_SEED = 42               # Random seed for reproducibility
+DEFAULT_MAX_TOKENS = 2048  # Maximum tokens for model generation
+DEFAULT_MAX_DEPTH = 10  # Maximum depth of search tree (max steps)
+DEFAULT_BEAM_WIDTH = 3  # Width of beam in beam search (solutions to track)
+DEFAULT_BRANCHING_FACTOR = 3  # Number of child nodes to expand per parent
+DEFAULT_TEMPERATURE = 0.3  # Sampling temperature (lower = more deterministic)
+DEFAULT_SEED = 42  # Random seed for reproducibility
+DEFAULT_C_PUCT = 2.0  # PUCT exploration constant for MCTS
 
 ###########################################
 # EXECUTION SETTINGS
@@ -50,21 +51,16 @@ NO_VALID_CHILD = "Fail to generate parsable text for next step."
 # These tags are used to parse the model's output into structured sections
 
 # Step output markers
-OUTPUT = "<o>"                  # Begins an output section
+OUTPUT = "<o>"  # Begins an output section
 OUTPUT_END = "<end_of_output>"  # Ends an output section
-STEP_END = "<end_of_step>"      # Marks the end of a reasoning step
+STEP_END = "<end_of_step>"  # Marks the end of a reasoning step
 
 # Code section markers
-CODE = "<code>"                 # Begins a code section
-CODE_TAG = "Now print the final answer"  # Indicates code that produces final answer
-CODE_END = "<end_of_code>"      # Ends a code section
+CODE = "<code>"  # Begins a code section
+CODE_END = "</code>"  # Ends a code section
 
-# Answer markers
-ANSWER = "<answer>"             # Begins the final answer section
-ANSWER_END = "<end_of_answer>"  # Ends the final answer section
-
-# Refinement markers (for solution verification)
-REFINE = "<refine>"             # Begins a solution refinement section
+# Refinement markers
+REFINE = "<refine>"  # Begins a solution refinement section
 REFINE_PASS = "I am sure that my answer is correct"  # Indicates a confident solution
 REFINE_END = "<end_of_refine>"  # Ends a refinement section
 
@@ -84,79 +80,82 @@ class Config:
     # APPLICATION PARAMETERS
     ###########################################
     verbose: bool = True  # Controls logging verbosity
-    
+
     ###########################################
     # MODEL CONFIGURATION
     ###########################################
     # Language model selection
-    policy_model: str = DEFAULT_POLICY_LLM    # Model that generates reasoning steps
-    pp_model: str = DEFAULT_PP_LLM            # Process Preference Model for evaluating steps
-    
+    policy_model: str = DEFAULT_POLICY_LLM  # Model that generates reasoning steps
+    pp_model: str = DEFAULT_PP_LLM  # Process Preference Model for evaluating steps
+
     # Model loading settings
     model_base_path: str = DEFAULT_MODEL_BASE_PATH  # Base path where models are stored
-    max_tokens: int = DEFAULT_MAX_TOKENS      # Maximum tokens for generation
-    dtype: str = "bfloat16"                   # Data type for model (affects precision/speed)
+    max_tokens: int = DEFAULT_MAX_TOKENS  # Maximum tokens for generation
+    dtype: str = "bfloat16"  # Data type for model (affects precision/speed)
 
     ###########################################
     # GENERATION PARAMETERS
     ###########################################
     max_depth: int = DEFAULT_MAX_DEPTH  # Maximum number of reasoning steps
-    
+
     ###########################################
     # DATA CONFIGURATION
     ###########################################
     data_folder: str = DEFAULT_TRAINING_DATA_PATH  # Path to ARC task data
-    task_index: int = 1    # Index of task to run (1-based indexing)
-    task_name: str = ""    # Name of specific task (overrides task_index if provided)
+    task_index: int = 1  # Index of task to run (1-based indexing)
+    task_name: str = ""  # Name of specific task (overrides task_index if provided)
     all_tasks: bool = False  # Whether to run all tasks in data_folder
-    
+
     ###########################################
     # SEARCH ALGORITHM PARAMETERS
     ###########################################
     search_mode: str = "bs"  # Search algorithm - "bs" for beam search, "mcts" for Monte Carlo Tree Search
     temperature: float = DEFAULT_TEMPERATURE  # Sampling temperature for LLM generation
-    seed: int = DEFAULT_SEED                  # Random seed for reproducibility
-    deterministic: bool = False               # Whether to enforce deterministic behavior
-    
+    seed: int = DEFAULT_SEED  # Random seed for reproducibility
+    deterministic: bool = False  # Whether to enforce deterministic behavior
+
     # BEAM search specific parameters
-    beam_width: int = DEFAULT_BEAM_WIDTH          # Number of top-scoring beams to track
+    beam_width: int = DEFAULT_BEAM_WIDTH  # Number of top-scoring beams to track
     branching_factor: int = DEFAULT_BRANCHING_FACTOR  # Number of children to generate per step
-    
+
+    # MCTS search specific parameters
+    c_puct: float = DEFAULT_C_PUCT  # PUCT exploration constant
+
     ###########################################
     # HARDWARE CONFIGURATION
     ###########################################
     gpus: int = 1  # Number of GPUs to use
-    
+
     ###########################################
     # OUTPUT CONFIGURATION
     ###########################################
     output_dir: str = DEFAULT_OUTPUT_PATH  # Directory to save results
     hint: str = ""  # Optional hint to provide to the solver
-    
+
     ###########################################
     # CONFIG FILE
     ###########################################
     config_file: str = ""  # Path to YAML config file
-    
+
     ###########################################
     # SLURM PARAMETERS
     ###########################################
     # These parameters are used by the SLURM script, not directly by the Python application
-    mem: Optional[str] = None          # Memory allocation for SLURM
-    cpus: Optional[int] = None         # Number of CPUs for SLURM
-    partition: Optional[str] = None    # SLURM partition to use
-    exclude: Optional[str] = None      # Nodes to exclude
-    nodelist: Optional[str] = None     # Specific nodes to use
-    constraint: Optional[str] = None   # Hardware constraints
-    time: Optional[str] = None         # Time limit for job
-    
+    mem: Optional[str] = None  # Memory allocation for SLURM
+    cpus: Optional[int] = None  # Number of CPUs for SLURM
+    partition: Optional[str] = None  # SLURM partition to use
+    exclude: Optional[str] = None  # Nodes to exclude
+    nodelist: Optional[str] = None  # Specific nodes to use
+    constraint: Optional[str] = None  # Hardware constraints
+    time: Optional[str] = None  # Time limit for job
+
     ###########################################
     # COMPUTED FIELDS
     ###########################################
     # These are calculated automatically in __post_init__
     policy_model_dir: Optional[str] = None  # Full path to policy model
-    pp_model_dir: Optional[str] = None      # Full path to PP model
-    
+    pp_model_dir: Optional[str] = None  # Full path to PP model
+
     def __post_init__(self):
         """
         Initialize computed fields after instance creation
@@ -226,8 +225,8 @@ class Config:
             field_def = field_obj
 
             # Skip private fields and computed fields
-            if (field_name.startswith('_') or 
-                field_name in ['policy_model_dir', 'pp_model_dir']):
+            if (field_name.startswith('_') or
+                    field_name in ['policy_model_dir', 'pp_model_dir']):
                 continue
 
             # Convert snake_case field names to kebab-case for CLI flags
@@ -289,7 +288,7 @@ class Config:
                 else:
                     print(f"Warning: Config file not found: {config_file}")
                     return {}
-                
+
             # Read and parse the YAML file
             with open(config_file, 'r') as f:
                 config_data = yaml.safe_load(f) or {}
@@ -297,7 +296,7 @@ class Config:
             # Convert kebab-case keys (like "model-name") to snake_case (like "model_name")
             # This ensures compatibility with Python variable naming conventions
             return {k.replace('-', '_'): v for k, v in config_data.items()}
-            
+
         except Exception as e:
             print(f"Error loading config file: {e}")
             return {}
@@ -334,7 +333,7 @@ class Config:
         # Report number of files if in verbose mode
         if self.verbose:
             print(f"Found {len(files)} JSON files in '{self.data_folder}'")
-            
+
         return files
 
     def select_task_file(self) -> str:
@@ -354,7 +353,7 @@ class Config:
         # PRIORITY 1: If a specific task name is provided, use it directly
         if self.task_name:
             # Convert task name to filename with .json extension
-            task_file = f"{self.task_name}.json" 
+            task_file = f"{self.task_name}.json"
             task_path = os.path.join(self.data_folder, task_file)
 
             # Verify the file exists
@@ -377,10 +376,9 @@ class Config:
 
         # Select the file by index (adjusting for 0-based list indexing)
         chosen_file = os.path.join(self.data_folder, files[self.task_index - 1])
-        
+
         # Report selected file if in verbose mode
         if self.verbose:
             print(f"Selected file by index: {chosen_file}")
 
         return chosen_file
-

@@ -1,159 +1,98 @@
-from typing import List, Dict, Any, Optional, Tuple
+from typing import Any, Optional, Tuple
 import numpy as np
 from config import Config
-from .tree import Tree
-from .node import Node
+from arc_rstar.agents.node import Node
 
+from arc_rstar.arc_task.task import ARCTask
+from arc_rstar.llms.policy import PolicyModel
+from arc_rstar.llms.process_preference import ProcessPreferenceModel
 from arc_rstar.tools.python_tool import extract_python_code, execute_code_with_grid
+from prompt import get_prompt
 
 
-class BeamSearch(Tree):
-    """
-    Beam Search implementation for ARC tasks.
-    
-    The search uses two key parameters:
-    - branching_factor: Number of candidates to generate at each node (exploration breadth)
-    - beam_width: Number of "best candidates" to keep after each step (pruning)
-    
-    This separation allows controlling generation diversity and search efficiency independently.
-    """
+class BeamSearch:
+
     def __init__(self, config: Config):
-        super().__init__(config)
+        self.config = config
+        self.root = None
         self.beam_width = config.beam_width
         self.branching_factor = config.branching_factor
         self.max_depth = config.max_depth
-        self.best_node = None
-        self.best_score = float('-inf')
-        
-    def search(self, task, policy_model) -> Node:
-        """
-        Execute beam search and return the best node found.
-        
-        Args:
-            task: The task to solve
-            policy_model: The policy model to generate candidates
-            
-        Returns:
-            The best node found during search
-        """
-        if self.root is None:
-            # Initialize the root with the task prompt
-            initial_state = {"text": task.get_initial_prompt(), "extra_info": ""}
-            self.initialize_root(initial_state)
-        
+
+    def initialize_root(self, prompt: str):
+        """Initialize the root node with the given state."""
+        self.root = Node(self.config)
+        self.root.state["text"] = prompt
+
+    def solve(self, task: ARCTask, policy_model: PolicyModel, pp_model: ProcessPreferenceModel) -> Optional[str]:
+
+        prompt = get_prompt(self.config, task)
+        self.initialize_root(prompt)
+
+        if self.config.verbose:
+            print(f"Starting beam search for task: {task.name}")
+            print(f"Beam width: {self.beam_width}, Branching factor: {self.branching_factor}, Max depth: {self.max_depth}")
+
         # Initialize beam with just the root node
         beam = [self.root]
-        
+        solution_found = False
+        solution_node = None
+
         for depth in range(self.max_depth):
             if not beam:
+                if self.config.verbose:
+                    print(f"Search stopped: Beam is empty at depth {depth}")
                 break
-            
+
+            if self.config.verbose:
+                print(f"\n--- Depth {depth+1}/{self.max_depth} ---")
+                print(f"Current beam size: {len(beam)}")
+
             # Generate candidate next steps for all nodes in the current beam
             candidates = []
-            
-            for node in beam:
-                if node.is_terminal:
-                    # Keep terminal nodes in the candidates
-                    candidates.append((node.score, node))
-                    continue
-                
-                # Generate potential next steps using the policy model
-                next_states = self._generate_candidates(node, task, policy_model)
-                
-                # Add all generated candidates to the pool
-                for state, score in next_states:
-                    child = self.add_child(node, state)
-                    child.set_score(score)
-                    candidates.append((score, child))
-                    
-                    # Update "best_node" if this is better
-                    if score > self.best_score:
-                        self.best_score = score
-                        self.best_node = child
 
-            sorted_candidates = sorted(candidates, key=lambda x: -x[0])
-            
+            for node in beam:
+                candidates.extend(node.generate_children(policy_model, pp_model, task))
+                
+            if self.config.verbose:
+                print(f"Total candidates generated: {len(candidates)}")
+                
+            if not candidates:
+                if self.config.verbose:
+                    print("Search stopped: No valid candidates generated")
+                break
+
+            sorted_candidates = sorted(candidates, key=lambda x: -x.reward)
+
             # Select top-k candidates for the next beam
-            beam = [node for _, node in sorted_candidates[:self.beam_width]]
+            beam = sorted_candidates[:self.beam_width]
             
+            if self.config.verbose:
+                print(f"New beam size after selection: {len(beam)}")
+
             # Check if we've found a solution
-            for node in beam:
-                if task.is_solved(node.state):
-                    node.is_terminal = True
-                    return node
-        
-        # Return the best node found
-        return self.best_node if self.best_node else self.root
-    
-    def _generate_candidates(self, node: Node, task, policy_model) -> List[Tuple[Dict[str, Any], float]]:
-        """
-        Generate candidate next steps using the policy model.
-        Focusing on generating Python code to solve the ARC task.
-        
-        Args:
-            node: Current node to expand
-            task: The task being solved
-            policy_model: The language model to generate candidates
-            
-        Returns:
-            List of (state, score) tuples for candidate next steps
-        """
+            for i, node in enumerate(beam):
+                if node.is_terminal() and task.run_training_examples(extract_python_code(node.get_text()))[0]:
+                    solution_found = True
+                    solution_node = node
+                    if self.config.verbose:
+                        print(f"Solution found at depth {depth+1}, beam position {i+1}")
+                    break
 
-        # Get the current state/prompt
-        prompt = node.state["text"]
-        
-        # Generate next steps using the policy model
-        candidates = []
-        
-        # Generate completions using the policy model
-        completions = policy_model.generate(prompt)
+            if solution_found:
+                break
 
-        # Process completions into candidate states
-        for i, completion in enumerate(completions):
-            # Extract the generated text
-            generated_text = completion.outputs[0].text
-            
-            # Create a new state by extending the current prompt
-            new_text = prompt + generated_text
-            new_state = {
-                "text": new_text,
-                "extra_info": "Generated by beam search step"
-            }
-            
-            # Extract Python code and evaluate it if possible
-            code = extract_python_code(new_text)
-            score = -i  # Default score based on order
-            
-            if code and hasattr(task, 'test_data') and task.test_data:
-                # Try to execute the code
-                test_input = task.test_data[0].input_grid.grid
-                result = execute_code_with_grid(code, test_input)
-                
-                # Score based on code execution success
-                if result.get('success', False):
-                    # If code executes successfully, give it a higher score
-                    score = 10.0
-                    
-                    # If there's an output grid, check if it's close to expected
-                    if 'grid' in result:
-                        # Check if dimensions match the expected output
-                        expected_output = task.test_data[0].output_grid.grid
-                        output_grid = result.get('grid')
-                        
-                        # Convert to list of lists if it's a numpy array
-                        if isinstance(output_grid, np.ndarray):
-                            output_grid = output_grid.tolist()
-                        
-                        # Further boost score for correct answers
-                        if output_grid == expected_output:
-                            score = 100.0  # Much higher score for correct answers
-                        elif len(output_grid) == len(expected_output):
-                            # Partial match - dimensions match
-                            score = 20.0
-            
-            # Add the score to the state for reference
-            new_state["score"] = score
-            candidates.append((new_state, score))
-        
-        return candidates
+        # If a solution was found, return the code
+        if solution_found:
+            final_code = extract_python_code(solution_node.get_text())
+            if self.config.verbose:
+                print("\nSOLUTION FOUND!")
+                print(f"Total steps: {solution_node.depth}")
+        else:
+            final_code = None
+            if self.config.verbose:
+                print("\nNO SOLUTION FOUND")
+                print(f"Search completed after {self.max_depth} steps or beam emptied")
 
+        # Return the best code found
+        return final_code

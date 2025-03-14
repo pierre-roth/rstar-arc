@@ -1,7 +1,8 @@
 import os
 import json
 import sys
-from arc_rstar.agents import BeamSearch, MCTS
+from arc_rstar.agents.beam_search import BeamSearch
+from arc_rstar.agents.mcts import MCTS
 from arc_rstar.solver import Solver
 from config import Config
 from datetime import datetime
@@ -31,10 +32,11 @@ def run_single_task(config: Config, task_path=None):
     if config.output_dir:
         os.makedirs(config.output_dir, exist_ok=True)
         task_name = os.path.basename(task_path).split('.')[0] if task_path else f"task_{config.task_index}"
-        output_path = os.path.join(config.output_dir, f"{task_name}_{config.search_mode}_result_{datetime.now()}.json")
+        output_path = os.path.join(config.output_dir,
+                                   f"{task_name}_{config.search_mode}_result_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.json")
 
         with open(output_path, 'w') as f:
-            json.dump(result, f, indent=2)
+            json.dump(result, f, indent=2)  # type: ignore
 
         if config.verbose:
             print(f"Results saved to {output_path}")
@@ -68,7 +70,7 @@ def run_all_tasks(config: Config):
         output_path = os.path.join(config.output_dir, f"all_tasks_{config.search_mode}_results.json")
 
         with open(output_path, 'w') as f:
-            json.dump(results, f, indent=2)
+            json.dump(results, f, indent=2)  # type: ignore
 
         if config.verbose:
             print(f"All results saved to {output_path}")
@@ -79,4 +81,3 @@ def run_all_tasks(config: Config):
     print(f"Overall results: {successful}/{total} tasks solved successfully ({successful / total * 100:.2f}%)")
 
     return results
-

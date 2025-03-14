@@ -1,5 +1,8 @@
 from config import Config
 from vllm import LLM, SamplingParams
+from random import random
+
+from arc_rstar.agents.node import Node
 
 
 class ProcessPreferenceModel:
@@ -7,20 +10,27 @@ class ProcessPreferenceModel:
         self.config = config
         self.llm = None
         self.tg = terminal_guided
+        self.is_initialized = False
 
     def init_llm(self):
-        if not self.tg:
-            self.llm = LLM(
-                model=self.config.pp_model,
-                download_dir=self.config.pp_model_dir,
-                tensor_parallel_size=self.config.gpus,
-                dtype=self.config.dtype
-            )
-        else:
-            pass
+        if self.is_initialized or self.tg:
+            return
 
-    def score(self, node):
-        sampling_params = SamplingParams(temperature=self.config.temperature)
-        return self.llm.generate(node, sampling_params)
+        self.llm = LLM(
+            model=self.config.pp_model,
+            download_dir=self.config.pp_model_dir,
+            tensor_parallel_size=self.config.gpus,
+            dtype=self.config.dtype
+        )
 
+        self.is_initialized = True
+
+    # the score function is used to evaluate the quality of a node
+    # the value is a float between -1 and 1
+    def score(self, node: Node):
+        if self.tg:
+            return random() * 2 - 1
+
+        # sampling_params = SamplingParams(temperature=self.config.temperature)
+        # return self.llm.generate(node, sampling_params=sampling_params)
 
