@@ -10,8 +10,13 @@ You are a powerful agent with broad problem solving/pattern matching knowledge a
 You need to write Python code to solve ARC (Abstraction and Reasoning Corpus) tasks.
 
 ARC Task Description:
-    1. 
-
+    1. ARC tasks are rectangular grids of integers.
+    2. Each integer represents a color and there are only 10 color values (0-9).
+    3. Each task is made up of training and test input-output examples.
+    4. Your task is to write Python code that can transform the input grids into their corresponding output grids.
+    5. You will get access to the training input-output examples to learn the transformation function.
+    6. You need to write code that can generate the correct output grids for the test input grids.
+    
 Remember:
     1. Write code that implements the transformation function step by step. The solution should include {CODE} {CODE_END} and intermediate steps.
     2. The final code block should be valid Python code and implement the function `solve(I: list[list[int]]) -> list[list[int]]`. This function transforms input grids into their corresponding output grids.
@@ -47,7 +52,7 @@ def solve(I):
 
 
 Now it's your turn! Write code to solve the task below. The code above is just an example and will not solve the task below.
-You need to come up with a solution that solves the task below.
+You need to come up with a solution that solves the task below. Use the input output example to infer the transformation function!
 
 {task.to_prompt()}
 

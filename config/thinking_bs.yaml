@@ -8,8 +8,7 @@ task-name: "8be77c9e"
 # Model parameters
 policy-model: "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B"
 pp-model: "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B"
-max-tokens: 32768
-max-model-len: 65536
+max-tokens: 24576
 
 # Search parameters
 search-mode: "beam_search"  # Options: beam_search, mcts

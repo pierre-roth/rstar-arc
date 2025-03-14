@@ -92,7 +92,7 @@ class Config:
     model_base_path: str = DEFAULT_MODEL_BASE_PATH  # Base path where models are stored
     max_tokens: int = DEFAULT_MAX_TOKENS  # Maximum tokens for generation
     dtype: str = "bfloat16"  # Data type for model (affects precision/speed)
-    max_model_len: int = 65536  # Affects the context window size
+    max_model_len: int = 24576  # Affects the context window size
 
     ###########################################
     # GENERATION PARAMETERS
