@@ -1,9 +1,8 @@
 from config import Config, CODE_END
+from arc_rstar.tools.python_tool import extract_python_code, execute_code_with_grid
 
 
 class Node:
-
-    prompt_code_ends = 1
 
     def __init__(self, config: Config):
         self.config = config
@@ -20,7 +19,8 @@ class Node:
         return self.parent is None
 
     def is_terminal(self) -> bool:
-        return self.get_text().count(CODE_END) > self.prompt_code_ends
+        # check whether end of text is CODE_END
+        return self.state["text"].strip().endswith(CODE_END)
 
     def add_child(self, child: "Node"):
         self.children.append(child)
@@ -29,8 +29,7 @@ class Node:
 
     # validate nodes based on whether the python code runs
     def valid(self, task) -> bool:
-        from arc_rstar.tools.python_tool import extract_python_code, execute_code_with_grid
-        
+
         # Check if this is a terminal node (already has CODE_END)
         is_terminal = self.is_terminal()
         
@@ -106,11 +105,10 @@ class Node:
         for i, child_text in enumerate(child_texts):
             child = Node(self.config)
             child.state["text"] = child_text
-            
-            # Check if the node is valid before adding it
+            self.add_child(child)
+            child.reward = pp_model.score(child)
+
             if child.valid(task):
-                child.reward = pp_model.score(child)
-                self.add_child(child)
                 valid_children.append(child)
                 if self.config.verbose:
                     print(f"Child {i+1}/{len(child_texts)} is valid with reward {child.reward:.4f}")

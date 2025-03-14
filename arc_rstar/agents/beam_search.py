@@ -27,7 +27,6 @@ class BeamSearch:
     def solve(self, task: ARCTask, policy_model: PolicyModel, pp_model: ProcessPreferenceModel) -> Optional[str]:
 
         prompt = get_prompt(self.config, task)
-        Node.prompt_code_ends = prompt.count(CODE_END)
         self.initialize_root(prompt)
 
         if self.config.verbose:
