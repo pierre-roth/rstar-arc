@@ -51,7 +51,7 @@ def prepare_code(code):
 
     # If the code doesn't contain a complete solve function (no 'return' statement)
     if 'def solve(I):' in clean_code and 'return' not in clean_code:
-        clean_code += "\n        return []"
+        clean_code += "\n    return []"
 
     return clean_code
 
