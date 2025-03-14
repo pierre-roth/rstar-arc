@@ -5,7 +5,7 @@ from arc_rstar.agents.node import Node
 
 from arc_rstar.arc_task.task import ARCTask
 from arc_rstar.llms.policy import PolicyModel
-from arc_rstar.llms.process_preference import ProcessPreferenceModel
+from arc_rstar.llms.pp import ProcessPreferenceModel
 from arc_rstar.tools.python_tool import extract_python_code, execute_code_with_grid
 from prompt import get_prompt
 

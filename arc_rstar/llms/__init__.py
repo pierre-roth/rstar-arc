@@ -1,5 +1,5 @@
 from .policy import PolicyModel
-from .process_preference import ProcessPreferenceModel
+from .pp import ProcessPreferenceModel
 
 
 __all__ = [
