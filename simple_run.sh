@@ -2,7 +2,7 @@
 #SBATCH --mail-type=NONE # mail configuration: NONE, BEGIN, END, FAIL, REQUEUE, ALL
 #SBATCH --output=/itet-stor/piroth/net_scratch/outputs/jobs/%j.out # where to store the output (%j is the JOBID)
 #SBATCH --error=/itet-stor/piroth/net_scratch/outputs/jobs/%j.err # where to store error messages
-#SBATCH --mem=48G
+#SBATCH --mem=64G
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=4
 #SBATCH --gres=gpu:1

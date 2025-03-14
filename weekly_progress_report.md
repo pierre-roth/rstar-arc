@@ -31,11 +31,13 @@
   - Clean up code and make it as "extendable" as possible
 
 - **Work done**: 
-  - Decided on implementing a "one line per step" format
+  - Decided on not specifying the extend of the step format beyond the "python block" limitation (that means the prefix code of every step must be valid python code)
+  - Successfully implemented working version of "Round 1" with beam search agent (also successfully solved first ARC Task)
   - 
 
 
 - **Issues and Questions**:
-  - How do I best handle arguments?
+  - It seems the SLMs have very weak performance with the current system. What is the best way to mitigate this issue?
+  - How do I effectively optimize the prompt for the policy SLM?
   - 
 
