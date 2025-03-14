@@ -1,5 +1,5 @@
 from typing import Any, Optional
-from config import Config
+from config import Config, STEP_END, CODE_END
 from vllm import LLM, SamplingParams
 
 
@@ -42,7 +42,8 @@ class PolicyModel:
             temperature=self.config.temperature,
             top_p=0.95,
             max_tokens=self.config.max_tokens,
-            n=self.config.branching_factor  # Number of candidates to generate
+            n=self.config.branching_factor,  # Number of candidates to generate
+            stop=[STEP_END, CODE_END]
         )
 
         request_outputs = self.llm.generate([prompt], sampling_params=sampling_params)

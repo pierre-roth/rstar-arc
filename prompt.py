@@ -17,9 +17,9 @@ def get_prompt(config: Config, task: ARCTask) -> str:
         1. Write code that implements the transformation function step by step. The solution should include {CODE} {CODE_END} and intermediate steps.
         2. The final code block should be valid Python code and implement the function `solve(I: list[list[int]]) -> list[list[int]]`. This function transforms input grids into their corresponding output grids.
         3. You may use numpy functions (it is imported as "import numpy as np")
-        4. Make sure to generate up to and including the final {CODE_END} marker.
-        5. Always only generate the next step!
-        6. Please use the following template:
+        5. Always generate the next step and the next step only, that it up to the {STEP_END} marker. 
+        6. If you generate a {CODE_END} marker instead of a {STEP_END} marker, this signals the end of the code block, and thus the end of the transformation function.
+        7. Please use the following template:
     
     Below follows an example task and solution. You need to write code to solve the task in the same format.
     
@@ -39,8 +39,6 @@ def get_prompt(config: Config, task: ARCTask) -> str:
         
         # return the output grid
         return 0
-        {STEP_END}
-    
     {CODE_END}
     
     Now it's your turn! Write code to solve the task below.

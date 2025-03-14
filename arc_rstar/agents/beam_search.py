@@ -1,6 +1,6 @@
 from typing import Any, Optional, Tuple
 import numpy as np
-from config import Config
+from config import Config, CODE_END
 from arc_rstar.agents.node import Node
 
 from arc_rstar.arc_task.task import ARCTask
@@ -27,6 +27,7 @@ class BeamSearch:
     def solve(self, task: ARCTask, policy_model: PolicyModel, pp_model: ProcessPreferenceModel) -> Optional[str]:
 
         prompt = get_prompt(self.config, task)
+        Node.prompt_code_ends = prompt.count(CODE_END)
         self.initialize_root(prompt)
 
         if self.config.verbose:

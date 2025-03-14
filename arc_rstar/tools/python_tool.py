@@ -18,41 +18,24 @@ def timeout_handler(signum, frame):
 
 
 def extract_python_code(text, verbose=False):
-    """Extract Python code from text between CODE and CODE_END markers.
-    Specifically extracts the last code block."""
+    """Extract Python code from text after the last CODE marker, removing any CODE_END or STEP_END markers."""
     import sys
     
     if verbose:
         print(f"Extracting code from text ({len(text)} characters)")
-        print(f"Text to extract from: {text}")
         
-    # Check if text contains the markers
+    # Check if text contains the CODE marker
     if CODE not in text:
         if verbose:
             print(f"CODE marker not found in text")
         raise ValueError(f"No CODE marker found in text")
-        
-    if CODE_END not in text:
-        if verbose:
-            print(f"CODE_END marker not found in text")
-        raise ValueError(f"No CODE_END marker found in text")
     
-    pattern = re.compile(f"{CODE}(.*?){CODE_END}", re.DOTALL)
-    matches = list(pattern.finditer(text))
-
-    # Check if there's at least one code block
-    if not matches:
-        if verbose:
-            print(f"No code blocks found despite markers being present")
-            print(f"First 100 chars of text: {text[:100]}...")
-            print(f"Last 100 chars of text: ...{text[-100:]}")
-        raise ValueError(f"No code blocks extracted from text")
-
-    if verbose:
-        print(f"Found {len(matches)} code blocks, using the last one")
-        
-    # Return the last code block
-    code = matches[-1].group(1).strip()
+    # Find the last CODE marker and get all content after it
+    last_code_start = text.rindex(CODE) + len(CODE)
+    code = text[last_code_start:].strip()
+    
+    if not code:
+        raise ValueError(f"No code was extracted after the last CODE marker")
     
     if verbose:
         print(f"Extracted code block ({len(code)} characters, {len(code.splitlines())} lines)")
@@ -65,9 +48,9 @@ def extract_python_code(text, verbose=False):
 
 
 def prepare_code(code):
-    """Prepare code by removing STEP_END markers and ensuring it returns a value."""
-    # Simple string replacement for STEP_END markers
-    clean_code = code.replace(f"{STEP_END}", "")
+    """Prepare code by removing STEP_END and CODE_END markers and ensuring it returns a value."""
+    # Remove both types of markers
+    clean_code = code.replace(f"{STEP_END}", "").replace(f"{CODE_END}", "")
 
     # If the code doesn't contain a complete solve function (no 'return' statement)
     if 'def solve(I):' in clean_code and 'return' not in clean_code:

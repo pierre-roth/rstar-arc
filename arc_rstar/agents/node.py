@@ -2,6 +2,9 @@ from config import Config, CODE_END
 
 
 class Node:
+
+    prompt_code_ends = 1
+
     def __init__(self, config: Config):
         self.config = config
         self.state = {"text": "", "extra_info": ""}
@@ -17,7 +20,7 @@ class Node:
         return self.parent is None
 
     def is_terminal(self) -> bool:
-        return self.get_text().count(CODE_END) > 1
+        return self.get_text().count(CODE_END) > self.prompt_code_ends
 
     def add_child(self, child: "Node"):
         self.children.append(child)
