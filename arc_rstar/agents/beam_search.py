@@ -76,7 +76,7 @@ class BeamSearch:
                     solution_found = True
                     solution_node = node
                     if self.config.verbose:
-                        print(f"Solution found at depth {depth+1}, beam position {i+1}")
+                        print(f"Solution found at node {node.tag} with depth {node.depth}")
                     break
 
             if solution_found:

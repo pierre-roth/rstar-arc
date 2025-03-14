@@ -41,7 +41,8 @@ def get_prompt(config: Config, task: ARCTask) -> str:
         return 0
     {CODE_END}
     
-    Now it's your turn! Write code to solve the task below.
+    Now it's your turn! Write code to solve the task below. The code above is just an example and will not solve the task below.
+    You need to come up with a solution that solves the task below.
     
     {task.to_prompt()}
     

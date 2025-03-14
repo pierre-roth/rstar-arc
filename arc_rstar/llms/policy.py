@@ -53,15 +53,6 @@ class PolicyModel:
         completion_outputs = request_output.outputs
 
         outputs = [completion_output.text for completion_output in completion_outputs]
-
-        # Log the completions if verbose
-        if self.config.verbose:
-            print(f"\nGenerated {len(outputs)} completions from policy model:")
-            for i, output in enumerate(outputs):
-                # Truncate long outputs for logging
-                preview = output[:100] + "..." if len(output) > 100 else output
-                preview = preview.replace('\n', ' ')
-                print(f"Completion {i+1}: {preview}")
         
         # Return the completions
         return outputs

@@ -33,8 +33,9 @@ class Solver:
 
         final_code = agent.solve(task, self.policy, self.pp)
 
-        # dump agent state
-        # agent_state = agent.dump_state()
+        if self.config.verbose:
+            print(f"Search completed! Final code: {final_code}")
+
         if final_code is not None:
             success, outputs = task.run_test_examples(final_code)
 

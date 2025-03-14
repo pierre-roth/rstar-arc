@@ -148,78 +148,46 @@ class ARCTask:
     def run_training_examples(self, code: str) -> (bool, list):
         passed = True
         outputs = []
-        
-        if self.config.verbose:
-            print(f"\nValidating code on {len(self.training_examples)} training examples")
 
         for i, example in enumerate(self.training_examples):
             test_input = example.input_grid.grid
             expected_output = example.output_grid.grid
-            
-            if self.config.verbose:
-                print(f"\nRunning training example {i+1}:")
-                print(f"Input shape: {len(test_input)}x{len(test_input[0]) if test_input else 0}")
-                print(f"Expected output shape: {len(expected_output)}x{len(expected_output[0]) if expected_output else 0}")
 
             actual_output = execute_code_with_grid(code, test_input, self.config.verbose)
 
-            if actual_output == expected_output:
-                if self.config.verbose:
-                    print(f"✓ Example {i+1} passed")
-            else:
+            if actual_output != expected_output:
                 passed = False
                 outputs.append(actual_output)
                 if self.config.verbose:
+                    print(f"During training validation, example {i+1} failed")
                     print(f"✗ Example {i+1} failed")
                     if actual_output:
                         print(f"Actual output shape: {len(actual_output)}x{len(actual_output[0]) if actual_output and actual_output[0] else 0}")
                     else:
                         print("No output generated (None returned)")
 
-        if self.config.verbose:
-            if passed:
-                print(f"All {len(self.training_examples)} training examples passed!")
-            else:
-                print(f"Failed {len(outputs)}/{len(self.training_examples)} examples")
-                
         return passed, outputs
 
     def run_test_examples(self, code: str) -> (bool, list):
         passed = True
         outputs = []
-        
-        if self.config.verbose:
-            print(f"\nEvaluating code on {len(self.test_examples)} test examples")
 
         for i, example in enumerate(self.test_examples):
             test_input = example.input_grid.grid
             expected_output = example.output_grid.grid
-            
-            if self.config.verbose:
-                print(f"\nRunning test example {i+1}:")
-                print(f"Input shape: {len(test_input)}x{len(test_input[0]) if test_input else 0}")
-                print(f"Expected output shape: {len(expected_output)}x{len(expected_output[0]) if expected_output else 0}")
 
             actual_output = execute_code_with_grid(code, test_input, self.config.verbose)
 
-            if actual_output == expected_output:
-                if self.config.verbose:
-                    print(f"✓ Test example {i+1} passed")
-            else:
+            if actual_output != expected_output:
                 passed = False
                 outputs.append(actual_output)
                 if self.config.verbose:
+                    print(f"During test validation, example {i + 1} failed")
                     print(f"✗ Test example {i+1} failed")
                     if actual_output:
                         print(f"Actual output shape: {len(actual_output)}x{len(actual_output[0]) if actual_output and actual_output[0] else 0}")
                     else:
                         print("No output generated (None returned)")
-
-        if self.config.verbose:
-            if passed:
-                print(f"All {len(self.test_examples)} test examples passed!")
-            else:
-                print(f"Failed {len(outputs)}/{len(self.test_examples)} test examples")
                 
         return passed, outputs
 

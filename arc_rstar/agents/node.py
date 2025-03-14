@@ -11,6 +11,7 @@ class Node:
         self.children = []
         self.depth = 0
         self.reward = 0
+        self.tag = "0"
 
     def has_children(self) -> bool:
         return self.children != []
@@ -26,6 +27,7 @@ class Node:
         self.children.append(child)
         child.parent = self
         child.depth = self.depth + 1
+        child.tag = f"{self.tag}.{len(self.children)-1}"
 
     # validate nodes based on whether the python code runs
     def valid(self, task) -> bool:
@@ -93,7 +95,7 @@ class Node:
     def generate_children(self, policy_model, pp_model, task) -> list["Node"]:
         prompt = self.get_text()
         if self.config.verbose:
-            print(f"Generating children for node at depth {self.depth}")
+            print(f"Generating children for node {self.tag}")
         
         child_texts = policy_model.generate(prompt)
         if self.config.verbose:
