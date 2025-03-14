@@ -72,7 +72,7 @@ class BeamSearch:
 
             # Check if we've found a solution
             for i, node in enumerate(beam):
-                if node.is_terminal() and task.run_training_examples(extract_python_code(node.get_text()))[0]:
+                if node.is_terminal() and task.run_training_examples(extract_python_code(node.get_text(), self.config.verbose))[0]:
                     solution_found = True
                     solution_node = node
                     if self.config.verbose:
@@ -84,7 +84,7 @@ class BeamSearch:
 
         # If a solution was found, return the code
         if solution_found:
-            final_code = extract_python_code(solution_node.get_text())
+            final_code = extract_python_code(solution_node.get_text(), self.config.verbose)
             if self.config.verbose:
                 print("\nSOLUTION FOUND!")
                 print(f"Total steps: {solution_node.depth}")

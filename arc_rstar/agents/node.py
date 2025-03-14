@@ -28,22 +28,57 @@ class Node:
     def valid(self, task) -> bool:
         from arc_rstar.tools.python_tool import extract_python_code, execute_code_with_grid
         
+        # Check if this is a terminal node (already has CODE_END)
+        is_terminal = self.is_terminal()
+        
+        if self.config.verbose:
+            print(f"\nValidating node at depth {self.depth} (terminal: {is_terminal})")
+        
         try:
-            # Try to extract the code
-            code = extract_python_code(self.get_text())
+            # Try to extract the code - for non-terminal nodes this might fail
+            if self.config.verbose:
+                print("Attempting to extract code from node...")
+                
+            code = extract_python_code(self.get_text(), self.config.verbose)
             
-            # Use the first training example to validate
+            if self.config.verbose:
+                print(f"Successfully extracted code ({len(code.splitlines())} lines)")
+                
+            # For non-terminal nodes, basic extraction success means it's valid
+            if not is_terminal:
+                if self.config.verbose:
+                    print("Non-terminal node with valid code structure - passed validation")
+                return True
+                
+            # For terminal nodes, we need to verify execution
             if task.training_examples:
+                if self.config.verbose:
+                    print("Terminal node - testing code execution on first training example")
+                    
                 example = task.training_examples[0]
                 test_input = example.input_grid.grid
                 
                 # Just check if execution works, not if result is correct
-                execute_code_with_grid(code, test_input)
-                return True
+                result = execute_code_with_grid(code, test_input, self.config.verbose)
+                
+                if result is not None:
+                    if self.config.verbose:
+                        print("Code executed successfully and returned a result")
+                    return True
+                else:
+                    if self.config.verbose:
+                        print("Code execution failed (returned None)")
+                    return False
+                    
+            if self.config.verbose:
+                print("No training examples available, skipping execution check")
             return True
+            
         except Exception as e:
             if self.config.verbose:
                 print(f"Node validation failed: {str(e)}")
+                import traceback
+                print(traceback.format_exc())
             return False
 
     # recursively collect all the text up to the root (root text is in front)
@@ -61,6 +96,8 @@ class Node:
         child_texts = policy_model.generate(prompt)
         if self.config.verbose:
             print(f"Generated {len(child_texts)} candidate continuations")
+            for i, child_text in enumerate(child_texts):
+                print(f"Child {i+1}/{len(child_texts)}: {child_text}")
         
         valid_children = []
         for i, child_text in enumerate(child_texts):

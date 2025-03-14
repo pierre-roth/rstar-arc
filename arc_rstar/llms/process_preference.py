@@ -29,7 +29,13 @@ class ProcessPreferenceModel:
     # the value is a float between -1 and 1
     def score(self, node: Node):
         if self.tg:
-            return random() * 2 - 1
+            # In terminal-guided mode, just return random score
+            score = random() * 2 - 1
+            
+            if node.config.verbose:
+                print(f"PPM (terminal-guided): Generated random score: {score:.4f}")
+                
+            return score
 
         # sampling_params = SamplingParams(temperature=self.config.temperature)
         # return self.llm.generate(node, sampling_params=sampling_params)

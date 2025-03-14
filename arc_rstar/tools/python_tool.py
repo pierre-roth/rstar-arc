@@ -17,18 +17,50 @@ def timeout_handler(signum, frame):
     raise TimeoutException(TIMEOUT_MESSAGE)
 
 
-def extract_python_code(text):
+def extract_python_code(text, verbose=False):
     """Extract Python code from text between CODE and CODE_END markers.
     Specifically extracts the last code block."""
+    import sys
+    
+    if verbose:
+        print(f"Extracting code from text ({len(text)} characters)")
+        
+    # Check if text contains the markers
+    if CODE not in text:
+        if verbose:
+            print(f"CODE marker not found in text")
+        raise ValueError(f"No CODE marker found in text")
+        
+    if CODE_END not in text:
+        if verbose:
+            print(f"CODE_END marker not found in text")
+        raise ValueError(f"No CODE_END marker found in text")
+    
     pattern = re.compile(f"{CODE}(.*?){CODE_END}", re.DOTALL)
     matches = list(pattern.finditer(text))
 
     # Check if there's at least one code block
     if not matches:
-        raise ValueError(f"No code blocks found in text")
+        if verbose:
+            print(f"No code blocks found despite markers being present")
+            print(f"First 100 chars of text: {text[:100]}...")
+            print(f"Last 100 chars of text: ...{text[-100:]}")
+        raise ValueError(f"No code blocks extracted from text")
 
+    if verbose:
+        print(f"Found {len(matches)} code blocks, using the last one")
+        
     # Return the last code block
-    return matches[-1].group(1).strip()
+    code = matches[-1].group(1).strip()
+    
+    if verbose:
+        print(f"Extracted code block ({len(code)} characters, {len(code.splitlines())} lines)")
+        print("First 3 lines:")
+        lines = code.splitlines()
+        for i in range(min(3, len(lines))):
+            print(f"  {i+1}: {lines[i]}")
+        
+    return code
 
 
 def prepare_code(code):
@@ -55,14 +87,21 @@ def capture_output():
         sys.stdout, sys.stderr = old_out, old_err
 
 
-def execute_code_with_grid(code, input_grid):
+def execute_code_with_grid(code, input_grid, verbose=False):
     """Execute Python code with the provided input grid."""
+    import sys
+    
     if not code.strip():
+        if verbose:
+            print("Cannot execute empty code")
         return None
 
     # Prepare code
     code = prepare_code(code)
-
+    
+    if verbose:
+        print(f"Executing code with grid of shape {len(input_grid)}x{len(input_grid[0]) if input_grid else 0}")
+        
     # Set up execution environment
     execution_globals = {
         'np': np,
@@ -79,26 +118,46 @@ def execute_code_with_grid(code, input_grid):
 
     try:
         # Execute code
-        with capture_output():
+        with capture_output() as (stdout, stderr):
             exec(wrapper_code, execution_globals)
+            
+            if verbose and stdout.getvalue():
+                print(f"Code stdout output:\n{stdout.getvalue()}")
+            if verbose and stderr.getvalue():
+                print(f"Code stderr output:\n{stderr.getvalue()}")
 
         # Get result
         result = execution_globals.get('result')
 
         # Convert numpy arrays to lists
         if isinstance(result, np.ndarray):
+            if verbose:
+                print(f"Converting numpy array of shape {result.shape} to list")
             result = result.tolist()
 
         # Validate result is a 2D grid
         if not (isinstance(result, list) and
                 (not result or all(isinstance(row, list) for row in result))):
+            if verbose:
+                print(f"Invalid result type: {type(result)}")
+                if isinstance(result, list):
+                    print(f"Result is list but contains non-list elements or is empty")
             return None
+            
+        if verbose:
+            print(f"Code execution successful, result grid shape: {len(result)}x{len(result[0]) if result and result[0] else 0}")
 
         return result
 
     except TimeoutException:
+        if verbose:
+            print(f"Code execution timed out after {TIMEOUT_SECONDS} seconds")
         return None
-    except Exception:
+    except Exception as e:
+        if verbose:
+            print(f"Exception during code execution: {str(e)}")
+            import traceback
+            print(traceback.format_exc())
         return None
     finally:
         signal.alarm(0)  # Cancel alarm in all cases
