@@ -1,0 +1,30 @@
+# Example configuration file for rstar-arc
+# All parameters are optional and will override defaults
+
+# Task parameters
+data-folder: "data_sample/training"
+task-name: "ac0a08a4"
+
+# Model parameters
+policy-model: "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B"
+pp-model: "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B"
+max-tokens: 32768
+
+# Search parameters
+search-mode: "beam_search"  # Options: beam_search, mcts
+max-depth: 6
+temperature: 0.6
+beam-width: 2  # Number of "best candidates" to keep after each step
+branching-factor: 2  # Number of candidates to generate per node
+
+# System parameters
+gpus: 1
+dtype: "bfloat16"  # Options: float16, bfloat16
+seed: 42
+
+# Runtime parameters
+verbose: true
+# Uncomment to run deterministic mode
+# deterministic: true
+# Uncomment to provide a hint
+# hint: "Try using pattern matching"
