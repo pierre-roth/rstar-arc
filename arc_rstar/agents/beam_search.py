@@ -63,25 +63,34 @@ class BeamSearch:
                     print("Search stopped: No valid candidates generated")
                 break
 
-            sorted_candidates = sorted(candidates, key=lambda x: -x.reward)
+            non_terminal_candidates = [c for c in candidates if not c.is_terminal()]
+            terminal_candidates = [c for c in candidates if c.is_terminal()]
+
+            sorted_non_terminal_candidates = sorted(non_terminal_candidates, key=lambda x: -x.reward)
 
             # Select top-k candidates for the next beam
-            beam = sorted_candidates[:self.beam_width]
-            
-            if self.config.verbose:
-                print(f"New beam size after selection: {len(beam)}")
+            beam = sorted_non_terminal_candidates[:self.beam_width]
 
             # Check if we've found a solution
-            for i, node in enumerate(beam):
-                if node.is_terminal() and task.run_training_examples(extract_python_code(node.get_text(), self.config.verbose))[0]:
+            for i, node in enumerate(terminal_candidates):
+                if self.config.verbose:
+                    print(f"Checking terminal node {node.tag} against training examples...")
+                if task.run_training_examples(extract_python_code(node.get_text(), self.config.verbose))[0]:
                     solution_found = True
                     solution_node = node
                     if self.config.verbose:
                         print(f"Solution found at node {node.tag} with depth {node.depth}")
+                        print("Stopping search...")
                     break
+                else:
+                    if self.config.verbose:
+                        print(f"Node {node.tag} failed the training examples ... discarding")
 
             if solution_found:
                 break
+
+            if self.config.verbose:
+                print(f"New beam size after selection: {len(beam)}")
 
         # If a solution was found, return the code
         if solution_found:
@@ -93,7 +102,6 @@ class BeamSearch:
             final_code = None
             if self.config.verbose:
                 print("\nNO SOLUTION FOUND")
-                print(f"Search completed after {self.max_depth} steps or beam emptied")
 
         # Return the best code found
         return final_code
