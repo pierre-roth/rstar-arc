@@ -49,11 +49,14 @@ class Node:
                 print(f"Successfully extracted code ({len(code.splitlines())} lines)")
                 print("Validation: testing for errors while running training examples")
 
-            _ = task.run_training_examples(code)
+            error = task.run_training_examples(code) is None
 
             if self.config.verbose:
-                print("No exceptions raised, node is valid")
-            return True
+                if error:
+                    print("Error detected while running training examples - node is invalid")
+                else:
+                    print("No errors detected while running training examples - node is valid")
+            return not error
 
         except Exception as e:
             if self.config.verbose:

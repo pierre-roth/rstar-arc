@@ -157,14 +157,7 @@ class ARCTask:
 
             if actual_output != expected_output:
                 passed = False
-                outputs.append(actual_output)
-                if self.config.verbose:
-                    print(f"During training validation, example {i+1} failed")
-                    print(f"✗ Example {i+1} failed")
-                    if actual_output:
-                        print(f"Actual output shape: {len(actual_output)}x{len(actual_output[0]) if actual_output and actual_output[0] else 0}")
-                    else:
-                        print("No output generated (None returned)")
+            outputs.append(actual_output)
 
         return passed, outputs
 
@@ -180,14 +173,7 @@ class ARCTask:
 
             if actual_output != expected_output:
                 passed = False
-                outputs.append(actual_output)
-                if self.config.verbose:
-                    print(f"During test validation, example {i + 1} failed")
-                    print(f"✗ Test example {i+1} failed")
-                    if actual_output:
-                        print(f"Actual output shape: {len(actual_output)}x{len(actual_output[0]) if actual_output and actual_output[0] else 0}")
-                    else:
-                        print("No output generated (None returned)")
+            outputs.append(actual_output)
                 
         return passed, outputs
 
