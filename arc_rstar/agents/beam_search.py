@@ -31,7 +31,8 @@ class BeamSearch:
 
         if self.config.verbose:
             print(f"Starting beam search for task: {task.name}")
-            print(f"Beam width: {self.beam_width}, Branching factor: {self.branching_factor}, Max depth: {self.max_depth}")
+            print(
+                f"Beam width: {self.beam_width}, Branching factor: {self.branching_factor}, Max depth: {self.max_depth}")
 
         # Initialize beam with just the root node
         beam = [self.root]
@@ -46,7 +47,7 @@ class BeamSearch:
                 break
 
             if self.config.verbose:
-                print(f"\n--- Depth {depth+1}/{self.max_depth} ---")
+                print(f"\n--- Depth {depth + 1}/{self.max_depth} ---")
                 print(f"Current beam size: {len(beam)}")
 
             # Generate candidate next steps for all nodes in the current beam
@@ -54,10 +55,10 @@ class BeamSearch:
 
             for node in beam:
                 candidates.extend(node.generate_children(policy_model, pp_model, task))
-                
+
             if self.config.verbose:
                 print(f"Total candidates generated: {len(candidates)}")
-                
+
             if not candidates:
                 if self.config.verbose:
                     print("Search stopped: No valid candidates generated")
