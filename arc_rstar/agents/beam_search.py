@@ -35,6 +35,7 @@ class BeamSearch:
 
         # Initialize beam with just the root node
         beam = [self.root]
+
         solution_found = False
         solution_node = None
 

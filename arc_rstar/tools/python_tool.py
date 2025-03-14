@@ -22,7 +22,7 @@ def extract_python_code(text, verbose=False):
     import sys
     
     if verbose:
-        print(f"Extracting code from text ({len(text)} characters)")
+        print(f"Extracting code from text (which has {len(text)} characters)")
         
     # Check if text contains the CODE marker
     if CODE not in text:
@@ -38,11 +38,8 @@ def extract_python_code(text, verbose=False):
         raise ValueError(f"No code was extracted after the last CODE marker")
     
     if verbose:
-        print(f"Extracted code block ({len(code)} characters, {len(code.splitlines())} lines)")
-        print("First 3 lines:")
-        lines = code.splitlines()
-        for i in range(min(3, len(lines))):
-            print(f"  {i+1}: {lines[i]}")
+        print(f"Extracted code block (with {len(code)} characters, {len(code.splitlines())} lines)")
+        print(f"Code block:\n{code}")
         
     return code
 

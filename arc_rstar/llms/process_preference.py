@@ -33,7 +33,7 @@ class ProcessPreferenceModel:
             score = random() * 2 - 1
             
             if node.config.verbose:
-                print(f"PPM (terminal-guided): Generated random score: {score:.4f}")
+                print(f"PPM (terminal-guided): generated score for node {node.tag}: {score:.4f}")
                 
             return score
 
