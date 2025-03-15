@@ -31,7 +31,7 @@
   - Clean up code and make it as "extendable" as possible
 
 - **Work done**: 
-  - Decided on not specifying the extend of the step format beyond the "python block" limitation (that means the prefix code of every step must be valid python code)
+  - Decided on not specifying the extent of the step format beyond the "python block" limitation (that means the prefix code of every step must be valid python code)
   - Successfully implemented working version of "Round 1" with beam search agent (also successfully solved first ARC Task)
   - Rewriting code to adhere to HCP Storage best practices (i.e. use local scratch space for all intermediate files)
   - 

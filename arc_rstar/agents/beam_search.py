@@ -19,15 +19,16 @@ class BeamSearch:
         self.branching_factor = config.branching_factor
         self.max_depth = config.max_depth
 
-    def initialize_root(self, prompt: str):
+    def initialize_root(self, prompt: str, task: ARCTask):
         """Initialize the root node with the given state."""
         self.root = Node(self.config)
         self.root.state["text"] = prompt
+        self.root.task = task
 
     def solve(self, task: ARCTask, policy_model: PolicyModel, pp_model: ProcessPreferenceModel) -> Optional[str]:
 
         prompt = get_prompt(self.config, task)
-        self.initialize_root(prompt)
+        self.initialize_root(prompt, task)
 
         if self.config.verbose:
             print(f"Starting beam search for task: {task.name}")
@@ -55,7 +56,7 @@ class BeamSearch:
             candidates = []
 
             for node in beam:
-                candidates.extend(node.generate_children(policy_model, pp_model, task))
+                candidates.extend(node.generate_children(policy_model, pp_model))
 
             if self.config.verbose:
                 print(f"Total candidates generated: {len(candidates)}")
@@ -77,16 +78,22 @@ class BeamSearch:
             for i, node in enumerate(terminal_candidates):
                 if self.config.verbose:
                     print(f"Checking terminal node {node.tag} against training examples...")
-                if task.run_training_examples(extract_python_code(node.get_text(), self.config.verbose))[0]:
-                    solution_found = True
-                    solution_node = node
+                try:
+                    code = extract_python_code(node.get_text(), self.config.verbose)
+                    success, _ = task.run_training_examples(code)
+                    if success:
+                        solution_found = True
+                        solution_node = node
+                        if self.config.verbose:
+                            print(f"Solution found at node {node.tag} with depth {node.depth}")
+                            print("Stopping search...")
+                        break
+                    else:
+                        if self.config.verbose:
+                            print(f"Node {node.tag} failed the training examples ... discarding")
+                except Exception as e:
                     if self.config.verbose:
-                        print(f"Solution found at node {node.tag} with depth {node.depth}")
-                        print("Stopping search...")
-                    break
-                else:
-                    if self.config.verbose:
-                        print(f"Node {node.tag} failed the training examples ... discarding")
+                        print(f"Error extracting code from terminal node: {str(e)}")
 
             if solution_found:
                 break

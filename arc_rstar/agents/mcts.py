@@ -1,6 +1,5 @@
 from typing import Any, Optional, Tuple
 import numpy as np
-import math
 from config import Config, CODE_END
 from arc_rstar.agents.node import Node
 from arc_rstar.arc_task.task import ARCTask
@@ -11,6 +10,16 @@ from prompt import get_prompt
 
 
 class MCTS:
+    """
+    Monte Carlo Tree Search implementation for solving ARC tasks.
+
+    MCTS is a tree search algorithm that consists of four phases:
+    1. Selection: Choose the most promising unexpanded node
+    2. Expansion: Generate children of the selected node
+    3. Simulation: Estimate the value of the node
+    4. Backpropagation: Update statistics up the tree
+    """
+
     def __init__(self, config: Config):
         self.config = config
         self.root = None
@@ -18,37 +27,21 @@ class MCTS:
         self.max_depth = config.max_depth
         self.num_simulations = config.beam_width  # Reusing beam_width as simulation count
 
-    def initialize_root(self, prompt: str):
-        """Initialize the root node with the given state."""
+    def initialize_root(self, prompt: str, task: ARCTask):
+        """Initialize the root node with the given prompt."""
         self.root = Node(self.config)
         self.root.state["text"] = prompt
-        # Initialize MCTS-specific attributes
-        self.root.visits = 0
-        self.root.value = 0.0
-
-    def uct_score(self, node: Node, parent_visits: int) -> float:
-        """Calculate the UCT score for a node.
-
-        UCT = exploitation + exploration
-             = node.value + c_puct * sqrt(ln(parent_visits) / node.visits)
-        """
-        # Ensure node has visits attribute
-        if not hasattr(node, 'visits'):
-            node.visits = 0
-
-        # Ensure node has value attribute
-        if not hasattr(node, 'value'):
-            node.value = 0.0
-
-        # If node hasn't been visited, prioritize exploration
-        if node.visits == 0:
-            return float('inf')
-
-        # UCT formula: exploitation + exploration
-        return node.value + self.c_puct * math.sqrt(math.log(parent_visits) / node.visits)
+        self.root.task = task
 
     def select(self, node: Node) -> Node:
-        """Select a node to expand using UCT."""
+        """
+        Select the most promising node to expand using UCT score.
+
+        This recursively traverses the tree until finding a node that either:
+        - Is a terminal node
+        - Has unvisited children
+        - Has no children at all
+        """
         # If node is terminal or has no children, return it
         if node.is_terminal() or not node.has_children():
             return node
@@ -58,7 +51,7 @@ class MCTS:
         best_child = None
 
         for child in node.children:
-            score = self.uct_score(child, node.visits)
+            score = child.uct_score(self.c_puct)
             if score > best_score:
                 best_score = score
                 best_child = child
@@ -72,22 +65,31 @@ class MCTS:
 
     def expand(self, node: Node, policy_model: PolicyModel, pp_model: ProcessPreferenceModel, task: ARCTask) -> list[
         Node]:
-        """Expand a node by generating its children."""
-        # Use the existing node.generate_children method
-        children = node.generate_children(policy_model, pp_model, task)
+        """
+        Expand a node by generating its children.
 
-        # Initialize MCTS-specific attributes for each child
-        for child in children:
-            child.visits = 0
-            child.value = 0.0
-
-        return children
+        Uses the policy model to generate potential next steps and validates them.
+        """
+        return node.generate_children(policy_model, pp_model)
 
     def simulate(self, node: Node, task: ARCTask) -> float:
-        """Simulation step to estimate the value of a node."""
+        """
+        Simulation step to estimate the value of a node.
+
+        For terminal nodes: Checks if it solves the task
+        For non-terminal nodes: Uses the preference model's score
+        """
         # For terminal nodes, check if it solves the task
         if node.is_terminal():
             try:
+                # Ensure node has task reference
+                if node.task is None:
+                    node.task = task
+                
+                # First check if the node is valid
+                if not node.valid():
+                    return -1.0
+                    
                 code = extract_python_code(node.get_text(), self.config.verbose)
                 success, _ = task.run_training_examples(code)
                 return 1.0 if success else -1.0
@@ -98,28 +100,24 @@ class MCTS:
         return node.reward
 
     def backpropagate(self, node: Node, value: float):
-        """Update node statistics by backpropagation."""
+        """
+        Update node statistics by backpropagation.
+
+        Updates the statistics of the node and all its ancestors.
+        """
         current = node
         while current is not None:
-            # Ensure node has visits attribute
-            if not hasattr(current, 'visits'):
-                current.visits = 0
-
-            # Ensure node has value attribute
-            if not hasattr(current, 'value'):
-                current.value = 0.0
-
-            current.visits += 1
-            # Update value as a running average
-            current.value = ((current.visits - 1) * current.value + value) / current.visits
-
-            # Move to parent
+            current.update_stats(value)
             current = current.parent
 
     def solve(self, task: ARCTask, policy_model: PolicyModel, pp_model: ProcessPreferenceModel) -> Optional[str]:
-        """Run MCTS to find a solution for the task."""
+        """
+        Run MCTS to find a solution for the task.
+
+        Performs multiple MCTS simulations and returns the best solution found.
+        """
         prompt = get_prompt(self.config, task)
-        self.initialize_root(prompt)
+        self.initialize_root(prompt, task)
 
         if self.config.verbose:
             print(f"Starting MCTS for task: {task.name}")
@@ -150,8 +148,12 @@ class MCTS:
 
             # If nodes were expanded, select one for simulation
             if expanded_nodes:
-                # Choose the expanded node with highest immediate reward
+                # Choose the expanded node with the highest immediate reward
                 selected_node = max(expanded_nodes, key=lambda x: x.reward)
+                
+                # Ensure task reference is propagated
+                if selected_node.task is None:
+                    selected_node.task = task
 
                 if self.config.verbose:
                     print(f"Selected expanded node {selected_node.tag} with reward {selected_node.reward}")
@@ -166,7 +168,7 @@ class MCTS:
             self.backpropagate(selected_node, value)
 
             # Check if we've found a solution
-            if selected_node.is_terminal():
+            if selected_node.is_terminal() and selected_node.valid():
                 try:
                     code = extract_python_code(selected_node.get_text(), self.config.verbose)
                     success, _ = task.run_training_examples(code)
@@ -176,6 +178,8 @@ class MCTS:
                         if self.config.verbose:
                             print(f"Solution found at node {selected_node.tag}")
                         break
+                    elif self.config.verbose:
+                        print(f"Terminal node {selected_node.tag} does not correctly solve the task")
                 except Exception as e:
                     if self.config.verbose:
                         print(f"Error extracting code from terminal node: {str(e)}")
@@ -188,18 +192,21 @@ class MCTS:
 
         # If no solution found during simulations, find the best terminal node
         def find_best_terminal(node):
+            """Recursively search for the best terminal node in the tree."""
             best_node = None
             best_score = float('-inf')
 
             # Check current node if it's terminal
-            if node.is_terminal() and hasattr(node, 'visits') and hasattr(node, 'value') and node.visits > 0:
+            if node.is_terminal() and node.visits > 0:
                 try:
-                    # Extract code (just to make sure it's valid)
+
+                    # TODO fix this
+                    # Extract code and verify it's valid
                     code = extract_python_code(node.get_text(), self.config.verbose)
 
                     # Calculate score as a combination of visits and value
                     # This balances exploitation (value) with exploration confidence (visits)
-                    score = node.value * math.sqrt(node.visits)
+                    score = node.value * (node.visits ** 0.5)
 
                     if score > best_score:
                         best_node = node
@@ -212,9 +219,7 @@ class MCTS:
                 child_best = find_best_terminal(child)
                 if child_best is not None:
                     # Get score for child_best
-                    child_score = child_best.value * math.sqrt(child_best.visits) if hasattr(child_best,
-                                                                                             'value') and hasattr(
-                        child_best, 'visits') else float('-inf')
+                    child_score = child_best.value * (child_best.visits ** 0.5)
 
                     if child_score > best_score:
                         best_node = child_best
@@ -229,16 +234,25 @@ class MCTS:
                 print(
                     f"\nBest terminal node found: {best_terminal.tag} with value {best_terminal.value} and visits {best_terminal.visits}")
             try:
+                # Ensure it's valid
+                if not best_terminal.valid():
+                    if self.config.verbose:
+                        print("Best terminal node is not valid - skipping")
+                    return None
+                
                 code = extract_python_code(best_terminal.get_text(), self.config.verbose)
-                # Double check that the code is valid
+                # Double check that it correctly solves the task
                 success, _ = task.run_training_examples(code)
                 if success:
                     if self.config.verbose:
                         print("Best terminal node passes training examples")
+                    return code
                 else:
                     if self.config.verbose:
                         print("Best terminal node does not pass training examples")
-                return code
+                    # Still return code even if it doesn't pass all examples
+                    # This can be useful as a partial solution
+                    return code
             except Exception as e:
                 if self.config.verbose:
                     print(f"Error extracting code from best terminal node: {str(e)}")
