@@ -32,6 +32,14 @@ if ! mkdir -p "${local_log_dir}"; then
     exit 1
 fi
 
+# Create net scratch directory
+if ! mkdir -p "${final_log_dir}"; then
+    echo "Failed to create net scratch directory" >&2
+    exit 1
+fi
+
+
+
 # Set up automatic cleanup when job ends
 trap "exit 1" HUP INT TERM
 trap 'echo "Transferring logs and cleaning up...";

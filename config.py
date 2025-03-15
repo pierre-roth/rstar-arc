@@ -14,6 +14,7 @@ from typing import Optional, Any, Type, Callable, get_type_hints
 # These paths are used if not overridden by command line or config file
 DEFAULT_MODEL_BASE_PATH = "/itet-stor/piroth/net_scratch/models"  # Base directory for models
 DEFAULT_OUTPUT_PATH = "/itet-stor/piroth/net_scratch/outputs"  # Where results will be saved
+
 DEFAULT_DATA_SAMPLE_PATH = "data_sample"  # Root folder for ARC data
 DEFAULT_TRAINING_DATA_PATH = "data_sample/training"  # Training data location
 DEFAULT_EVALUATION_DATA_PATH = "data_sample/evaluation"  # Evaluation data location
