@@ -33,6 +33,7 @@
 - **Work done**: 
   - Decided on not specifying the extend of the step format beyond the "python block" limitation (that means the prefix code of every step must be valid python code)
   - Successfully implemented working version of "Round 1" with beam search agent (also successfully solved first ARC Task)
+  - Rewriting code to adhere to HCP Storage best practices (i.e. use local scratch space for all intermediate files)
   - 
 
 
@@ -40,4 +41,21 @@
   - It seems the SLMs have very weak performance with the current system. What is the best way to mitigate this issue?
   - How do I effectively optimize the prompt for the policy SLM?
   - 
+
+
+### Week 3 (17.03.2025)
+
+- **Work planned**:
+  - Test the current version on more ARC tasks and see how it performs
+  - Potentially generate more simple ARC tasks to generate to data for supervised fine-tuning of the policy SLM
+  - Think about how to effectively use reasoning models in the current system
+  - Think about better step definitions that allow for more comprehensive intermediate code execution
+
+- **Work done**: 
+  - 
+
+
+- **Issues and Questions**:
+  - 
+
 
