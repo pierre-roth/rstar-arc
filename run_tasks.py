@@ -37,7 +37,7 @@ def run_single_task(config: Config, task_path=None):
     if config.output_dir:
         os.makedirs(config.output_dir, exist_ok=True)
         task_name = os.path.basename(task_path).split('.')[0] if task_path else f"task_{config.task_index}"
-        output_path = os.path.join(config.output_dir,
+        output_path = os.path.join(config.output_dir, f"detailed_logs", f"job_{config.job_id}",
                                    f"{task_name}_{config.search_mode}_result_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.json")
 
         with open(output_path, 'w') as f:
@@ -72,7 +72,7 @@ def run_all_tasks(config: Config):
     # Save all results
     if config.output_dir:
         os.makedirs(config.output_dir, exist_ok=True)
-        output_path = os.path.join(config.output_dir, f"all_tasks_{config.search_mode}_results.json")
+        output_path = os.path.join(config.output_dir, f"detailed_logs", f"job_{config.job_id}", f"all_tasks_{config.search_mode}_results.json")
 
         with open(output_path, 'w') as f:
             json.dump(results, f, indent=2)  # type: ignore
