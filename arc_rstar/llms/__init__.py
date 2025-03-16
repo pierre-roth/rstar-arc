@@ -1,8 +1,8 @@
 from .policy import PolicyModel
-from .pp import ProcessPreferenceModel
+from .reward import RewardModel
 
 
 __all__ = [
     'PolicyModel',
-    'ProcessPreferenceModel',
+    'RewardModel',
 ]

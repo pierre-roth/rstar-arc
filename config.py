@@ -21,7 +21,7 @@ DEFAULT_EVALUATION_DATA_PATH = "data_sample/evaluation"  # Evaluation data locat
 
 # Default model names - identifies which language models to use
 DEFAULT_POLICY_LLM = "Qwen/Qwen2.5-Coder-7B-Instruct"  # Policy model (generates reasoning steps)
-DEFAULT_PP_LLM = "Qwen/Qwen2.5-Coder-7B-Instruct"  # Process Preference Model (evaluates steps)
+DEFAULT_REWARD_LLM = "Qwen/Qwen2.5-Coder-7B-Instruct"  # Reward Model (evaluates steps)
 
 # Default hyperparameters
 DEFAULT_MAX_TOKENS = 2048  # Maximum tokens for model generation
@@ -87,7 +87,7 @@ class Config:
     ###########################################
     # Language model selection
     policy_model: str = DEFAULT_POLICY_LLM  # Model that generates reasoning steps
-    pp_model: str = DEFAULT_PP_LLM  # Process Preference Model for evaluating steps
+    reward_model: str = DEFAULT_REWARD_LLM  # Reward Model for evaluating steps
 
     # Model loading settings
     model_base_path: str = DEFAULT_MODEL_BASE_PATH  # Base path where models are stored
@@ -157,7 +157,7 @@ class Config:
     ###########################################
     # These are calculated automatically in __post_init__
     policy_model_dir: Optional[str] = None  # Full path to policy model
-    pp_model_dir: Optional[str] = None  # Full path to PP model
+    reward_model_dir: Optional[str] = None  # Full path to reward model
 
     def __post_init__(self):
         """
@@ -168,7 +168,7 @@ class Config:
         """
         # Set computed model directories based on model_base_path
         self.policy_model_dir = os.path.join(self.model_base_path, "policy")
-        self.pp_model_dir = os.path.join(self.model_base_path, "pp")
+        self.reward_model_dir = os.path.join(self.model_base_path, "reward")
 
     @classmethod
     def from_args(cls, args: Optional[list[str]] = None) -> Config:

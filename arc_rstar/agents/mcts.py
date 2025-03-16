@@ -4,7 +4,7 @@ from config import Config, CODE_END
 from arc_rstar.agents.node import Node
 from arc_rstar.arc_task.task import ARCTask
 from arc_rstar.llms.policy import PolicyModel
-from arc_rstar.llms.pp import ProcessPreferenceModel
+from arc_rstar.llms.reward import RewardModel
 from arc_rstar.tools.python_tool import extract_python_code
 from prompt import get_prompt
 
@@ -63,7 +63,7 @@ class MCTS:
         # Recursively select from the best child
         return self.select(best_child)
 
-    def expand(self, node: Node, policy_model: PolicyModel, pp_model: ProcessPreferenceModel, task: ARCTask) -> list[
+    def expand(self, node: Node, policy_model: PolicyModel, pp_model: RewardModel, task: ARCTask) -> list[
         Node]:
         """
         Expand a node by generating its children.
@@ -77,7 +77,7 @@ class MCTS:
         Simulation step to estimate the value of a node.
 
         For terminal nodes: Checks if it solves the task
-        For non-terminal nodes: Uses the preference model's score
+        For non-terminal nodes: Uses the reward model's score
         """
         # For terminal nodes, check if it solves the task
         if node.is_terminal():
@@ -110,7 +110,7 @@ class MCTS:
             current.update_stats(value)
             current = current.parent
 
-    def solve(self, task: ARCTask, policy_model: PolicyModel, pp_model: ProcessPreferenceModel) -> Optional[str]:
+    def solve(self, task: ARCTask, policy_model: PolicyModel, pp_model: RewardModel) -> Optional[str]:
         """
         Run MCTS to find a solution for the task.
 

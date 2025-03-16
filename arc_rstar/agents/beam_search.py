@@ -5,7 +5,7 @@ from arc_rstar.agents.node import Node
 
 from arc_rstar.arc_task.task import ARCTask
 from arc_rstar.llms.policy import PolicyModel
-from arc_rstar.llms.pp import ProcessPreferenceModel
+from arc_rstar.llms.reward import RewardModel
 from arc_rstar.tools.python_tool import extract_python_code, execute_code_with_grid
 from prompt import get_prompt
 
@@ -25,7 +25,7 @@ class BeamSearch:
         self.root.state["text"] = prompt
         self.root.task = task
 
-    def solve(self, task: ARCTask, policy_model: PolicyModel, pp_model: ProcessPreferenceModel) -> Optional[str]:
+    def solve(self, task: ARCTask, policy_model: PolicyModel, pp_model: RewardModel) -> Optional[str]:
 
         prompt = get_prompt(self.config, task)
         self.initialize_root(prompt, task)

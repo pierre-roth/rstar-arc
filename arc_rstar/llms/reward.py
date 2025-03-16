@@ -5,7 +5,7 @@ from random import random
 from arc_rstar.agents.node import Node
 
 
-class ProcessPreferenceModel:
+class RewardModel:
     def __init__(self, config: Config, terminal_guided=False):
         self.config = config
         self.llm = None
@@ -17,8 +17,8 @@ class ProcessPreferenceModel:
             return
 
         self.llm = LLM(
-            model=self.config.pp_model,
-            download_dir=self.config.pp_model_dir,
+            model=self.config.reward_model,
+            download_dir=self.config.reward_model_dir,
             tensor_parallel_size=self.config.gpus,
             dtype=self.config.dtype
         )

@@ -2,7 +2,7 @@ from typing import Any, Optional
 import json
 import os
 from config import Config
-from arc_rstar.llms import PolicyModel, ProcessPreferenceModel
+from arc_rstar.llms import PolicyModel, RewardModel
 from arc_rstar.arc_task.task import ARCTask
 
 
@@ -10,10 +10,9 @@ class Solver:
     def __init__(self, config: Config):
         self.config = config
         self.policy = PolicyModel(config)
-        # remove terminal guidance for preference model
-        self.pp = ProcessPreferenceModel(config, terminal_guided=True)
+        self.reward = RewardModel(config, terminal_guided=True)
         self.policy.init_llm()  # Initialize the policy model
-        self.pp.init_llm()  # Initialize the preference model
+        self.reward.init_llm()  # Initialize the reward model
 
     def load_task(self, task_path: str) -> ARCTask:
         """Load an ARC task from the given path."""
@@ -31,7 +30,7 @@ class Solver:
         if self.config.verbose:
             print(f"Starting {self.config.search_mode} search...")
 
-        final_code = agent.solve(task, self.policy, self.pp)
+        final_code = agent.solve(task, self.policy, self.reward)
 
         if self.config.verbose:
             print(f"Search completed! Final code: {final_code}")
