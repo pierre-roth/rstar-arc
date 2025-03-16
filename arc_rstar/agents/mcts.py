@@ -30,6 +30,10 @@ class MCTS:
         self.root.state["text"] = prompt
         self.root.task = task
 
+        if self.config.verbose:
+            # Just print the string representation which is already JSON (for the visualizer)
+            print(f"Added child node: {self.root}")
+
     def select(self, node: Node) -> Node:
         """
         Select the most promising node to expand using UCT score.

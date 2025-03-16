@@ -209,25 +209,35 @@ def visualize_tree(g: ig.Graph, color_attr: Optional[str] = 'value',
 
         # Check if values are numeric
         if all(isinstance(val, (int, float)) for val in attr_values if val is not None):
+            # Replace None with 0 for calculations
+            safe_values = [val if val is not None else 0 for val in attr_values]
+
             # Normalize values between 0 and 1
-            min_val = min(val for val in attr_values if val is not None)
-            max_val = max(val for val in attr_values if val is not None)
+            min_val = min(safe_values)
+            max_val = max(safe_values)
 
             if min_val == max_val:
-                normalized = [0.5 if val is not None else 0 for val in attr_values]
+                normalized = [0.5 for _ in safe_values]
             else:
-                normalized = [(val - min_val) / (max_val - min_val) if val is not None else 0 for val in attr_values]
+                normalized = [(val - min_val) / (max_val - min_val) for val in safe_values]
 
             # Create a blue color scale
             colors = [f'rgb({int(255 * (1 - n))}, {int(255 * (1 - n))}, 255)' for n in normalized]
         else:
             # For non-numeric values, use a categorical colormap
-            unique_values = list(set(val for val in attr_values if val is not None))
-            color_map = {val: i / len(unique_values) for i, val in enumerate(unique_values)}
-            normalized = [color_map.get(val, 0) if val is not None else 0 for val in attr_values]
+            # Filter out None values first
+            non_none_values = [val for val in attr_values if val is not None]
 
-            # Create colors using a hue range - green to blue
-            colors = [f'hsl({int(120 + 120 * n)}, 80%, 70%)' for n in normalized]
+            if not non_none_values:
+                # All values are None, use default color
+                colors = ['skyblue'] * len(g.vs)
+            else:
+                unique_values = list(set(non_none_values))
+                color_map = {val: i / max(1, len(unique_values) - 1) for i, val in enumerate(unique_values)}
+                normalized = [color_map.get(val, 0) if val is not None else 0 for val in attr_values]
+
+                # Create colors using a hue range - green to blue
+                colors = [f'hsl({int(120 + 120 * n)}, 80%, 70%)' for n in normalized]
 
         visual_info.append(f"Color: '{color_attr}'")
     else:
@@ -242,9 +252,12 @@ def visualize_tree(g: ig.Graph, color_attr: Optional[str] = 'value',
 
         # Check if values are numeric
         if all(isinstance(val, (int, float)) for val in attr_values if val is not None):
+            # Replace None with 0 for calculations
+            safe_values = [val if val is not None else 0 for val in attr_values]
+
             # Normalize values between min and max size
-            min_val = min(val for val in attr_values if val is not None)
-            max_val = max(val for val in attr_values if val is not None)
+            min_val = min(safe_values)
+            max_val = max(safe_values)
 
             min_size, max_size = 10, 30
 
@@ -253,8 +266,7 @@ def visualize_tree(g: ig.Graph, color_attr: Optional[str] = 'value',
             else:
                 node_sizes = [
                     min_size + (max_size - min_size) * (val - min_val) / (max_val - min_val)
-                    if val is not None else min_size
-                    for val in attr_values
+                    for val in safe_values
                 ]
         else:
             # Default size
@@ -262,29 +274,56 @@ def visualize_tree(g: ig.Graph, color_attr: Optional[str] = 'value',
 
         visual_info.append(f"Size: '{node_size_attr}'")
     else:
-        # Default: smaller for deeper nodes
-        node_sizes = [max(10, min(25, 20 - 3 * name.count('.'))) for name in labels]
+        # Safely get depth from node name
+        node_sizes = []
+        for name in labels:
+            try:
+                depth = name.count('.')
+                size = max(10, min(25, 20 - 3 * depth))
+            except (AttributeError, TypeError):
+                size = 15  # Default size if name isn't a string or has issues
+            node_sizes.append(size)
 
     # Only show labels for nodes up to depth 2 if many nodes
     if len(g.vs) > 50:
         # For larger trees, only show labels for upper levels
-        node_texts = [name if name.count('.') < 3 else "" for name in labels]
+        node_texts = []
+        for name in labels:
+            try:
+                depth = name.count('.')
+                text = name if depth < 3 else ""
+            except (AttributeError, TypeError):
+                text = ""  # Default empty if name isn't a string
+            node_texts.append(text)
     else:
         node_texts = labels
 
     # Augment the graph with any calculated values
+    # Ensure all numeric attributes have default values instead of None
+    numeric_attrs = ['visits', 'value', 'reward', 'prior_probability', 'depth']
+    for attr in numeric_attrs:
+        if attr in g.vs.attributes():
+            for i, v in enumerate(g.vs):
+                if v[attr] is None:
+                    g.vs[i][attr] = 0.0 if attr != 'depth' else 0
+
     # Calculate PUCT scores if not already present but components exist
     if 'value' in g.vs.attributes() and 'prior_probability' in g.vs.attributes() and 'visits' in g.vs.attributes():
         if 'puct_score' not in g.vs.attributes():
             g.vs['puct_score'] = [0.0] * len(g.vs)
             for i, v in enumerate(g.vs):
                 # Simple approximation of PUCT score for visualization
-                if v['visits'] > 0 and i > 0:  # Skip root node
-                    parent_visits = g.vs[g.neighbors(i, mode='in')[0]]['visits'] if g.neighbors(i, mode='in') else 0
+                visits = v['visits'] if v['visits'] is not None else 0
+                if visits > 0 and i > 0:  # Skip root node
+                    neighbors = g.neighbors(i, mode='in')
+                    parent_visits = g.vs[neighbors[0]]['visits'] if neighbors else 0
+                    parent_visits = parent_visits if parent_visits is not None else 0
+
                     if parent_visits > 0:
-                        exploration = 1.0 * v['prior_probability'] * math.sqrt(math.log(parent_visits)) / (
-                                    1 + v['visits'])
-                        v['puct_score'] = v['value'] + exploration
+                        prior = v['prior_probability'] if v['prior_probability'] is not None else 1.0
+                        value = v['value'] if v['value'] is not None else 0.0
+                        exploration = 1.0 * prior * math.sqrt(math.log(parent_visits)) / (1 + visits)
+                        v['puct_score'] = value + exploration
 
     # Create figure
     fig = go.Figure()
@@ -428,3 +467,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

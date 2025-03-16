@@ -24,6 +24,10 @@ class BeamSearch:
         self.root.state["text"] = prompt
         self.root.task = task
 
+        if self.config.verbose:
+            # Just print the string representation which is already JSON (for the visualizer)
+            print(f"Added child node: {self.root}")
+
     def solve(self, task: ARCTask, policy_model: PolicyModel, reward_model: RewardModel) -> Optional[str]:
 
         prompt = get_prompt(self.config, task)
