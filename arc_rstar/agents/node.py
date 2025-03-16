@@ -220,7 +220,7 @@ class Node:
         return valid_children
 
     def __str__(self):
-        """Return a JSON string representation of the node."""
+        """Return a JSON string representation of the node including state information."""
         import json
 
         # Create a JSON representation of the node
@@ -234,7 +234,10 @@ class Node:
                 "prior_probability": self.prior_probability,
                 "is_valid": self.is_valid,
                 "terminal_reason": self.terminal_reason,
-                "has_children": self.has_children()
+                "has_children": self.has_children(),
+                # Include state information
+                "state_text": self.state.get("text", ""),
+                "state_extra_info": self.state.get("extra_info", "")
             }
         }
         return json.dumps(node_json)

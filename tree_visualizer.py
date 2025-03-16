@@ -10,9 +10,9 @@ import sys
 # Add a nice banner when program starts
 BANNER = """
 ╔═══════════════════════════════════════════════════════╗
-║                  MCTS Tree Visualizer                 ║
+║                    Tree Visualizer                    ║
 ║                                                       ║
-║  Visualize Monte Carlo Tree Search trees from logs    ║
+║         Visualize tree structures from logs           ║
 ╚═══════════════════════════════════════════════════════╝
 """
 
@@ -23,7 +23,7 @@ def parse_log_file(filepath: str) -> List[Dict[str, Any]]:
 
     Specifically looks for lines containing JSON output from Node add_child method.
     Each node should have a tag (e.g., "0", "0.1", "0.1.2") and data attributes like
-    visits, value, reward, depth, prior_probability, etc.
+    visits, value, reward, depth, etc.
 
     Args:
         filepath: Path to the log file.
@@ -165,11 +165,26 @@ def visualize_tree(g: ig.Graph, color_attr: Optional[str] = 'value',
         # Create organized sections for hover text
         core_attrs = []
         mcts_attrs = []
+        state_attrs = []
         validation_attrs = []
         other_attrs = []
 
         for attr, value in v.attributes().items():
             if attr in ["name"]:
+                continue
+
+            # Special handling for state_text - truncate if too long
+            if attr == "state_text" and value is not None:
+                # Handle state_text specially
+                state_preview = value
+                if len(state_preview) > 200:
+                    state_preview = state_preview[:197] + "..."
+                state_attrs.append(f"<b>State Text:</b><br><pre>{state_preview}</pre>")
+                continue
+
+            # Special handling for state_extra_info
+            if attr == "state_extra_info" and value:
+                state_attrs.append(f"<b>Extra Info:</b><br>{value}")
                 continue
 
             # Format the value based on type
@@ -195,6 +210,8 @@ def visualize_tree(g: ig.Graph, color_attr: Optional[str] = 'value',
             hover_text += "<br><b>MCTS:</b><br>" + "<br>".join(mcts_attrs)
         if validation_attrs:
             hover_text += "<br><b>Validation:</b><br>" + "<br>".join(validation_attrs)
+        if state_attrs:
+            hover_text += "<br>" + "<br>".join(state_attrs)
         if other_attrs:
             hover_text += "<br><b>Other:</b><br>" + "<br>".join(other_attrs)
 
@@ -337,7 +354,17 @@ def visualize_tree(g: ig.Graph, color_attr: Optional[str] = 'value',
         hoverinfo='none'
     ))
 
-    # Add nodes
+    # Add a click event handler to show full state content
+    full_state_data = []
+    for v in g.vs:
+        state_text = v.get("state_text", "")
+        node_info = {
+            "node": v["name"],
+            "state_text": state_text if state_text else "(No state text available)"
+        }
+        full_state_data.append(node_info)
+
+    # Add nodes with click events
     fig.add_trace(go.Scatter(
         x=Xn,
         y=Yn,
@@ -350,14 +377,67 @@ def visualize_tree(g: ig.Graph, color_attr: Optional[str] = 'value',
         text=node_texts,
         hovertext=hover_texts,
         hoverinfo='text',
-        textposition='top center'
+        textposition='top center',
+        customdata=[[i, v["name"]] for i, v in enumerate(g.vs)],  # Include index and node name
     ))
 
+    # Add JavaScript for node click handling
+    fig.update_layout(
+        clickmode='event',
+        # Add custom JavaScript to handle click events
+        updatemenus=[
+            dict(
+                type="buttons",
+                showactive=False,
+                buttons=[
+                    dict(
+                        label="View State",
+                        method="relayout",
+                        args=["annotations[1].text", "Click on a node to view its state"]
+                    )
+                ],
+                x=0.5,
+                xanchor="center",
+                y=1.02,
+                visible=False  # Hide this menu but keep the JavaScript
+            )
+        ]
+    )
+
+    # Add JavaScript to show code in a sidebar on click
+    fig.update_layout(
+        # Add annotation where state text will be shown
+        annotations=[
+            # Title annotation (already defined)
+            dict(
+                text="Hover over nodes to see details. Click a node to view its full state content.",
+                showarrow=False,
+                xref="paper", yref="paper",
+                x=0.5, y=1.05,
+                font=dict(size=10)
+            ),
+            # State text annotation (will be updated on click)
+            dict(
+                text="Click on a node to view its state",
+                showarrow=False,
+                xref="paper", yref="paper",
+                x=0.5, y=-0.1,  # Position at bottom
+                font=dict(size=12),
+                bgcolor="rgba(240, 240, 240, 0.9)",
+                bordercolor="rgba(0, 0, 0, 0.5)",
+                borderwidth=1,
+                borderpad=10,
+                opacity=0.9
+            )
+        ]
+    )
+
     # Update layout
-    title = 'MCTS Tree Visualization'
+    title = 'Tree Visualization'
     if visual_info:
         title += f' ({", ".join(visual_info)})'
 
+    # Add a modal for viewing full state content
     fig.update_layout(
         title=title,
         plot_bgcolor='white',
@@ -365,7 +445,17 @@ def visualize_tree(g: ig.Graph, color_attr: Optional[str] = 'value',
         hovermode='closest',
         margin=dict(b=10, l=10, r=10, t=40),
         xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-        yaxis=dict(showgrid=False, zeroline=False, showticklabels=False)
+        yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+        # Add annotations explaining hover interaction
+        annotations=[
+            dict(
+                text="Hover over nodes to see details. Click a node to view its full state content.",
+                showarrow=False,
+                xref="paper", yref="paper",
+                x=0.5, y=1.05,
+                font=dict(size=10)
+            )
+        ]
     )
 
     # Show or save figure
@@ -397,6 +487,10 @@ def generate_sample_json():
             "terminal_reason": None,
             "has_children": True,
 
+            # State information
+            "state_text": "def solve(input_grid):\n    # Process the grid",
+            "state_extra_info": "Additional information about this state",
+
             # Additional attributes that might be useful
             "puct_score": 1.25  # Could be calculated using the puct_score() method
         }
@@ -407,7 +501,7 @@ def generate_sample_json():
 def main():
     print(BANNER)
 
-    parser = argparse.ArgumentParser(description='Visualize MCTS tree from log file.')
+    parser = argparse.ArgumentParser(description='Visualize tree structures from log file.')
     parser.add_argument('log_file', nargs='?', help='Path to the log file.')
     parser.add_argument('--output', '-o', help='Path to save the visualization (optional).')
     parser.add_argument('--color', '-c', help='Node attribute to use for coloring (optional).')
@@ -467,4 +561,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
