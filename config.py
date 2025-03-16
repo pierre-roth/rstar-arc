@@ -40,11 +40,12 @@ DEFAULT_C_PUCT = 2.0  # PUCT exploration constant for MCTS
 TIMEOUT_SECONDS = 15  # Maximum time allowed for code execution
 TIMEOUT_MESSAGE = f"Execution of the code snippet has timed out for exceeding {TIMEOUT_SECONDS} seconds."
 
-# Error message constants
-ERROR_COLOR = "red"  # Color for error messages in output
-TOO_MANY_CODE_ERRORS = "Too many consecutive steps have code errors."
-TOO_MANY_STEPS = "Fail to solve the problem within limited steps."
-NO_VALID_CHILD = "Fail to generate parsable text for next step."
+# Terminal node constants
+TERMINAL_SUCCESS = "Successful solution"
+TERMINAL_FAILURE = "Failed solution"
+TERMINAL_INVALID = "Invalid code"
+TERMINAL_MAX_DEPTH = "Maximum depth reached"
+TERMINAL_CODE_END = "Code end marker"
 
 ###########################################
 # OUTPUT FORMAT MARKERS

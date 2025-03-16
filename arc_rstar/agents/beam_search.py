@@ -25,7 +25,7 @@ class BeamSearch:
         self.root.state["text"] = prompt
         self.root.task = task
 
-    def solve(self, task: ARCTask, policy_model: PolicyModel, pp_model: RewardModel) -> Optional[str]:
+    def solve(self, task: ARCTask, policy_model: PolicyModel, reward_model: RewardModel) -> Optional[str]:
 
         prompt = get_prompt(self.config, task)
         self.initialize_root(prompt, task)
@@ -56,7 +56,7 @@ class BeamSearch:
             candidates = []
 
             for node in beam:
-                candidates.extend(node.generate_children(policy_model, pp_model))
+                candidates.extend(node.generate_children(policy_model, reward_model))
 
             if self.config.verbose:
                 print(f"Total candidates generated: {len(candidates)}")

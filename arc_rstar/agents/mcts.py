@@ -51,7 +51,7 @@ class MCTS:
         best_child = None
 
         for child in node.children:
-            score = child.uct_score(self.c_puct)
+            score = child.puct_score(self.c_puct)
             if score > best_score:
                 best_score = score
                 best_child = child
@@ -63,14 +63,14 @@ class MCTS:
         # Recursively select from the best child
         return self.select(best_child)
 
-    def expand(self, node: Node, policy_model: PolicyModel, pp_model: RewardModel, task: ARCTask) -> list[
+    def expand(self, node: Node, policy_model: PolicyModel, reward_model: RewardModel, task: ARCTask) -> list[
         Node]:
         """
         Expand a node by generating its children.
 
         Uses the policy model to generate potential next steps and validates them.
         """
-        return node.generate_children(policy_model, pp_model)
+        return node.generate_children(policy_model, reward_model)
 
     def simulate(self, node: Node, task: ARCTask) -> float:
         """
@@ -96,7 +96,7 @@ class MCTS:
             except Exception:
                 return -1.0
 
-        # For non-terminal nodes, use the PP model's score
+        # For non-terminal nodes, use the reward model's score
         return node.reward
 
     def backpropagate(self, node: Node, value: float):
@@ -110,7 +110,7 @@ class MCTS:
             current.update_stats(value)
             current = current.parent
 
-    def solve(self, task: ARCTask, policy_model: PolicyModel, pp_model: RewardModel) -> Optional[str]:
+    def solve(self, task: ARCTask, policy_model: PolicyModel, reward_model: RewardModel) -> Optional[str]:
         """
         Run MCTS to find a solution for the task.
 
@@ -141,7 +141,7 @@ class MCTS:
             # 2. Expansion: Generate children for the selected node
             expanded_nodes = []
             if not selected_node.is_terminal() and selected_node.depth < self.max_depth:
-                expanded_nodes = self.expand(selected_node, policy_model, pp_model, task)
+                expanded_nodes = self.expand(selected_node, policy_model, reward_model, task)
 
                 if self.config.verbose:
                     print(f"Expanded {len(expanded_nodes)} nodes")

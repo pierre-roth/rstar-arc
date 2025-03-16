@@ -16,7 +16,7 @@ TASK_NAME="ac0a08a4"
 MAX_ITERATIONS=5
 MAX_DEPTH=10
 POLICY_MODEL="Qwen/Qwen2.5-Coder-7B-Instruct"
-PP_MODEL="Qwen/Qwen2.5-Coder-7B-Instruct"
+REWARD_MODEL="Qwen/Qwen2.5-Coder-7B-Instruct"
 MAX_TOKENS=2048
 SEARCH_MODE="beam_search"
 BEAM_WIDTH=3
@@ -122,7 +122,7 @@ echo "===== Application Parameters ====="
 echo "Task Index: ${TASK_INDEX}"
 echo "Max Iterations: ${MAX_ITERATIONS}"
 echo "Policy Model: ${POLICY_MODEL}"
-echo "PP Model: ${PP_MODEL}"
+echo "Reward Model: ${REWARD_MODEL}"
 echo "Model dtype: ${DTYPE}"
 if [[ ! -z "${HINT}" ]]; then echo "Hint: ${HINT}"; fi
 
@@ -142,7 +142,7 @@ fi
 
 # Add model parameters
 PYTHON_ARGS+=(--policy-model="${POLICY_MODEL}")
-PYTHON_ARGS+=(--pp-model="${PP_MODEL}")
+PYTHON_ARGS+=(--reward-model="${REWARD_MODEL}")
 PYTHON_ARGS+=(--max-tokens="${MAX_TOKENS}")
 
 # Add search parameters

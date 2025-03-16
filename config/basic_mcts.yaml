@@ -7,7 +7,7 @@ task-name: "8be77c9e"
 
 # Model parameters
 policy-model: "Qwen/Qwen2.5-Coder-7B-Instruct"
-pp-model: "Qwen/Qwen2.5-Coder-7B-Instruct"
+reward-model: "Qwen/Qwen2.5-Coder-7B-Instruct"
 max-tokens: 2048
 
 # Search parameters

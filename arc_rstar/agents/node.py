@@ -1,4 +1,5 @@
-from config import Config, CODE_END
+import config
+from config import Config, CODE_END, TERMINAL_CODE_END, TERMINAL_MAX_DEPTH, TERMINAL_INVALID
 from arc_rstar.tools.python_tool import extract_python_code, execute_code_with_grid
 from arc_rstar.arc_task.task import ARCTask
 import math
@@ -22,6 +23,10 @@ class Node:
         # MCTS-specific attributes
         self.visits = 0  # Number of visits to this node
         self.value = 0.0  # Average of simulation values (used for MCTS)
+        self.prior_probability = 1.0  # Prior probability from policy model (used for PUCT)
+
+        # terminal reason tracking
+        self.terminal_reason = None  # Reason for terminal node (if applicable)
 
         # Validation status (set during child creation)
         self.is_valid = None  # Will be set to True/False when validated
@@ -36,8 +41,23 @@ class Node:
         return self.parent is None
 
     def is_terminal(self) -> bool:
-        """Check if this is a terminal node (reached the end of the solution)."""
-        return self.state["text"].strip().endswith(CODE_END)
+        """Check if this is a terminal node."""
+
+        # If terminal reason is already set, return True
+        if self.terminal_reason is not None:
+            return True
+
+        # Check if ended with code end marker
+        if self.state["text"].strip().endswith(CODE_END):
+            self.terminal_reason = TERMINAL_CODE_END
+            return True
+
+        # Check if maximum depth reached
+        if self.depth >= self.config.max_depth:
+            self.terminal_reason = TERMINAL_MAX_DEPTH
+            return True
+
+        return False
 
     def add_child(self, child: "Node"):
         """
@@ -52,11 +72,11 @@ class Node:
         child.tag = f"{self.tag}.{len(self.children) - 1}"
         child.task = self.task
 
-    def uct_score(self, c_puct: float) -> float:
+    def puct_score(self, c_puct: float) -> float:
         """
-        Calculate the UCT score for MCTS selection.
-        UCT = exploitation + exploration
-             = node.value + c_puct * sqrt(ln(parent_visits) / node.visits)
+        Calculate the PUCT score for MCTS selection.
+        PUCT = exploitation + exploration
+              = node.value + c_puct * prior * sqrt(parent_visits) / (1 + node.visits)
         """
         if self.visits == 0:
             return float('inf')  # Prioritize unvisited nodes
@@ -64,9 +84,12 @@ class Node:
         if self.parent is None:
             return self.value  # Root node has no parent for exploration term
 
-        # UCT formula: exploitation + exploration
+        # Use fixed prior probability of 1.0 for now
+        prior_p = self.prior_probability
+
+        # PUCT formula: exploitation + exploration
         exploitation = self.value
-        exploration = c_puct * math.sqrt(math.log(max(1, self.parent.visits)) / self.visits)
+        exploration = c_puct * prior_p * math.sqrt(math.log(self.parent.visits)) / (1 + self.visits)
         return exploitation + exploration
 
     def update_stats(self, simulation_value: float):
@@ -74,6 +97,19 @@ class Node:
         self.visits += 1
         # Update value as a running average
         self.value = ((self.visits - 1) * self.value + simulation_value) / self.visits
+
+    def update(self, value: float):
+        """Update just this node's statistics."""
+        self.visits += 1
+        self.value = ((self.visits - 1) * self.value + value) / self.visits
+
+    def update_recursive(self, value: float, stop_node=None):
+        """Update this node and all ancestors up to stop_node."""
+        current = self
+        while current is not None and current is not stop_node:
+            current.visits += 1
+            current.value = ((current.visits - 1) * current.value + value) / current.visits
+            current = current.parent
 
     def _validate(self) -> bool:
         """
@@ -128,9 +164,13 @@ class Node:
         If the node has been previously validated, returns the cached result.
         Otherwise, validates the node and caches the result.
         """
-        # If this node hasn't been validated yet or was validated with a different task
+        # If this node hasn't been validated yet
         if self.is_valid is None:
             self.is_valid = self._validate()
+
+            # If node is invalid, set it as terminal with invalid reason
+            if not self.is_valid:
+                self.terminal_reason = TERMINAL_INVALID
 
         return self.is_valid
 
@@ -142,7 +182,7 @@ class Node:
             text = self.parent.get_text() + "\n" + text
         return text
 
-    def generate_children(self, policy_model, pp_model) -> list["Node"]:
+    def generate_children(self, policy_model, reward_model) -> list["Node"]:
         """Generate and validate children for this node."""
         prompt = self.get_text()
         if self.config.verbose:
@@ -160,7 +200,7 @@ class Node:
             child.state["text"] = child_text
 
             self.add_child(child)
-            child.reward = pp_model.score(child)
+            child.reward = reward_model.score(child)
 
             # Validate the child node
             is_valid = child.valid()
