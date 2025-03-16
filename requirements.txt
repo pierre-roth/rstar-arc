@@ -18,3 +18,5 @@ pydantic
 numpy
 timeout-decorator
 pyyaml
+plotly
+igraph

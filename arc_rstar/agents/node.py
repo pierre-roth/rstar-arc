@@ -71,6 +71,10 @@ class Node:
         child.tag = f"{self.tag}.{len(self.children) - 1}"
         child.task = self.task
 
+        if self.config.verbose:
+            # Just print the string representation which is already JSON (for the visualizer)
+            print(f"Added child node: {child}")
+
     def puct_score(self) -> float:
         """
         Calculate the PUCT score for MCTS selection.
@@ -214,3 +218,24 @@ class Node:
             print(f"Added {len(valid_children)}/{len(child_texts)} valid children")
 
         return valid_children
+
+    def __str__(self):
+        """Return a JSON string representation of the node."""
+        import json
+
+        # Create a JSON representation of the node
+        node_json = {
+            "node": self.tag,
+            "data": {
+                "depth": self.depth,
+                "reward": self.reward,
+                "visits": self.visits,
+                "value": self.value,
+                "prior_probability": self.prior_probability,
+                "is_valid": self.is_valid,
+                "terminal_reason": self.terminal_reason,
+                "has_children": self.has_children()
+            }
+        }
+        return json.dumps(node_json)
+

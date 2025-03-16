@@ -5,8 +5,7 @@ from config import *
 def get_prompt(config: Config, task: ARCTask) -> str:
     example_task = ARCTask(str(os.path.join(config.data_folder, "6d0aefbc.json")), config)
 
-    prompt = f"""
-You are a powerful agent with broad problem solving/pattern matching knowledge and great python programming skills. 
+    prompt = f"""You are a powerful agent with broad problem solving/pattern matching knowledge and great python programming skills. 
 You need to write Python code to solve ARC (Abstraction and Reasoning Corpus) tasks.
 
 ARC Task Description:

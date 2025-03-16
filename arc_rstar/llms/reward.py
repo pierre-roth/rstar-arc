@@ -38,5 +38,8 @@ class RewardModel:
 
             return score
 
+        raise NotImplementedError
+
         # sampling_params = SamplingParams(temperature=self.config.temperature)
         # return self.llm.generate(node, sampling_params=sampling_params)
+
