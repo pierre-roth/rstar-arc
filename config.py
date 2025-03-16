@@ -193,7 +193,7 @@ class Config:
 
         # Start with defaults from the dataclass
         config_data = {field.name: field.default for field in fields(cls) 
-                      if field.name not in ['policy_model_dir', 'pp_model_dir']}
+                      if field.name not in ['policy_model_dir', 'reward_model_dir']}
         
         # First load from config file if provided (overrides defaults)
         if args_dict.get("config_file"):
@@ -249,7 +249,7 @@ class Config:
 
             # Skip private fields and computed fields
             if (field_name.startswith('_') or
-                    field_name in ['policy_model_dir', 'pp_model_dir']):
+                    field_name in ['policy_model_dir', 'reward_model_dir']):
                 continue
 
             # Convert snake_case field names to kebab-case for CLI flags
