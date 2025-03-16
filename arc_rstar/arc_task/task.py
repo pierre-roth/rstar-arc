@@ -1,9 +1,7 @@
 import json
-from typing import Any, Type
-from config import Config
-import numpy as np
 
-from arc_rstar.tools.python_tool import extract_python_code, execute_code_with_grid
+from arc_rstar.tools.python_tool import execute_code_with_grid
+from config import Config
 
 
 class Grid:
@@ -174,6 +172,5 @@ class ARCTask:
             if actual_output != expected_output:
                 passed = False
             outputs.append(actual_output)
-                
-        return passed, outputs
 
+        return passed, outputs

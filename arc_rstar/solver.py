@@ -1,9 +1,8 @@
-from typing import Any, Optional
-import json
-import os
-from config import Config
-from arc_rstar.llms import PolicyModel, RewardModel
+from typing import Any
+
 from arc_rstar.arc_task.task import ARCTask
+from arc_rstar.llms import PolicyModel, RewardModel
+from config import Config
 
 
 class Solver:

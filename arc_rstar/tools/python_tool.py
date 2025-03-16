@@ -30,6 +30,7 @@ def remove_thinking_blocks(text, verbose=False):
     """
     import re
 
+    original_length = 0
     if verbose:
         original_length = len(text)
         num_blocks = len(re.findall(r'<think>', text))

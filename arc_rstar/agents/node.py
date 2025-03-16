@@ -1,8 +1,7 @@
-import config
-from config import Config, CODE_END, TERMINAL_CODE_END, TERMINAL_MAX_DEPTH, TERMINAL_INVALID
-from arc_rstar.tools.python_tool import extract_python_code, execute_code_with_grid
-from arc_rstar.arc_task.task import ARCTask
 import math
+
+from arc_rstar.tools.python_tool import extract_python_code
+from config import Config, CODE_END, TERMINAL_CODE_END, TERMINAL_MAX_DEPTH, TERMINAL_INVALID
 
 
 class Node:
@@ -72,7 +71,7 @@ class Node:
         child.tag = f"{self.tag}.{len(self.children) - 1}"
         child.task = self.task
 
-    def puct_score(self, c_puct: float) -> float:
+    def puct_score(self) -> float:
         """
         Calculate the PUCT score for MCTS selection.
         PUCT = exploitation + exploration
@@ -89,14 +88,8 @@ class Node:
 
         # PUCT formula: exploitation + exploration
         exploitation = self.value
-        exploration = c_puct * prior_p * math.sqrt(math.log(self.parent.visits)) / (1 + self.visits)
+        exploration = self.config.c_puct * prior_p * math.sqrt(math.log(self.parent.visits)) / (1 + self.visits)
         return exploitation + exploration
-
-    def update_stats(self, simulation_value: float):
-        """Update node statistics based on simulation result."""
-        self.visits += 1
-        # Update value as a running average
-        self.value = ((self.visits - 1) * self.value + simulation_value) / self.visits
 
     def update(self, value: float):
         """Update just this node's statistics."""
@@ -140,7 +133,7 @@ class Node:
 
             # Just check if execution works without errors
             # The function returns (bool, list) but we only check if it returns not None
-            result = self.task.run_training_examples(code) 
+            result = self.task.run_training_examples(code)
             is_valid = result is not None
 
             if self.config.verbose:
@@ -204,12 +197,14 @@ class Node:
 
             # Validate the child node
             is_valid = child.valid()
-            
+
             if is_valid:
                 valid_children.append(child)
                 if self.config.verbose:
                     print(f"Child {i + 1}/{len(child_texts)} is valid with reward {child.reward:.4f}")
             else:
+                # Mark invalid nodes with negative reward and terminal
+                child.reward = -1.0
                 if self.config.verbose:
                     print(f"Child {i + 1}/{len(child_texts)} is invalid and will be discarded")
 
@@ -219,4 +214,3 @@ class Node:
             print(f"Added {len(valid_children)}/{len(child_texts)} valid children")
 
         return valid_children
-

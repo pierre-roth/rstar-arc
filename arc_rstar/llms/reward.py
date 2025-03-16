@@ -1,8 +1,9 @@
-from config import Config
-from vllm import LLM, SamplingParams
 from random import random
 
+from vllm import LLM
+
 from arc_rstar.agents.node import Node
+from config import Config
 
 
 class RewardModel:
@@ -31,12 +32,11 @@ class RewardModel:
         if self.tg:
             # In terminal-guided mode, just return random score
             score = random() * 2 - 1
-            
+
             if node.config.verbose:
                 print(f"PPM (terminal-guided): generated score for node {node.tag}: {score:.4f}")
-                
+
             return score
 
         # sampling_params = SamplingParams(temperature=self.config.temperature)
         # return self.llm.generate(node, sampling_params=sampling_params)
-

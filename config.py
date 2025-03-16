@@ -1,10 +1,12 @@
 from __future__ import annotations
+
 import argparse
 import os
 import sys
+from dataclasses import dataclass, fields
+from typing import Optional, Any, get_type_hints
+
 import yaml
-from dataclasses import dataclass, field, asdict, fields
-from typing import Optional, Any, Type, Callable, get_type_hints
 
 ###########################################
 # DEFAULT CONFIGURATION VALUES
@@ -123,6 +125,7 @@ class Config:
 
     # MCTS search specific parameters
     c_puct: float = DEFAULT_C_PUCT  # PUCT exploration constant
+    num_simulations: int = 8  # Number of simulations to run for MCTS
 
     ###########################################
     # HARDWARE CONFIGURATION
@@ -193,9 +196,9 @@ class Config:
         args_dict = vars(parsed_args)
 
         # Start with defaults from the dataclass
-        config_data = {field.name: field.default for field in fields(cls) 
-                      if field.name not in ['policy_model_dir', 'reward_model_dir']}
-        
+        config_data = {field.name: field.default for field in fields(cls)
+                       if field.name not in ['policy_model_dir', 'reward_model_dir']}
+
         # First load from config file if provided (overrides defaults)
         if args_dict.get("config_file"):
             yaml_config = cls._load_from_file(args_dict["config_file"])
@@ -209,12 +212,12 @@ class Config:
                 if arg.startswith('--'):
                     arg_name = arg[2:].replace('-', '_')  # Convert from kebab-case to snake_case
                     provided_args.add(arg_name)
-        
+
         # Then override with command line arguments (highest priority), but only if explicitly provided
         for key, value in args_dict.items():
             if key == "config_file":
                 continue  # Skip config_file, we've already processed it
-            
+
             # Only include values from arguments that were explicitly provided
             if key in provided_args and key in cls.__annotations__:
                 print(f"DEBUG - Setting from CLI args: {key}={value}")
@@ -269,7 +272,7 @@ class Config:
                 # For boolean args, add both --flag and --no-flag options
                 # This makes the CLI intent explicit for boolean values
                 group = parser.add_mutually_exclusive_group()
-                
+
                 # The --flag option sets the value to True
                 group.add_argument(
                     flag_name,
@@ -277,7 +280,7 @@ class Config:
                     dest=field_name,
                     help=f"{help_text} (enable)"
                 )
-                
+
                 # The --no-flag option sets the value to False
                 group.add_argument(
                     f"--no-{field_name.replace('_', '-')}",
@@ -332,12 +335,12 @@ class Config:
             # Convert kebab-case keys (like "model-name") to snake_case (like "model_name")
             # This ensures compatibility with Python variable naming conventions
             result = {k.replace('-', '_'): v for k, v in config_data.items()}
-            
+
             # Debug the loaded configuration
             print(f"DEBUG - Loaded from {config_file}:")
             for k, v in result.items():
                 print(f"  {k}: {v}")
-                
+
             return result
 
         except Exception as e:
@@ -395,7 +398,7 @@ class Config:
         """
         # Debug info
         print(f"DEBUG - In select_task_file: task_name='{self.task_name}', task_index={self.task_index}")
-        
+
         # PRIORITY 1: If a specific task name is provided, use it directly
         if self.task_name and self.task_name.strip():
             # Convert task name to filename with .json extension

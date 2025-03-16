@@ -12,8 +12,11 @@ max-tokens: 2048
 
 # Search parameters
 search-mode: "mcts"  # Options: beam_search, mcts
-max-depth: 10
+max-depth: 7
 temperature: 0.7
+num-simulations: 4
+c-puct: 2.0
+branching-factor: 10
 
 # System parameters
 gpus: 1

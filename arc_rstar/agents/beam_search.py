@@ -1,12 +1,11 @@
-from typing import Any, Optional, Tuple
-import numpy as np
-from config import Config, CODE_END
-from arc_rstar.agents.node import Node
+from typing import Optional
 
+from arc_rstar.agents.node import Node
 from arc_rstar.arc_task.task import ARCTask
 from arc_rstar.llms.policy import PolicyModel
 from arc_rstar.llms.reward import RewardModel
-from arc_rstar.tools.python_tool import extract_python_code, execute_code_with_grid
+from arc_rstar.tools.python_tool import extract_python_code
+from config import Config
 from prompt import get_prompt
 
 

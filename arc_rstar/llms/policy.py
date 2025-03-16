@@ -1,6 +1,6 @@
-from typing import Any, Optional
-from config import Config, STEP_END, CODE_END
 from vllm import LLM, SamplingParams
+
+from config import Config, STEP_END, CODE_END
 
 
 class PolicyModel:
@@ -54,6 +54,6 @@ class PolicyModel:
         completion_outputs = request_output.outputs
 
         outputs = [completion_output.text for completion_output in completion_outputs]
-        
+
         # Return the completions
         return outputs

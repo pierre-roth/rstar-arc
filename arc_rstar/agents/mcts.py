@@ -1,11 +1,11 @@
-from typing import Any, Optional, Tuple
-import numpy as np
-from config import Config, CODE_END
+from typing import Optional
+
 from arc_rstar.agents.node import Node
 from arc_rstar.arc_task.task import ARCTask
 from arc_rstar.llms.policy import PolicyModel
 from arc_rstar.llms.reward import RewardModel
 from arc_rstar.tools.python_tool import extract_python_code
+from config import Config
 from prompt import get_prompt
 
 
@@ -23,9 +23,6 @@ class MCTS:
     def __init__(self, config: Config):
         self.config = config
         self.root = None
-        self.c_puct = config.c_puct  # Exploration constant for UCT formula
-        self.max_depth = config.max_depth
-        self.num_simulations = config.beam_width  # Reusing beam_width as simulation count
 
     def initialize_root(self, prompt: str, task: ARCTask):
         """Initialize the root node with the given prompt."""
@@ -50,8 +47,8 @@ class MCTS:
         best_score = float('-inf')
         best_child = None
 
-        for child in node.children:
-            score = child.puct_score(self.c_puct)
+        for child in filter(lambda c: c.valid(), node.children):
+            score = child.puct_score()
             if score > best_score:
                 best_score = score
                 best_child = child
@@ -63,8 +60,7 @@ class MCTS:
         # Recursively select from the best child
         return self.select(best_child)
 
-    def expand(self, node: Node, policy_model: PolicyModel, reward_model: RewardModel, task: ARCTask) -> list[
-        Node]:
+    def expand(self, node: Node, policy_model: PolicyModel, reward_model: RewardModel) -> list[Node]:
         """
         Expand a node by generating its children.
 
@@ -72,7 +68,7 @@ class MCTS:
         """
         return node.generate_children(policy_model, reward_model)
 
-    def simulate(self, node: Node, task: ARCTask) -> float:
+    def simulate(self, node: Node) -> float:
         """
         Simulation step to estimate the value of a node.
 
@@ -82,16 +78,14 @@ class MCTS:
         # For terminal nodes, check if it solves the task
         if node.is_terminal():
             try:
-                # Ensure node has task reference
-                if node.task is None:
-                    node.task = task
-                
+
                 # First check if the node is valid
                 if not node.valid():
                     return -1.0
-                    
+
                 code = extract_python_code(node.get_text(), self.config.verbose)
-                success, _ = task.run_training_examples(code)
+                success, _ = self.root.task.run_training_examples(code)
+                # potentially also check if the code runs successfully on test examples
                 return 1.0 if success else -1.0
             except Exception:
                 return -1.0
@@ -105,32 +99,32 @@ class MCTS:
 
         Updates the statistics of the node and all its ancestors.
         """
-        current = node
-        while current is not None:
-            current.update_stats(value)
-            current = current.parent
+        node.update_recursive(value)
 
     def solve(self, task: ARCTask, policy_model: PolicyModel, reward_model: RewardModel) -> Optional[str]:
         """
         Run MCTS to find a solution for the task.
 
-        Performs multiple MCTS simulations and returns the best solution found.
+        Performs multiple MCTS simulations and returns the best working solution found.
+        If multiple working solutions are found, returns the shortest one.
+        If no working solution is found, returns None.
         """
         prompt = get_prompt(self.config, task)
         self.initialize_root(prompt, task)
 
         if self.config.verbose:
             print(f"Starting MCTS for task: {task.name}")
-            print(f"C_PUCT: {self.c_puct}, Max depth: {self.max_depth}, Num simulations: {self.num_simulations}")
+            print(
+                f"C_PUCT: {self.config.c_puct}, Max depth: {self.config.max_depth}, Num simulations: {self.config.num_simulations}")
             print(f"\n\nInitial prompt: {prompt} \n\n\n")
 
-        solution_found = False
-        solution_code = None
+        # Keep track of all working solutions
+        working_solutions = []
 
         # Run simulations
-        for sim in range(self.num_simulations):
+        for sim in range(self.config.num_simulations):
             if self.config.verbose:
-                print(f"\n--- Simulation {sim + 1}/{self.num_simulations} ---")
+                print(f"\n--- Simulation {sim + 1}/{self.config.num_simulations} ---")
 
             # 1. Selection: Find the most promising leaf node
             selected_node = self.select(self.root)
@@ -140,26 +134,22 @@ class MCTS:
 
             # 2. Expansion: Generate children for the selected node
             expanded_nodes = []
-            if not selected_node.is_terminal() and selected_node.depth < self.max_depth:
-                expanded_nodes = self.expand(selected_node, policy_model, reward_model, task)
+            if not selected_node.is_terminal() and selected_node.depth < self.config.max_depth:
+                expanded_nodes = self.expand(selected_node, policy_model, reward_model)
 
                 if self.config.verbose:
-                    print(f"Expanded {len(expanded_nodes)} nodes")
+                    print(f"Expanded! {len(expanded_nodes)} nodes added")
 
             # If nodes were expanded, select one for simulation
             if expanded_nodes:
                 # Choose the expanded node with the highest immediate reward
                 selected_node = max(expanded_nodes, key=lambda x: x.reward)
-                
-                # Ensure task reference is propagated
-                if selected_node.task is None:
-                    selected_node.task = task
 
                 if self.config.verbose:
                     print(f"Selected expanded node {selected_node.tag} with reward {selected_node.reward}")
 
             # 3. Simulation: Estimate the value of the selected node
-            value = self.simulate(selected_node, task)
+            value = self.simulate(selected_node)
 
             if self.config.verbose:
                 print(f"Simulated value: {value}")
@@ -167,97 +157,41 @@ class MCTS:
             # 4. Backpropagation: Update statistics for nodes in the path
             self.backpropagate(selected_node, value)
 
-            # Check if we've found a solution
+            # Check if we've found a working solution
             if selected_node.is_terminal() and selected_node.valid():
                 try:
                     code = extract_python_code(selected_node.get_text(), self.config.verbose)
-                    success, _ = task.run_training_examples(code)
+                    success, _ = task.run_test_examples(code)
+
                     if success:
-                        solution_found = True
-                        solution_code = code
+                        # Add to working solutions
+                        working_solutions.append(code)
                         if self.config.verbose:
                             print(f"Solution found at node {selected_node.tag}")
-                        break
+                            print(f"Total working solutions found: {len(working_solutions)}")
+
                     elif self.config.verbose:
-                        print(f"Terminal node {selected_node.tag} does not correctly solve the task")
+                        print(f"Terminal node {selected_node.tag} passes training examples but fails test examples")
+
                 except Exception as e:
                     if self.config.verbose:
                         print(f"Error extracting code from terminal node: {str(e)}")
 
-        # If a solution was found, return it
-        if solution_found:
+        # If we found any working solutions, return the shortest one
+        if working_solutions:
             if self.config.verbose:
-                print("\nSOLUTION FOUND!")
-            return solution_code
+                print(f"\nFound {len(working_solutions)} working solutions!")
 
-        # If no solution found during simulations, find the best terminal node
-        def find_best_terminal(node):
-            """Recursively search for the best terminal node in the tree."""
-            best_node = None
-            best_score = float('-inf')
+            # Find the shortest solution by counting lines of code
+            shortest_solution = min(working_solutions, key=lambda code: len(code.splitlines()))
 
-            # Check current node if it's terminal
-            if node.is_terminal() and node.visits > 0:
-                try:
-
-                    # TODO fix this
-                    # Extract code and verify it's valid
-                    code = extract_python_code(node.get_text(), self.config.verbose)
-
-                    # Calculate score as a combination of visits and value
-                    # This balances exploitation (value) with exploration confidence (visits)
-                    score = node.value * (node.visits ** 0.5)
-
-                    if score > best_score:
-                        best_node = node
-                        best_score = score
-                except Exception:
-                    pass
-
-            # Check children recursively
-            for child in node.children:
-                child_best = find_best_terminal(child)
-                if child_best is not None:
-                    # Get score for child_best
-                    child_score = child_best.value * (child_best.visits ** 0.5)
-
-                    if child_score > best_score:
-                        best_node = child_best
-                        best_score = child_score
-
-            return best_node
-
-        best_terminal = find_best_terminal(self.root)
-
-        if best_terminal is not None:
             if self.config.verbose:
-                print(
-                    f"\nBest terminal node found: {best_terminal.tag} with value {best_terminal.value} and visits {best_terminal.visits}")
-            try:
-                # Ensure it's valid
-                if not best_terminal.valid():
-                    if self.config.verbose:
-                        print("Best terminal node is not valid - skipping")
-                    return None
-                
-                code = extract_python_code(best_terminal.get_text(), self.config.verbose)
-                # Double check that it correctly solves the task
-                success, _ = task.run_training_examples(code)
-                if success:
-                    if self.config.verbose:
-                        print("Best terminal node passes training examples")
-                    return code
-                else:
-                    if self.config.verbose:
-                        print("Best terminal node does not pass training examples")
-                    # Still return code even if it doesn't pass all examples
-                    # This can be useful as a partial solution
-                    return code
-            except Exception as e:
-                if self.config.verbose:
-                    print(f"Error extracting code from best terminal node: {str(e)}")
+                print(f"Selected shortest solution with {len(shortest_solution.splitlines())} lines of code")
 
+            return shortest_solution
+
+        # No working solutions found
         if self.config.verbose:
-            print("\nNO SOLUTION FOUND")
+            print("\nNO WORKING SOLUTION FOUND")
 
         return None

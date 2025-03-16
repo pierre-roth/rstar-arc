@@ -1,11 +1,12 @@
-import os
 import json
+import os
 import sys
+from datetime import datetime
+
 from arc_rstar.agents.beam_search import BeamSearch
 from arc_rstar.agents.mcts import MCTS
 from arc_rstar.solver import Solver
 from config import Config
-from datetime import datetime
 
 
 def run_single_task(config: Config, task_path=None):
@@ -72,7 +73,8 @@ def run_all_tasks(config: Config):
     # Save all results
     if config.output_dir:
         os.makedirs(config.output_dir, exist_ok=True)
-        output_path = os.path.join(config.output_dir, f"detailed_logs", f"job_{config.job_id}", f"all_tasks_{config.search_mode}_results.json")
+        output_path = os.path.join(config.output_dir, f"detailed_logs", f"job_{config.job_id}",
+                                   f"all_tasks_{config.search_mode}_results.json")
 
         with open(output_path, 'w') as f:
             json.dump(results, f, indent=2)  # type: ignore
