@@ -84,18 +84,6 @@ def prepare_code(code):
     return clean_code
 
 
-@contextlib.contextmanager
-def capture_output():
-    """Capture stdout and stderr."""
-    old_out, old_err = sys.stdout, sys.stderr
-    new_out, new_err = StringIO(), StringIO()
-    try:
-        sys.stdout, sys.stderr = new_out, new_err
-        yield new_out, new_err
-    finally:
-        sys.stdout, sys.stderr = old_out, old_err
-
-
 def create_subprocess_script(code, temp_dir=None):
     """Create a temporary script file with the user's code and I/O handling.
 
