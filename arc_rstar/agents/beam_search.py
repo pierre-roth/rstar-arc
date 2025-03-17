@@ -12,11 +12,11 @@ from prompt import get_prompt
 class BeamSearch:
 
     def __init__(self, config: Config):
-        self.config = config
+        self.config: Config = config
         self.root: Optional[Node] = None
-        self.beam_width = config.beam_width
-        self.branching_factor = config.branching_factor
-        self.max_depth = config.max_depth
+        self.beam_width: int = config.beam_width
+        self.branching_factor: int = config.branching_factor
+        self.max_depth: int = config.max_depth
 
     def initialize_root(self, prompt: str, task: ARCTask):
         """Initialize the root node with the given state."""

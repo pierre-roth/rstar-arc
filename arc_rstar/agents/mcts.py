@@ -21,8 +21,9 @@ class MCTS:
     """
 
     def __init__(self, config: Config):
-        self.config = config
+        self.config: Config = config
         self.root: Optional[Node] = None
+        self.branching_factor: int = config.branching_factor
 
     def initialize_root(self, prompt: str, task: ARCTask):
         """Initialize the root node with the given prompt."""

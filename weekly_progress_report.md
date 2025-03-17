@@ -51,10 +51,11 @@
 ### Week 3 (17.03.2025)
 
 - **Work planned**:
-  - Test the current version on more ARC tasks and see how it performs
-  - Potentially generate more simple ARC tasks to generate to data for supervised fine-tuning of the policy SLM
-  - Think about how to effectively use reasoning models in the current system
-  - Think about better step definitions that allow for more comprehensive intermediate code execution
+    - Experiment with different prompts and prompt formats for the policy SLM
+    - Test the "best" versions on more ARC tasks and see how they perform
+    - Potentially generate more simple ARC tasks to generate to data for supervised fine-tuning of the policy SLM
+    - Think about how to effectively use reasoning models in the current system
+    - Think about better step definitions that allow for more comprehensive intermediate code execution
 
 - **Work done**: 
   - 

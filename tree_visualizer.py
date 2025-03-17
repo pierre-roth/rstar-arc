@@ -14,20 +14,20 @@ from config import TERMINAL_CODE_END, TERMINAL_MAX_DEPTH, TERMINAL_INVALID, TERM
 # Add a nice banner when program starts
 BANNER = """
 ╔═══════════════════════════════════════════════════════╗
-║                    Tree Visualizer                    ║
+║                Dark Mode Tree Visualizer              ║
 ║                                                       ║
 ║         Visualize tree structures from logs           ║
 ╚═══════════════════════════════════════════════════════╝
 """
 
-# Define terminal reason colors using imported constants
+# Define terminal reason colors for dark mode
 TERMINAL_COLORS = {
-    TERMINAL_CODE_END: 'green',
-    TERMINAL_MAX_DEPTH: 'orange',
-    TERMINAL_INVALID: 'red',
-    TERMINAL_FAILURE: 'purple',  # Added failure state
-    TERMINAL_SUCCESS: 'blue',  # Added success state
-    None: 'lightblue'  # Non-terminal nodes
+    TERMINAL_CODE_END: '#00e676',  # bright green
+    TERMINAL_MAX_DEPTH: '#ffab40',  # bright orange
+    TERMINAL_INVALID: '#ff5252',  # bright red
+    TERMINAL_FAILURE: '#ea80fc',  # bright purple
+    TERMINAL_SUCCESS: '#40c4ff',  # bright blue
+    None: '#64b5f6'  # bright light blue
 }
 
 
@@ -143,7 +143,7 @@ def calculate_node_colors(g: ig.Graph, color_attr: str = 'terminal_reason') -> L
         List of color values as strings
     """
     if color_attr not in g.vs.attributes():
-        return ['skyblue'] * len(g.vs)
+        return ['#64b5f6'] * len(g.vs)  # Default dark mode blue
 
     # Get attribute values
     attr_values = g.vs[color_attr]
@@ -160,31 +160,31 @@ def calculate_node_colors(g: ig.Graph, color_attr: str = 'terminal_reason') -> L
         else:
             normalized = [(val - min_val) / (max_val - min_val) for val in safe_values]
 
-        # Blue intensity gradient
-        colors = [f'rgb({int(255 * (1 - n))}, {int(255 * (1 - n))}, 255)' for n in normalized]
+        # Blue intensity gradient for dark mode
+        colors = [f'rgb(0, {int(100 + 155 * n)}, 255)' for n in normalized]
     else:
         # Categorical values
         non_none_values = [val for val in attr_values if val is not None]
 
         if not non_none_values:
-            return ['skyblue'] * len(g.vs)
+            return ['#64b5f6'] * len(g.vs)  # Default dark mode blue
 
         # Special handling for terminal_reason
         if color_attr == 'terminal_reason':
-            colors = ['lightblue'] * len(g.vs)
+            colors = ['#64b5f6'] * len(g.vs)  # Default dark mode blue
 
             for i, value in enumerate(attr_values):
                 if value is not None:
-                    colors[i] = TERMINAL_COLORS.get(value, 'purple')
+                    colors[i] = TERMINAL_COLORS.get(value, '#ea80fc')  # Default to purple
 
             print(f"Coloring nodes by terminal reason: " +
                   f"{', '.join([f'{k}: {v}' for k, v in TERMINAL_COLORS.items() if k is not None])}")
         else:
-            # Generic categorical coloring
+            # Generic categorical coloring for dark mode
             unique_values = list(set(non_none_values))
             color_map = {val: i / max(1, len(unique_values) - 1) for i, val in enumerate(unique_values)}
             normalized = [color_map.get(val, 0) if val is not None else 0 for val in attr_values]
-            colors = [f'hsl({int(120 + 120 * n)}, 80%, 70%)' for n in normalized]
+            colors = [f'hsl({int(120 + 240 * n)}, 80%, 70%)' for n in normalized]
 
     return colors
 
@@ -391,6 +391,10 @@ def generate_javascript_for_node_click(node_state_data: List[Dict]) -> str:
     return f"""
     <script>
     document.addEventListener('DOMContentLoaded', function() {{
+        // Apply dark mode to the entire document
+        document.body.style.backgroundColor = '#121212';
+        document.body.style.color = '#e0e0e0';
+
         var plot = document.querySelector('.plotly-graph-div');
         var stateTextDiv = document.createElement('div');
         stateTextDiv.id = 'stateTextDisplay';
@@ -399,8 +403,9 @@ def generate_javascript_for_node_click(node_state_data: List[Dict]) -> str:
         stateTextDiv.style.top = '0';
         stateTextDiv.style.width = '400px';
         stateTextDiv.style.height = '100%';
-        stateTextDiv.style.backgroundColor = '#f8f9fa';
-        stateTextDiv.style.borderLeft = '1px solid #dee2e6';
+        stateTextDiv.style.backgroundColor = '#1e1e1e';  // Dark background
+        stateTextDiv.style.color = '#e0e0e0';  // Light text
+        stateTextDiv.style.borderLeft = '1px solid #333333';  // Darker border
         stateTextDiv.style.padding = '15px';
         stateTextDiv.style.overflowY = 'auto';
         stateTextDiv.style.display = 'none';
@@ -415,6 +420,7 @@ def generate_javascript_for_node_click(node_state_data: List[Dict]) -> str:
         closeBtn.style.top = '10px';
         closeBtn.style.border = 'none';
         closeBtn.style.background = 'none';
+        closeBtn.style.color = '#e0e0e0';  // Light text
         closeBtn.style.fontSize = '24px';
         closeBtn.style.cursor = 'pointer';
         closeBtn.onclick = function() {{
@@ -437,11 +443,13 @@ def generate_javascript_for_node_click(node_state_data: List[Dict]) -> str:
                 if (nodeInfo) {{
                     var header = document.createElement('h3');
                     header.textContent = 'Node: ' + nodeName;
+                    header.style.color = '#e0e0e0';  // Light text
 
                     var stateText = document.createElement('pre');
                     stateText.textContent = nodeInfo.state_text;
                     stateText.style.whiteSpace = 'pre-wrap';
-                    stateText.style.backgroundColor = '#f1f1f1';
+                    stateText.style.backgroundColor = '#2d2d2d';  // Darker background
+                    stateText.style.color = '#e0e0e0';  // Light text
                     stateText.style.padding = '10px';
                     stateText.style.borderRadius = '4px';
                     stateText.style.maxHeight = 'calc(100% - 80px)';
@@ -455,6 +463,23 @@ def generate_javascript_for_node_click(node_state_data: List[Dict]) -> str:
                 }}
             }}
         }});
+
+        // Apply dark mode to any tooltips that appear
+        const observer = new MutationObserver(function(mutations) {{
+            mutations.forEach(function(mutation) {{
+                if (mutation.addedNodes) {{
+                    mutation.addedNodes.forEach(function(node) {{
+                        if (node.classList && node.classList.contains('plotly-tooltip')) {{
+                            node.style.backgroundColor = '#2d2d2d';
+                            node.style.color = '#e0e0e0';
+                            node.style.border = '1px solid #444444';
+                        }}
+                    }});
+                }}
+            }});
+        }});
+
+        observer.observe(document.body, {{ childList: true, subtree: true }});
     }});
     </script>
     """
@@ -512,15 +537,15 @@ def visualize_tree(g: ig.Graph, layout: str = 'tree', color_attr: str = 'termina
             "state_text": state_text if state_text else "(No state text available)"
         })
 
-    # Create figure
+    # Create figure with dark mode
     fig = go.Figure()
 
-    # Add edges
+    # Add edges - brighter for dark mode
     fig.add_trace(go.Scatter(
         x=Xe,
         y=Ye,
         mode='lines',
-        line=dict(color='rgba(0,0,0,0.5)', width=1),
+        line=dict(color='rgba(150,150,150,0.5)', width=1),  # Lighter for dark mode
         hoverinfo='none'
     ))
 
@@ -532,9 +557,12 @@ def visualize_tree(g: ig.Graph, layout: str = 'tree', color_attr: str = 'termina
         marker=dict(
             size=node_sizes,
             color=colors,
-            line=dict(color='black', width=1)
+            line=dict(color='#444444', width=1)  # Darker border for dark mode
         ),
         text=node_texts,
+        textfont=dict(
+            color='#e0e0e0'  # Light text for dark mode
+        ),
         hovertext=hover_texts,
         hoverinfo='text',
         textposition='top center',
@@ -552,15 +580,29 @@ def visualize_tree(g: ig.Graph, layout: str = 'tree', color_attr: str = 'termina
     if visual_info:
         title += f' ({", ".join(visual_info)})'
 
-    # Update layout
+    # Update layout for dark mode
     fig.update_layout(
-        title=title,
-        plot_bgcolor='white',
+        title=dict(
+            text=title,
+            font=dict(color='#e0e0e0')  # Light title font for dark mode
+        ),
+        plot_bgcolor='#121212',  # Dark background
+        paper_bgcolor='#121212',  # Dark background
         showlegend=False,
         hovermode='closest',
         margin=dict(b=10, l=10, r=10, t=40),
-        xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-        yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+        xaxis=dict(
+            showgrid=False,
+            zeroline=False,
+            showticklabels=False,
+            gridcolor='#444444'  # Darker grid color if shown
+        ),
+        yaxis=dict(
+            showgrid=False,
+            zeroline=False,
+            showticklabels=False,
+            gridcolor='#444444'  # Darker grid color if shown
+        ),
         clickmode='event',
         annotations=[
             dict(
@@ -568,7 +610,7 @@ def visualize_tree(g: ig.Graph, layout: str = 'tree', color_attr: str = 'termina
                 showarrow=False,
                 xref="paper", yref="paper",
                 x=0.5, y=1.05,
-                font=dict(size=10)
+                font=dict(size=10, color='#e0e0e0')  # Light text for dark mode
             )
         ]
     )
@@ -578,13 +620,42 @@ def visualize_tree(g: ig.Graph, layout: str = 'tree', color_attr: str = 'termina
         html_content = fig.to_html(include_plotlyjs='cdn')
         js_code = generate_javascript_for_node_click(full_state_data)
 
-        # Insert JavaScript before the closing body tag
+        # Add dark mode CSS to the HTML
+        dark_mode_css = """
+        <style>
+            body {
+                background-color: #121212;
+                color: #e0e0e0;
+                margin: 0;
+                padding: 0;
+            }
+            .plotly-graph-div {
+                background-color: #121212 !important;
+            }
+            .modebar {
+                background-color: #2d2d2d !important;
+                color: #e0e0e0 !important;
+            }
+            .modebar-btn path {
+                fill: #e0e0e0 !important;
+            }
+            .modebar-btn:hover {
+                background-color: #444444 !important;
+            }
+            .js-plotly-plot .plotly .modebar-container {
+                background-color: #2d2d2d !important;
+            }
+        </style>
+        """
+
+        # Insert dark mode CSS and JavaScript
+        html_content = html_content.replace('<head>', '<head>' + dark_mode_css)
         html_content = html_content.replace('</body>', js_code + '</body>')
 
         with open(output_file, 'w') as f:
             f.write(html_content)
 
-        print(f"Visualization saved to: {output_file}")
+        print(f"Dark mode visualization saved to: {output_file}")
     else:
         fig.show()
 
@@ -620,7 +691,7 @@ def generate_sample_json():
 def main():
     print(BANNER)
 
-    parser = argparse.ArgumentParser(description='Visualize tree structures from log file.')
+    parser = argparse.ArgumentParser(description='Visualize tree structures from log file in dark mode.')
     parser.add_argument('log_file', nargs='?', help='Path to the log file.')
     parser.add_argument('--output', '-o', help='Path to save the visualization (optional).')
     parser.add_argument('--color', '-c', default='terminal_reason',
@@ -672,7 +743,7 @@ def main():
 
     # Visualize tree
     try:
-        print(f"Using {args.layout} layout...")
+        print(f"Using {args.layout} layout with dark mode theme...")
         visualize_tree(
             graph,
             layout=args.layout,
