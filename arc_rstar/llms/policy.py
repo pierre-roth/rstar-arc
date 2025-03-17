@@ -28,7 +28,7 @@ class PolicyModel:
             tensor_parallel_size=self.config.gpus,
             dtype=self.config.dtype,
             max_model_len=self.config.max_model_len,
-            engine_use_ray=False,  # Avoid Ray-related conflicts
+            # distributed_executor_backend='mp',  # use multiprocessing for distributed executor instead of Ray
             engine_args={
                 "port": port,
                 "engine_id": self.engine_id
