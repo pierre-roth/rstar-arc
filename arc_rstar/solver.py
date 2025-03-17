@@ -1,9 +1,9 @@
-from typing import Any
 import os
+from typing import Any
 
+from arc_rstar.agents import BeamSearch, MCTS
 from arc_rstar.arc_task.task import ARCTask
 from arc_rstar.llms import PolicyModel, RewardModel
-from arc_rstar.agents import BeamSearch, MCTS
 from config import Config, CODE_END, STEP_END
 
 
