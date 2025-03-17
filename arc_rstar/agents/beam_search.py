@@ -107,7 +107,7 @@ class BeamSearch:
                 print("\nSOLUTION FOUND!")
                 print(f"Total steps: {solution_node.depth}")
         else:
-            final_code = None, None
+            final_code = ""
             if self.config.verbose:
                 print("\nNO SOLUTION FOUND")
 
