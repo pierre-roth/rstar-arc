@@ -29,10 +29,7 @@ class PolicyModel:
             dtype=self.config.dtype,
             max_model_len=self.config.max_model_len,
             # distributed_executor_backend='mp',  # use multiprocessing for distributed executor instead of Ray
-            engine_args={
-                "port": port,
-                "engine_id": self.engine_id
-            }
+            # engine_args={"port": port, "engine_id": self.engine_id}
         )
 
         self.is_initialized = True
