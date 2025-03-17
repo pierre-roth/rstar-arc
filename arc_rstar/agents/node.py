@@ -78,7 +78,7 @@ class Node:
               = node.value + c_puct * prior * sqrt(parent_visits) / (1 + node.visits)
         """
         if self.visits == 0:
-            return float('inf')  # Prioritize unvisited nodes
+            return self.prior_probability * 10  # Prioritize unvisited nodes
 
         if self.parent is None:
             return self.value  # Root node has no parent for exploration term
@@ -92,17 +92,11 @@ class Node:
         return exploitation + exploration
 
     def update(self, value: float):
-        """Update just this node's statistics."""
         self.visits += 1
-        self.value = ((self.visits - 1) * self.value + value) / self.visits
-
-    def update_recursive(self, value: float, stop_node=None):
-        """Update this node and all ancestors up to stop_node."""
-        current = self
-        while current is not None and current is not stop_node:
-            current.visits += 1
-            current.value = ((current.visits - 1) * current.value + value) / current.visits
-            current = current.parent
+        # Use incremental average formula to avoid numerical issues
+        self.value = self.value + (value - self.value) / self.visits
+        if not self.is_root():
+            self.parent.update(value)
 
     def _validate(self) -> bool:
         """

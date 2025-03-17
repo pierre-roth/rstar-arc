@@ -5,7 +5,7 @@ from arc_rstar.arc_task.task import ARCTask
 from arc_rstar.llms.policy import PolicyModel
 from arc_rstar.llms.reward import RewardModel
 from arc_rstar.tools.python_tool import extract_python_code
-from config import Config
+from config import Config, CODE_END, STEP_END
 from prompt import get_prompt
 
 
@@ -69,9 +69,9 @@ class MCTS:
         """
         return node.generate_children(policy_model, reward_model)
 
-    def simulate(self, node: Node) -> float:
+    def evaluate_node(self, node: Node) -> float:
         """
-        Simulation step to estimate the value of a node.
+        Evaluation step to estimate the value of a node.
 
         For terminal nodes: Checks if it solves the task
         For non-terminal nodes: Uses the reward model's score
@@ -100,9 +100,9 @@ class MCTS:
 
         Updates the statistics of the node and all its ancestors.
         """
-        node.update_recursive(value)
+        node.update(value)
 
-    def solve(self, task: ARCTask, policy_model: PolicyModel, reward_model: RewardModel) -> Optional[str]:
+    def solve(self, task: ARCTask, policy_model: PolicyModel, reward_model: RewardModel) -> (Optional[str], Optional[Node]):
         """
         Run MCTS to find a solution for the task.
 
@@ -150,10 +150,10 @@ class MCTS:
                     print(f"Selected expanded node {selected_node.tag} with reward {selected_node.reward}")
 
             # 3. Simulation: Estimate the value of the selected node
-            value = self.simulate(selected_node)
+            value = self.evaluate_node(selected_node)
 
             if self.config.verbose:
-                print(f"Simulated value: {value}")
+                print(f"Simulated value for node {selected_node.tag}: {value}")
 
             # 4. Backpropagation: Update statistics for nodes in the path
             self.backpropagate(selected_node, value)
@@ -166,7 +166,7 @@ class MCTS:
 
                     if success:
                         # Add to working solutions
-                        working_solutions.append(code)
+                        working_solutions.append((code, selected_node))
                         if self.config.verbose:
                             print(f"Solution found at node {selected_node.tag}")
                             print(f"Total working solutions found: {len(working_solutions)}")
@@ -184,10 +184,10 @@ class MCTS:
                 print(f"\nFound {len(working_solutions)} working solutions!")
 
             # Find the shortest solution by counting lines of code
-            shortest_solution = min(working_solutions, key=lambda code: len(code.splitlines()))
+            shortest_solution = min(working_solutions, key=lambda t: len(t[0].splitlines().replace(CODE_END, '').replace(STEP_END, '').replace('\n', '')))
 
             if self.config.verbose:
-                print(f"Selected shortest solution with {len(shortest_solution.splitlines())} lines of code")
+                print(f"Selected shortest working solution")
 
             return shortest_solution
 
@@ -195,4 +195,4 @@ class MCTS:
         if self.config.verbose:
             print("\nNO WORKING SOLUTION FOUND")
 
-        return None
+        return None, None

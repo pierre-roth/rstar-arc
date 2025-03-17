@@ -4,7 +4,7 @@ from typing import Any
 from arc_rstar.agents import BeamSearch, MCTS
 from arc_rstar.arc_task.task import ARCTask
 from arc_rstar.llms import PolicyModel, RewardModel
-from config import Config, CODE_END, STEP_END
+from config import Config, CODE_END, STEP_END, TERMINAL_SUCCESS, TERMINAL_FAILURE
 
 
 class Solver:
@@ -31,7 +31,7 @@ class Solver:
         if self.config.verbose:
             print(f"Starting {self.config.search_mode} search...")
 
-        final_code = agent.solve(task, self.policy, self.reward)
+        final_code, final_node = agent.solve(task, self.policy, self.reward)
 
         # Print the final tree if verbose (for visualization)
         if self.config.verbose:
@@ -50,6 +50,9 @@ class Solver:
             }
 
             if success:
+                if final_node is not None:
+                    final_node.terminal_reason = TERMINAL_SUCCESS
+
                 output_path = os.path.join(self.config.output_dir, f"detailed_logs", f"job_{self.config.job_id}",
                                            f"{task.name}_solution.py")
 
@@ -60,6 +63,9 @@ class Solver:
                     print(f"Error saving Python solution code to {output_path}: {e}")
 
                 print(f"Python solution code saved to {output_path}")
+            else:
+                if final_node is not None:
+                    final_node.terminal_reason = TERMINAL_FAILURE
 
             if self.config.verbose:
                 print(f"Search completed! Solution found: {result['success']}")

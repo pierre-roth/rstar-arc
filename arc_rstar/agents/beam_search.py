@@ -24,7 +24,7 @@ class BeamSearch:
         self.root.state["text"] = prompt
         self.root.task = task
 
-    def solve(self, task: ARCTask, policy_model: PolicyModel, reward_model: RewardModel) -> Optional[str]:
+    def solve(self, task: ARCTask, policy_model: PolicyModel, reward_model: RewardModel) -> (Optional[str], Optional[Node]):
 
         prompt = get_prompt(self.config, task)
         self.initialize_root(prompt, task)
@@ -107,9 +107,9 @@ class BeamSearch:
                 print("\nSOLUTION FOUND!")
                 print(f"Total steps: {solution_node.depth}")
         else:
-            final_code = None
+            final_code = None, None
             if self.config.verbose:
                 print("\nNO SOLUTION FOUND")
 
         # Return the best code found
-        return final_code
+        return final_code, solution_node
