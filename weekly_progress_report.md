@@ -34,6 +34,7 @@
   - Decided on not specifying the extent of the step format beyond the "python block" limitation (that means the prefix code of every step must be valid python code)
   - Successfully implemented working version of "Round 1" with beam search agent (also successfully solved first ARC Task)
   - Rewriting code to adhere to HCP Storage best practices (i.e. use local scratch space for all intermediate files)
+  - Wrote tree visualizer to help with debugging (and because it's cool)
   - 
 
 
@@ -41,6 +42,10 @@
   - It seems the SLMs have very weak performance with the current system. What is the best way to mitigate this issue?
   - How do I effectively optimize the prompt for the policy SLM?
   - Sometimes the LLMs freeze up if I submit multiple jobs?
+
+- **Visuals**:
+  - Tree visualization output: (Beam Search: width=3, branching_factor=3)
+    ![img.png](images/week2_beam_search_visualization.png)
 
 
 ### Week 3 (17.03.2025)

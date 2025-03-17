@@ -11,7 +11,7 @@ On some READMEs, you may see small images that convey metadata, such as whether 
 ## Visuals
 ## Example: ARC task 00d62c1b
 
-![Task 00d62c1b](00d62c1b.png)
+![Task 00d62c1b](images/00d62c1b.png)
 
 ## Usage
 Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
