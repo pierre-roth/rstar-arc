@@ -52,8 +52,12 @@ class Solver:
             if success:
                 output_path = os.path.join(self.config.output_dir, f"detailed_logs", f"job_{self.config.job_id}",
                                            f"{task.name}_solution.py")
-                with open(output_path, 'w') as f:
-                    f.write(final_code)
+
+                try:
+                    with open(output_path, 'w') as f:
+                        f.write(final_code)
+                except Exception as e:
+                    print(f"Error saving Python solution code to {output_path}: {e}")
 
                 print(f"Python solution code saved to {output_path}")
 
