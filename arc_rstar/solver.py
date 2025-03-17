@@ -33,10 +33,6 @@ class Solver:
 
         final_code, final_node = agent.solve(task, self.policy, self.reward)
 
-        # Print the final tree if verbose (for visualization)
-        if self.config.verbose:
-            agent.root.print_tree()
-
         if self.config.verbose:
             print(f"Search completed! Final code: {final_code}")
 
@@ -75,5 +71,9 @@ class Solver:
                 "code": None,
                 "outputs": None
             }
+
+        # Print the final tree if verbose (for visualization)
+        if self.config.verbose:
+            agent.root.print_tree()
 
         return result

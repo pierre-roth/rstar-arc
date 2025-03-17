@@ -22,11 +22,11 @@ BANNER = """
 
 # Define terminal reason colors for dark mode
 TERMINAL_COLORS = {
-    TERMINAL_CODE_END: '#00e676',  # bright green
-    TERMINAL_MAX_DEPTH: '#ffab40',  # bright orange
-    TERMINAL_INVALID: '#ff5252',  # bright red
-    TERMINAL_FAILURE: '#ea80fc',  # bright purple
-    TERMINAL_SUCCESS: '#40c4ff',  # bright blue
+    TERMINAL_CODE_END: '#fcd303',  # orange
+    TERMINAL_MAX_DEPTH: '#fcfc03',  # yellow
+    TERMINAL_INVALID: '#fc0303',  # red
+    TERMINAL_FAILURE: '#fc03f8',  # pink
+    TERMINAL_SUCCESS: '#03fc18',  # green
     None: '#64b5f6'  # bright light blue
 }
 
