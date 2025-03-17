@@ -8,14 +8,14 @@ task-name: "8be77c9e"
 # Model parameters
 policy-model: "Qwen/Qwen2.5-Coder-7B-Instruct"
 reward-model: "Qwen/Qwen2.5-Coder-7B-Instruct"
-max-tokens: 2048
+max-tokens: 1024
 
 # Search parameters
 search-mode: "beam_search"  # Options: beam_search, mcts
-max-depth: 6
+max-depth: 7
 temperature: 0.7
-beam-width: 8  # Number of "best candidates" to keep after each step
-branching-factor: 8  # Number of candidates to generate per node
+beam-width: 10  # Number of "best candidates" to keep after each step
+branching-factor: 10  # Number of candidates to generate per node
 
 # System parameters
 gpus: 1

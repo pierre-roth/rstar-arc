@@ -71,10 +71,6 @@ class Node:
         child.tag = f"{self.tag}.{len(self.children) - 1}"
         child.task = self.task
 
-        if self.config.verbose:
-            # Just print the string representation which is already JSON (for the visualizer)
-            print(f"Added child node: {child}")
-
     def puct_score(self) -> float:
         """
         Calculate the PUCT score for MCTS selection.

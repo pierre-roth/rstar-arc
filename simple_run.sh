@@ -73,6 +73,9 @@ cd ${DIRECTORY}
 # Execute the Python application with output redirected to local scratch
 echo "Running: python main.py --config-file ${CONFIG_FILE}" | tee -a "${local_log_dir}/job_info.log"
 
+# setting relevant environment variables
+export VLLM_LOGGING_LEVEL=DEBUG
+
 # Run the program with output going to local scratch
 python main.py --config-file ${CONFIG_FILE} > "${local_log_dir}/program_output.log" 2> "${local_log_dir}/program_error.log"
 

@@ -31,7 +31,10 @@ class Solver:
             print(f"Starting {self.config.search_mode} search...")
 
         final_code = agent.solve(task, self.policy, self.reward)
-        agent.root.print_tree()
+
+        # Print the final tree if verbose (for visualization)
+        if self.config.verbose:
+            agent.root.print_tree()
 
         if self.config.verbose:
             print(f"Search completed! Final code: {final_code}")

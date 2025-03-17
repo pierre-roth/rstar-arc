@@ -8,7 +8,7 @@ task-name: "8be77c9e"
 # Model parameters
 policy-model: "Qwen/Qwen2.5-Coder-7B-Instruct"
 reward-model: "Qwen/Qwen2.5-Coder-7B-Instruct"
-max-tokens: 2048
+max-tokens: 1024
 
 # Search parameters
 search-mode: "mcts"  # Options: beam_search, mcts

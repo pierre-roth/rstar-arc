@@ -1,4 +1,8 @@
 from vllm import LLM, SamplingParams
+import os
+import random
+import time
+from vllm.utils import get_open_port  # Using vLLM's built-in utility
 
 from config import Config, STEP_END, CODE_END
 
@@ -8,29 +12,41 @@ class PolicyModel:
         self.config = config
         self.llm = None
         self.is_initialized = False
+        self.engine_id = f"vllm_engine_{config.job_id}_{int(time.time())}"
 
     def init_llm(self):
         """Initialize the language model."""
         if self.is_initialized:
             return
 
+        # Find an available port using vLLM's utility
+        port = get_open_port()
+
         self.llm = LLM(
             model=self.config.policy_model,
             download_dir=self.config.policy_model_dir,
             tensor_parallel_size=self.config.gpus,
             dtype=self.config.dtype,
-            max_model_len=self.config.max_model_len
+            max_model_len=self.config.max_model_len,
+            engine_use_ray=False,  # Avoid Ray-related conflicts
+            engine_args={
+                "port": port,
+                "engine_id": self.engine_id
+            }
         )
 
         self.is_initialized = True
 
+        if self.config.verbose:
+            print(f"vLLM initialized with engine ID {self.engine_id} on port {port}")
+
     def generate(self, prompt: str) -> list[str]:
         """
         Generate completions for the given prompt.
-        
+
         Args:
             prompt: The prompt to generate completions for
-            
+
         Returns:
             List of completions
         """
@@ -38,7 +54,6 @@ class PolicyModel:
             self.init_llm()
 
         # Generate completions with default params
-
         sampling_params = SamplingParams(
             temperature=self.config.temperature,
             top_p=0.95,
@@ -57,3 +72,4 @@ class PolicyModel:
 
         # Return the completions
         return outputs
+
