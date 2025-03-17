@@ -35,13 +35,15 @@
   - Successfully implemented working version of "Round 1" with beam search agent (also successfully solved first ARC Task)
   - Rewriting code to adhere to HCP Storage best practices (i.e. use local scratch space for all intermediate files)
   - Wrote tree visualizer to help with debugging (and because it's cool)
-  - 
+  - Played firefighter basically for a week straight (I'm not complaining, I love it)
+  - Wrote most of the MCTS implementation (still needs some work)
 
 
 - **Issues and Questions**:
   - It seems the SLMs have very weak performance with the current system. What is the best way to mitigate this issue?
   - How do I effectively optimize the prompt for the policy SLM?
   - Sometimes the LLMs freeze up if I submit multiple jobs?
+  - The net scratch seems to be overloaded many times ...
 
 - **Visuals**:
   - Tree visualization output: (Beam Search: width=3, branching_factor=3)
@@ -51,11 +53,15 @@
 ### Week 3 (17.03.2025)
 
 - **Work planned**:
+    - Use subprocesses to run code with memory and time limits (additionally prevents out of memory errors)
+    - Fix MCTS implementation to better reflect the rStar-Math implementation
     - Experiment with different prompts and prompt formats for the policy SLM
     - Test the "best" versions on more ARC tasks and see how they perform
     - Potentially generate more simple ARC tasks to generate to data for supervised fine-tuning of the policy SLM
     - Think about how to effectively use reasoning models in the current system
     - Think about better step definitions that allow for more comprehensive intermediate code execution
+    - **Major code refactoring for maintainability** (I will probably try to take some more inspiration from the rStar-Math implementation)
+    - 
 
 - **Work done**: 
   - 

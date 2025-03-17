@@ -22,10 +22,10 @@ BANNER = """
 
 # Define terminal reason colors for dark mode
 TERMINAL_COLORS = {
-    TERMINAL_CODE_END: '#fcd303',  # orange
-    TERMINAL_MAX_DEPTH: '#fcfc03',  # yellow
-    TERMINAL_INVALID: '#fc0303',  # red
-    TERMINAL_FAILURE: '#fc03f8',  # pink
+    TERMINAL_CODE_END: '#ffa500',  # orange
+    TERMINAL_MAX_DEPTH: '#ffff00',  # yellow
+    TERMINAL_INVALID: '#ff0000',  # red
+    TERMINAL_FAILURE: '#6600ff',  # purple
     TERMINAL_SUCCESS: '#03fc18',  # green
     None: '#64b5f6'  # bright light blue
 }
@@ -442,6 +442,10 @@ def visualize_tree(g: ig.Graph, layout: str = 'tree', color_attr: str = 'termina
     # Convert layout to coordinates
     layout_array = np.array(layout_coords.coords)
     Xn, Yn = layout_array[:, 0], layout_array[:, 1]
+
+    # Flip the y-coordinates for tree layout to put root on top
+    if layout == 'tree':
+        Yn = -Yn
 
     # Create edges
     Xe, Ye = [], []

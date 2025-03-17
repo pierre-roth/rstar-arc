@@ -16,6 +16,7 @@ import yaml
 # These paths are used if not overridden by command line or config file
 DEFAULT_MODEL_BASE_PATH = "/itet-stor/piroth/net_scratch/models"  # Base directory for models
 DEFAULT_OUTPUT_PATH = "/itet-stor/piroth/net_scratch/outputs"  # Where results will be saved
+DEFAULT_TEMPORARY_PATH_PREFIX = "/scratch/piroth/log_"  # Temporary output directory
 
 DEFAULT_DATA_SAMPLE_PATH = "data_sample"  # Root folder for ARC data
 DEFAULT_TRAINING_DATA_PATH = "data_sample/training"  # Training data location
@@ -41,6 +42,8 @@ DEFAULT_C_PUCT = 2.0  # PUCT exploration constant for MCTS
 # Code execution timeout settings
 TIMEOUT_SECONDS = 15  # Maximum time allowed for code execution
 TIMEOUT_MESSAGE = f"Execution of the code snippet has timed out for exceeding {TIMEOUT_SECONDS} seconds."
+MEMORY_LIMIT_MB = 1024
+MEMORY_LIMIT_BYTES = MEMORY_LIMIT_MB * 1024 * 1024
 
 # Terminal node constants
 TERMINAL_SUCCESS = "Successful solution"
@@ -173,6 +176,7 @@ class Config:
         # Set computed model directories based on model_base_path
         self.policy_model_dir = os.path.join(self.model_base_path, "policy")
         self.reward_model_dir = os.path.join(self.model_base_path, "reward")
+        self.temporary_path = DEFAULT_TEMPORARY_PATH_PREFIX + str(self.job_id)
 
     @classmethod
     def from_args(cls, args: Optional[list[str]] = None) -> Config:
