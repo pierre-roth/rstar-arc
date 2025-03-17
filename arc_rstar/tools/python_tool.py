@@ -11,16 +11,6 @@ import re
 from config import TIMEOUT_SECONDS, TIMEOUT_MESSAGE, CODE, CODE_END, STEP_END, MEMORY_LIMIT_BYTES
 
 
-class TimeoutException(Exception):
-    """Exception raised when code execution times out."""
-    pass
-
-
-def timeout_handler(signum, frame):
-    """Signal handler for execution timeout."""
-    raise TimeoutException(TIMEOUT_MESSAGE)
-
-
 def remove_thinking_blocks(text, verbose=False):
     """
     Remove all <think>...</think> blocks from text.
@@ -244,14 +234,6 @@ def execute_code_with_grid(code, input_grid, verbose=False, temp_dir=None):
 
     script_path = None
     try:
-        # Create a temporary directory for our script if not provided
-        created_temp_dir = False
-        if temp_dir is None:
-            temp_dir = tempfile.mkdtemp()
-            created_temp_dir = True
-        elif not os.path.exists(temp_dir):
-            os.makedirs(temp_dir, exist_ok=True)
-
         # Create the script file
         script_path = create_subprocess_script(code, temp_dir)
 
