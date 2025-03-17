@@ -1,190 +1,201 @@
-from typing import Optional
+from typing import Optional, List, Tuple
 
 from arc_rstar.agents.node import Node
 from arc_rstar.arc_task.task import ARCTask
 from arc_rstar.llms.policy import PolicyModel
 from arc_rstar.llms.reward import RewardModel
 from arc_rstar.tools.python_tool import extract_python_code
-from config import Config, CODE_END, STEP_END
+from config import Config, TERMINAL_SUCCESS, TERMINAL_FAILURE, STEP_END, CODE_END
 from prompt import get_prompt
 
 
 class MCTS:
     """
-    Monte Carlo Tree Search implementation for solving ARC tasks.
-
-    MCTS is a tree search algorithm that consists of four phases:
-    1. Selection: Choose the most promising unexpanded node
-    2. Expansion: Generate children of the selected node
-    3. Simulation: Estimate the value of the node
-    4. Backpropagation: Update statistics up the tree
+    Monte Carlo Tree Search implementation for solving ARC tasks based on rStar-Math approach.
     """
 
     def __init__(self, config: Config):
         self.config: Config = config
         self.root: Optional[Node] = None
-        self.branching_factor: int = config.branching_factor
+        self.candidate_nodes: List[Node] = []
+        self.final_answer_nodes: List[Node] = []
+        self.current_node: Optional[Node] = None
 
     def initialize_root(self, prompt: str, task: ARCTask):
         """Initialize the root node with the given prompt."""
         self.root = Node(self.config)
         self.root.state["text"] = prompt
         self.root.task = task
+        self.current_node = self.root
 
-    def select(self, node: Node) -> Node:
+    def selection(self, from_root: bool = False) -> Optional[Node]:
         """
-        Select the most promising node to expand using UCT score.
+        Select the most promising node to expand using PUCT.
 
-        This recursively traverses the tree until finding a node that either:
-        - Is a terminal node
-        - Has unvisited children
-        - Has no children at all
+        If from_root is True, start selection from the root node.
+        Otherwise, start from the current node.
         """
-        # If node is terminal or has no children, return it
-        if node.is_terminal() or not node.has_children():
-            return node
+        start_node = self.root if from_root else self.current_node
 
-        # Find the child with the highest UCT score
-        best_score = float('-inf')
+        if start_node is None:
+            return None
+
+        if start_node.is_terminal():
+            return None
+
+        if start_node.has_children():
+            next_node = self.select_child(start_node)
+            if next_node is None:  # All children are terminal or invalid
+                return None
+            return next_node
+
+        return start_node  # Leaf node ready for expansion
+
+    def select_child(self, node: Node) -> Optional[Node]:
+        """Select the best child based on PUCT score."""
+        best_value = float('-inf')
         best_child = None
 
-        for child in filter(lambda c: c.valid(), node.children):
-            score = child.puct_score()
-            if score > best_score:
-                best_score = score
+        for child in node.children:
+            if child.is_terminal() or not child.valid():
+                continue
+
+            puct_value = child.puct_score()
+
+            if puct_value > best_value:
+                best_value = puct_value
                 best_child = child
 
-        # If no best child found, return the current node
-        if best_child is None:
-            return node
+        return best_child
 
-        # Recursively select from the best child
-        return self.select(best_child)
-
-    def expand(self, node: Node, policy_model: PolicyModel, reward_model: RewardModel) -> list[Node]:
+    def expand(self, node: Node, policy_model: PolicyModel, reward_model: RewardModel) -> List[Node]:
         """
-        Expand a node by generating its children.
+        Generate and validate children for a node.
 
-        Uses the policy model to generate potential next steps and validates them.
+        Returns list of valid expanded nodes.
         """
-        return node.generate_children(policy_model, reward_model)
+        expanded_nodes = node.generate_children(policy_model, reward_model)
+        valid_nodes = [child for child in expanded_nodes if child.valid()]
 
-    def evaluate_node(self, node: Node) -> float:
-        """
-        Evaluation step to estimate the value of a node.
+        # Add valid nodes to candidate_nodes list for evaluation
+        self.candidate_nodes.extend(valid_nodes)
 
-        For terminal nodes: Checks if it solves the task
-        For non-terminal nodes: Uses the reward model's score
-        """
-        # For terminal nodes, check if it solves the task
-        if node.is_terminal():
-            try:
+        return valid_nodes
 
-                # First check if the node is valid
-                if not node.valid():
-                    return -1.0
-
-                code = extract_python_code(node.get_text(), self.config.verbose)
-                success, _ = self.root.task.run_training_examples(code)
-                # potentially also check if the code runs successfully on test examples
-                return 1.0 if success else -1.0
-            except Exception:
+    def evaluate_terminal_node(self, node: Node) -> float:
+        """Evaluate a terminal node by checking if it solves the ARC task."""
+        try:
+            if not node.valid():
                 return -1.0
 
-        # For non-terminal nodes, use the reward model's score
-        return node.reward
+            code = extract_python_code(node.get_text(), self.config.verbose)
+            success, _ = self.root.task.run_training_examples(code)
 
-    def backpropagate(self, node: Node, value: float):
+            if success:
+                node.terminal_reason = TERMINAL_SUCCESS
+                self.final_answer_nodes.append(node)
+            else:
+                node.terminal_reason = TERMINAL_FAILURE
+
+            return 1.0 if success else -1.0
+
+        except Exception as e:
+            if self.config.verbose:
+                print(f"Error evaluating terminal node: {str(e)}")
+            return -1.0
+
+    def evaluate_nodes(self, reward_model: RewardModel):
         """
-        Update node statistics by backpropagation.
+        Evaluate candidate nodes and backpropagate values.
 
-        Updates the statistics of the node and all its ancestors.
+        Terminal nodes are checked against the task.
+        Non-terminal nodes use the reward model's score.
         """
-        node.update(value)
+        for node in self.candidate_nodes:
+            if node.is_terminal():
+                value = self.evaluate_terminal_node(node)
+            else:
+                value = reward_model.score(node)
 
-    def solve(self, task: ARCTask, policy_model: PolicyModel, reward_model: RewardModel) -> (Optional[str], Optional[Node]):
+            # Backpropagate value up the tree
+            node.update(value)
+
+    def select_next_step(self, from_root: bool = False) -> None:
+        """Select the next node to expand in the search process."""
+        self.current_node = self.selection(from_root)
+        self.candidate_nodes = []
+
+        if self.current_node is not None:
+            self.candidate_nodes.append(self.current_node)
+
+    def solve(self, task: ARCTask, policy_model: PolicyModel, reward_model: RewardModel) -> Tuple[
+              Optional[str], Optional[Node]]:
         """
         Run MCTS to find a solution for the task.
 
-        Performs multiple MCTS simulations and returns the best working solution found.
-        If multiple working solutions are found, returns the shortest one.
-        If no working solution is found, returns None.
+        Performs multiple rollouts and returns the best working solution.
         """
         prompt = get_prompt(self.config, task)
         self.initialize_root(prompt, task)
 
         if self.config.verbose:
             print(f"Starting MCTS for task: {task.name}")
-            print(
-                f"C_PUCT: {self.config.c_puct}, Max depth: {self.config.max_depth}, Num simulations: {self.config.num_simulations}")
-            print(f"\n\nInitial prompt: {prompt} \n\n\n")
 
-        # Keep track of all working solutions
+        # Run rollouts
+        for rollout in range(self.config.num_simulations):
+
+            if self.config.verbose:
+                print(f"\n--- Rollout {rollout + 1}/{self.config.num_simulations} ---")
+
+            # Start each rollout from the root
+            self.select_next_step(from_root=True)
+
+            # Run steps within this rollout until reaching max depth or no nodes to expand
+            for step in range(self.config.max_depth):
+                if self.config.verbose:
+                    print(f"Rollout {rollout + 1}, Step {step + 1}")
+
+                if not self.current_node:
+                    break
+
+                # Expansion phase
+                if not self.current_node.is_terminal():
+                    expanded_nodes = self.expand(self.current_node, policy_model, reward_model)
+
+                    if self.config.verbose and expanded_nodes:
+                        print(f"Expanded node {self.current_node.tag}: {len(expanded_nodes)} valid children")
+
+                # Evaluation phase
+                self.evaluate_nodes(reward_model)
+
+                # Selection phase for next step
+                self.select_next_step()
+
+            if self.config.verbose:
+                print(f"Rollout {rollout + 1} complete - found {len(self.final_answer_nodes)} potential solutions")
+
+        # After all rollouts, verify solutions on test examples
         working_solutions = []
 
-        # Run simulations
-        for sim in range(self.config.num_simulations):
-            if self.config.verbose:
-                print(f"\n--- Simulation {sim + 1}/{self.config.num_simulations} ---")
+        for node in self.final_answer_nodes:
+            try:
+                code = extract_python_code(node.get_text(), self.config.verbose)
+                success, _ = task.run_test_examples(code)
 
-            # 1. Selection: Find the most promising leaf node
-            selected_node = self.select(self.root)
+                if success:
+                    working_solutions.append((code, node))
 
-            if self.config.verbose:
-                print(f"Selected node {selected_node.tag} at depth {selected_node.depth}")
-
-            # 2. Expansion: Generate children for the selected node
-            expanded_nodes = []
-            if not selected_node.is_terminal() and selected_node.depth < self.config.max_depth:
-                expanded_nodes = self.expand(selected_node, policy_model, reward_model)
-
+            except Exception as e:
                 if self.config.verbose:
-                    print(f"Expanded! {len(expanded_nodes)} nodes added")
+                    print(f"Error testing solution: {str(e)}")
 
-            # If nodes were expanded, select one for simulation
-            if expanded_nodes:
-                # Choose the expanded node with the highest immediate reward
-                selected_node = max(expanded_nodes, key=lambda x: x.reward)
-
-                if self.config.verbose:
-                    print(f"Selected expanded node {selected_node.tag} with reward {selected_node.reward}")
-
-            # 3. Simulation: Estimate the value of the selected node
-            value = self.evaluate_node(selected_node)
-
-            if self.config.verbose:
-                print(f"Simulated value for node {selected_node.tag}: {value}")
-
-            # 4. Backpropagation: Update statistics for nodes in the path
-            self.backpropagate(selected_node, value)
-
-            # Check if we've found a working solution
-            if selected_node.is_terminal() and selected_node.valid():
-                try:
-                    code = extract_python_code(selected_node.get_text(), self.config.verbose)
-                    success, _ = task.run_test_examples(code)
-
-                    if success:
-                        # Add to working solutions
-                        working_solutions.append((code, selected_node))
-                        if self.config.verbose:
-                            print(f"Solution found at node {selected_node.tag}")
-                            print(f"Total working solutions found: {len(working_solutions)}")
-
-                    elif self.config.verbose:
-                        print(f"Terminal node {selected_node.tag} passes training examples but fails test examples")
-
-                except Exception as e:
-                    if self.config.verbose:
-                        print(f"Error extracting code from terminal node: {str(e)}")
-
-        # If we found any working solutions, return the shortest one
+        # Return the best working solution (if any)
         if working_solutions:
             if self.config.verbose:
                 print(f"\nFound {len(working_solutions)} working solutions!")
 
-            # Find the shortest solution by counting lines of code
-            shortest_solution = min(working_solutions, key=lambda t: len(t[0].splitlines().replace(CODE_END, '').replace(STEP_END, '').replace('\n', '')))
+            # Find the shortest solution by code length
+            shortest_solution = min(working_solutions, key=lambda t: len(t[0].replace(CODE_END, '').replace(STEP_END, '').replace('\n\n', '\n').splitlines()))
 
             if self.config.verbose:
                 print(f"Selected shortest working solution")

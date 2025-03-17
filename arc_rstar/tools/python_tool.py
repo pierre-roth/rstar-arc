@@ -1,14 +1,10 @@
-import sys
-import signal
-import os
-import tempfile
 import json
+import os
 import subprocess
-from io import StringIO
-import contextlib
-import numpy as np
-import re
-from config import TIMEOUT_SECONDS, TIMEOUT_MESSAGE, CODE, CODE_END, STEP_END, MEMORY_LIMIT_BYTES
+import sys
+import tempfile
+
+from config import TIMEOUT_SECONDS, CODE, CODE_END, STEP_END, MEMORY_LIMIT_BYTES
 
 
 def remove_thinking_blocks(text, verbose=False):
