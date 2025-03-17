@@ -1,7 +1,7 @@
 import math
 
 from arc_rstar.tools.python_tool import extract_python_code
-from config import Config, CODE_END, TERMINAL_CODE_END, TERMINAL_MAX_DEPTH, TERMINAL_INVALID
+from config import Config, CODE_END, TERMINAL_CODE_END, TERMINAL_MAX_DEPTH, TERMINAL_INVALID, TERMINAL_FAILURE, TERMINAL_SUCCESS
 
 
 class Node:
@@ -241,4 +241,14 @@ class Node:
             }
         }
         return json.dumps(node_json)
+
+    def print_tree(self):
+        """
+        Print the JSON string representation of the entire tree starting from this node.
+        This is designed to generate output that can be parsed by the tree visualizer.
+        """
+        print(self)
+        for child in self.children:
+            child.print_tree()
+
 

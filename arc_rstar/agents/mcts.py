@@ -22,17 +22,13 @@ class MCTS:
 
     def __init__(self, config: Config):
         self.config = config
-        self.root = None
+        self.root: Optional[Node] = None
 
     def initialize_root(self, prompt: str, task: ARCTask):
         """Initialize the root node with the given prompt."""
         self.root = Node(self.config)
         self.root.state["text"] = prompt
         self.root.task = task
-
-        if self.config.verbose:
-            # Just print the string representation which is already JSON (for the visualizer)
-            print(f"Added child node: {self.root}")
 
     def select(self, node: Node) -> Node:
         """

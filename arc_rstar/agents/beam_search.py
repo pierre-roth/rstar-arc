@@ -13,7 +13,7 @@ class BeamSearch:
 
     def __init__(self, config: Config):
         self.config = config
-        self.root = None
+        self.root: Optional[Node] = None
         self.beam_width = config.beam_width
         self.branching_factor = config.branching_factor
         self.max_depth = config.max_depth
@@ -23,10 +23,6 @@ class BeamSearch:
         self.root = Node(self.config)
         self.root.state["text"] = prompt
         self.root.task = task
-
-        if self.config.verbose:
-            # Just print the string representation which is already JSON (for the visualizer)
-            print(f"Added child node: {self.root}")
 
     def solve(self, task: ARCTask, policy_model: PolicyModel, reward_model: RewardModel) -> Optional[str]:
 

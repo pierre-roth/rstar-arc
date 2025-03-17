@@ -2,6 +2,7 @@ from typing import Any
 
 from arc_rstar.arc_task.task import ARCTask
 from arc_rstar.llms import PolicyModel, RewardModel
+from arc_rstar.agents import BeamSearch, MCTS
 from config import Config
 
 
@@ -21,7 +22,7 @@ class Solver:
             print(f"Loaded task: {task_path}")
         return task
 
-    def solve(self, agent, task_path: str = None) -> dict[str, Any]:
+    def solve(self, agent: BeamSearch | MCTS, task_path: str = None) -> dict[str, Any]:
         # Load the task if a path is provided
         task = self.load_task(task_path)
 
@@ -30,6 +31,7 @@ class Solver:
             print(f"Starting {self.config.search_mode} search...")
 
         final_code = agent.solve(task, self.policy, self.reward)
+        agent.root.print_tree()
 
         if self.config.verbose:
             print(f"Search completed! Final code: {final_code}")

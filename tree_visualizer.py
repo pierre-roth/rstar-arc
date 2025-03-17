@@ -6,6 +6,10 @@ import math
 from typing import Dict, List, Any, Optional, Tuple
 import numpy as np
 import sys
+import traceback
+
+# Import terminal constants from config
+from config import TERMINAL_CODE_END, TERMINAL_MAX_DEPTH, TERMINAL_INVALID, TERMINAL_FAILURE, TERMINAL_SUCCESS
 
 # Add a nice banner when program starts
 BANNER = """
@@ -16,21 +20,18 @@ BANNER = """
 ╚═══════════════════════════════════════════════════════╝
 """
 
+# Define terminal reason colors using imported constants
+TERMINAL_COLORS = {
+    TERMINAL_CODE_END: 'green',
+    TERMINAL_MAX_DEPTH: 'orange',
+    TERMINAL_INVALID: 'red',
+    TERMINAL_FAILURE: 'purple',  # Added failure state
+    TERMINAL_SUCCESS: 'blue',  # Added success state
+    None: 'lightblue'  # Non-terminal nodes
+}
+
 
 def parse_log_file(filepath: str) -> List[Dict[str, Any]]:
-    """
-    Parse the log file and extract node information.
-
-    Specifically looks for lines containing JSON output from Node add_child method.
-    Each node should have a tag (e.g., "0", "0.1", "0.1.2") and data attributes like
-    visits, value, reward, depth, etc.
-
-    Args:
-        filepath: Path to the log file.
-
-    Returns:
-        List of node dictionaries.
-    """
     """
     Parse the log file and extract node information.
 
@@ -83,7 +84,7 @@ def build_tree(nodes: List[Dict[str, Any]], max_depth: Optional[int] = None) -> 
     # Filter by depth if specified
     if max_depth is not None:
         node_data_map = {name: data for name, data in node_data_map.items()
-                         if name.count('.') < max_depth}
+                         if name.count('.') <= max_depth}
 
     # Create a mapping of node names to indices
     node_indices = {}
@@ -116,7 +117,7 @@ def build_tree(nodes: List[Dict[str, Any]], max_depth: Optional[int] = None) -> 
             # Ensure parent exists
             if parent_name not in node_indices:
                 # Check if parent is above max_depth
-                if max_depth is not None and parent_name.count('.') >= max_depth:
+                if max_depth is not None and parent_name.count('.') > max_depth:
                     continue
 
                 # Create parent node with default data
@@ -130,39 +131,125 @@ def build_tree(nodes: List[Dict[str, Any]], max_depth: Optional[int] = None) -> 
     return g, node_indices
 
 
-def visualize_tree(g: ig.Graph, color_attr: Optional[str] = 'value',
-                   node_size_attr: Optional[str] = 'visits', output_file: Optional[str] = None):
+def calculate_node_colors(g: ig.Graph, color_attr: str = 'terminal_reason') -> List[str]:
     """
-    Visualize the tree using Plotly and igraph.
+    Calculate colors for nodes based on a specified attribute.
 
     Args:
-        g: igraph Graph object.
-        color_attr: Attribute to use for coloring nodes (optional).
-        node_size_attr: Attribute to use for node sizes (optional).
-        output_file: Path to save the visualization (optional).
+        g: igraph Graph object
+        color_attr: Attribute to use for coloring nodes
+
+    Returns:
+        List of color values as strings
     """
-    # Calculate layout using igraph's tree layout
-    layout = g.layout_reingold_tilford(root=[0])
-    layout = np.array(layout.coords)
+    if color_attr not in g.vs.attributes():
+        return ['skyblue'] * len(g.vs)
 
-    # Convert layout to x, y coordinates
-    Xn, Yn = layout[:, 0], layout[:, 1]
+    # Get attribute values
+    attr_values = g.vs[color_attr]
 
-    # Create edges
-    Xe, Ye = [], []
-    for edge in g.es:
-        source, target = edge.tuple
-        Xe += [Xn[source], Xn[target], None]
-        Ye += [Yn[source], Yn[target], None]
+    # Check if values are numeric
+    if all(isinstance(val, (int, float)) for val in attr_values if val is not None):
+        # Numeric values - use a gradient
+        safe_values = [val if val is not None else 0 for val in attr_values]
+        min_val = min(safe_values)
+        max_val = max(safe_values)
 
-    # Create node labels and hover text
-    labels = g.vs["name"]
+        if min_val == max_val:
+            normalized = [0.5 for _ in safe_values]
+        else:
+            normalized = [(val - min_val) / (max_val - min_val) for val in safe_values]
+
+        # Blue intensity gradient
+        colors = [f'rgb({int(255 * (1 - n))}, {int(255 * (1 - n))}, 255)' for n in normalized]
+    else:
+        # Categorical values
+        non_none_values = [val for val in attr_values if val is not None]
+
+        if not non_none_values:
+            return ['skyblue'] * len(g.vs)
+
+        # Special handling for terminal_reason
+        if color_attr == 'terminal_reason':
+            colors = ['lightblue'] * len(g.vs)
+
+            for i, value in enumerate(attr_values):
+                if value is not None:
+                    colors[i] = TERMINAL_COLORS.get(value, 'purple')
+
+            print(f"Coloring nodes by terminal reason: " +
+                  f"{', '.join([f'{k}: {v}' for k, v in TERMINAL_COLORS.items() if k is not None])}")
+        else:
+            # Generic categorical coloring
+            unique_values = list(set(non_none_values))
+            color_map = {val: i / max(1, len(unique_values) - 1) for i, val in enumerate(unique_values)}
+            normalized = [color_map.get(val, 0) if val is not None else 0 for val in attr_values]
+            colors = [f'hsl({int(120 + 120 * n)}, 80%, 70%)' for n in normalized]
+
+    return colors
+
+
+def calculate_node_sizes(g: ig.Graph, node_size_attr: Optional[str] = 'visits') -> List[float]:
+    """
+    Calculate sizes for nodes based on a specified attribute.
+
+    Args:
+        g: igraph Graph object
+        node_size_attr: Attribute to use for sizing nodes
+
+    Returns:
+        List of node sizes
+    """
+    if node_size_attr and node_size_attr in g.vs.attributes():
+        attr_values = g.vs[node_size_attr]
+
+        if all(isinstance(val, (int, float)) for val in attr_values if val is not None):
+            # Replace None with 0
+            safe_values = [val if val is not None else 0 for val in attr_values]
+
+            # Normalize between min and max size
+            min_val = min(safe_values)
+            max_val = max(safe_values)
+            min_size, max_size = 10, 30
+
+            if min_val == max_val:
+                return [20] * len(g.vs)
+            else:
+                return [
+                    min_size + (max_size - min_size) * (val - min_val) / (max_val - min_val)
+                    for val in safe_values
+                ]
+        else:
+            return [15] * len(g.vs)
+    else:
+        # Size based on depth
+        node_sizes = []
+        for name in g.vs["name"]:
+            try:
+                depth = name.count('.')
+                size = max(10, min(25, 20 - 3 * depth))
+            except (AttributeError, TypeError):
+                size = 15
+            node_sizes.append(size)
+        return node_sizes
+
+
+def create_hover_texts(g: ig.Graph) -> List[str]:
+    """
+    Create hover texts for nodes.
+
+    Args:
+        g: igraph Graph object
+
+    Returns:
+        List of hover text strings
+    """
     hover_texts = []
 
     for v in g.vs:
         hover_text = f"Node: {v['name']}<br>"
 
-        # Create organized sections for hover text
+        # Organize attributes by category
         core_attrs = []
         mcts_attrs = []
         state_attrs = []
@@ -173,9 +260,14 @@ def visualize_tree(g: ig.Graph, color_attr: Optional[str] = 'value',
             if attr in ["name"]:
                 continue
 
-            # Special handling for state_text - truncate if too long
+            # Format the value based on type
+            if isinstance(value, float):
+                display_value = f"{value:.4f}"
+            else:
+                display_value = value
+
+            # Special handling for state_text
             if attr == "state_text" and value is not None:
-                # Handle state_text specially
                 state_preview = value
                 if len(state_preview) > 200:
                     state_preview = state_preview[:197] + "..."
@@ -186,12 +278,6 @@ def visualize_tree(g: ig.Graph, color_attr: Optional[str] = 'value',
             if attr == "state_extra_info" and value:
                 state_attrs.append(f"<b>Extra Info:</b><br>{value}")
                 continue
-
-            # Format the value based on type
-            if isinstance(value, float):
-                display_value = f"{value:.4f}"
-            else:
-                display_value = value
 
             # Group attributes by category
             if attr in ["depth", "has_children"]:
@@ -217,106 +303,20 @@ def visualize_tree(g: ig.Graph, color_attr: Optional[str] = 'value',
 
         hover_texts.append(hover_text)
 
-    # Calculate node colors if color_attr is provided
-    visual_info = []
-    if color_attr and color_attr in g.vs.attributes():
-        print(f"Using '{color_attr}' for node coloring")
-        # Get attribute values
-        attr_values = g.vs[color_attr]
+    return hover_texts
 
-        # Check if values are numeric
-        if all(isinstance(val, (int, float)) for val in attr_values if val is not None):
-            # Replace None with 0 for calculations
-            safe_values = [val if val is not None else 0 for val in attr_values]
 
-            # Normalize values between 0 and 1
-            min_val = min(safe_values)
-            max_val = max(safe_values)
+def prepare_graph_for_visualization(g: ig.Graph) -> ig.Graph:
+    """
+    Prepare graph for visualization by calculating derived attributes.
 
-            if min_val == max_val:
-                normalized = [0.5 for _ in safe_values]
-            else:
-                normalized = [(val - min_val) / (max_val - min_val) for val in safe_values]
+    Args:
+        g: igraph Graph object
 
-            # Create a blue color scale
-            colors = [f'rgb({int(255 * (1 - n))}, {int(255 * (1 - n))}, 255)' for n in normalized]
-        else:
-            # For non-numeric values, use a categorical colormap
-            # Filter out None values first
-            non_none_values = [val for val in attr_values if val is not None]
-
-            if not non_none_values:
-                # All values are None, use default color
-                colors = ['skyblue'] * len(g.vs)
-            else:
-                unique_values = list(set(non_none_values))
-                color_map = {val: i / max(1, len(unique_values) - 1) for i, val in enumerate(unique_values)}
-                normalized = [color_map.get(val, 0) if val is not None else 0 for val in attr_values]
-
-                # Create colors using a hue range - green to blue
-                colors = [f'hsl({int(120 + 120 * n)}, 80%, 70%)' for n in normalized]
-
-        visual_info.append(f"Color: '{color_attr}'")
-    else:
-        # Default blue color
-        colors = ['skyblue'] * len(g.vs)
-
-    # Calculate node sizes
-    if node_size_attr and node_size_attr in g.vs.attributes():
-        print(f"Using '{node_size_attr}' for node sizing")
-        # Get attribute values
-        attr_values = g.vs[node_size_attr]
-
-        # Check if values are numeric
-        if all(isinstance(val, (int, float)) for val in attr_values if val is not None):
-            # Replace None with 0 for calculations
-            safe_values = [val if val is not None else 0 for val in attr_values]
-
-            # Normalize values between min and max size
-            min_val = min(safe_values)
-            max_val = max(safe_values)
-
-            min_size, max_size = 10, 30
-
-            if min_val == max_val:
-                node_sizes = [20] * len(g.vs)
-            else:
-                node_sizes = [
-                    min_size + (max_size - min_size) * (val - min_val) / (max_val - min_val)
-                    for val in safe_values
-                ]
-        else:
-            # Default size
-            node_sizes = [15] * len(g.vs)
-
-        visual_info.append(f"Size: '{node_size_attr}'")
-    else:
-        # Safely get depth from node name
-        node_sizes = []
-        for name in labels:
-            try:
-                depth = name.count('.')
-                size = max(10, min(25, 20 - 3 * depth))
-            except (AttributeError, TypeError):
-                size = 15  # Default size if name isn't a string or has issues
-            node_sizes.append(size)
-
-    # Only show labels for nodes up to depth 2 if many nodes
-    if len(g.vs) > 50:
-        # For larger trees, only show labels for upper levels
-        node_texts = []
-        for name in labels:
-            try:
-                depth = name.count('.')
-                text = name if depth < 3 else ""
-            except (AttributeError, TypeError):
-                text = ""  # Default empty if name isn't a string
-            node_texts.append(text)
-    else:
-        node_texts = labels
-
-    # Augment the graph with any calculated values
-    # Ensure all numeric attributes have default values instead of None
+    Returns:
+        Updated graph object
+    """
+    # Ensure all numeric attributes have default values
     numeric_attrs = ['visits', 'value', 'reward', 'prior_probability', 'depth']
     for attr in numeric_attrs:
         if attr in g.vs.attributes():
@@ -324,23 +324,193 @@ def visualize_tree(g: ig.Graph, color_attr: Optional[str] = 'value',
                 if v[attr] is None:
                     g.vs[i][attr] = 0.0 if attr != 'depth' else 0
 
-    # Calculate PUCT scores if not already present but components exist
-    if 'value' in g.vs.attributes() and 'prior_probability' in g.vs.attributes() and 'visits' in g.vs.attributes():
+    # Calculate PUCT scores if components exist
+    if ('value' in g.vs.attributes() and
+            'prior_probability' in g.vs.attributes() and
+            'visits' in g.vs.attributes()):
         if 'puct_score' not in g.vs.attributes():
             g.vs['puct_score'] = [0.0] * len(g.vs)
             for i, v in enumerate(g.vs):
-                # Simple approximation of PUCT score for visualization
                 visits = v['visits'] if v['visits'] is not None else 0
                 if visits > 0 and i > 0:  # Skip root node
                     neighbors = g.neighbors(i, mode='in')
-                    parent_visits = g.vs[neighbors[0]]['visits'] if neighbors else 0
-                    parent_visits = parent_visits if parent_visits is not None else 0
+                    if neighbors:
+                        parent_idx = neighbors[0]
+                        if parent_idx < len(g.vs):
+                            parent_visits = g.vs[parent_idx]['visits'] if 'visits' in g.vs[
+                                parent_idx].attributes() else 0
+                            parent_visits = parent_visits if parent_visits is not None else 0
 
-                    if parent_visits > 0:
-                        prior = v['prior_probability'] if v['prior_probability'] is not None else 1.0
-                        value = v['value'] if v['value'] is not None else 0.0
-                        exploration = 1.0 * prior * math.sqrt(math.log(parent_visits)) / (1 + visits)
-                        v['puct_score'] = value + exploration
+                            if parent_visits > 0:
+                                prior = v['prior_probability'] if v['prior_probability'] is not None else 1.0
+                                value = v['value'] if v['value'] is not None else 0.0
+                                exploration = 1.0 * prior * math.sqrt(math.log(parent_visits)) / (1 + visits)
+                                v['puct_score'] = value + exploration
+
+    return g
+
+
+def get_node_text_display(g: ig.Graph, max_nodes: int = 50) -> List[str]:
+    """
+    Determine which nodes should display labels based on tree size.
+
+    Args:
+        g: igraph Graph object
+        max_nodes: Maximum number of nodes to show all labels
+
+    Returns:
+        List of text labels for nodes
+    """
+    labels = g.vs["name"]
+
+    if len(g.vs) > max_nodes:
+        # For larger trees, only show labels for nodes at lower depths
+        node_texts = []
+        for name in labels:
+            try:
+                depth = name.count('.')
+                text = name if depth < 5 else ""
+            except (AttributeError, TypeError):
+                text = ""
+            node_texts.append(text)
+        return node_texts
+    else:
+        return labels
+
+
+def generate_javascript_for_node_click(node_state_data: List[Dict]) -> str:
+    """
+    Generate JavaScript code for handling node clicks.
+
+    Args:
+        node_state_data: List of node data including state text
+
+    Returns:
+        JavaScript code as a string
+    """
+    return f"""
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {{
+        var plot = document.querySelector('.plotly-graph-div');
+        var stateTextDiv = document.createElement('div');
+        stateTextDiv.id = 'stateTextDisplay';
+        stateTextDiv.style.position = 'fixed';
+        stateTextDiv.style.right = '0';
+        stateTextDiv.style.top = '0';
+        stateTextDiv.style.width = '400px';
+        stateTextDiv.style.height = '100%';
+        stateTextDiv.style.backgroundColor = '#f8f9fa';
+        stateTextDiv.style.borderLeft = '1px solid #dee2e6';
+        stateTextDiv.style.padding = '15px';
+        stateTextDiv.style.overflowY = 'auto';
+        stateTextDiv.style.display = 'none';
+        stateTextDiv.style.zIndex = '1000';
+        stateTextDiv.style.fontFamily = 'monospace';
+        document.body.appendChild(stateTextDiv);
+
+        var closeBtn = document.createElement('button');
+        closeBtn.textContent = '×';
+        closeBtn.style.position = 'absolute';
+        closeBtn.style.right = '15px';
+        closeBtn.style.top = '10px';
+        closeBtn.style.border = 'none';
+        closeBtn.style.background = 'none';
+        closeBtn.style.fontSize = '24px';
+        closeBtn.style.cursor = 'pointer';
+        closeBtn.onclick = function() {{
+            stateTextDiv.style.display = 'none';
+        }};
+        stateTextDiv.appendChild(closeBtn);
+
+        // Store node data
+        var nodeData = {json.dumps(node_state_data)};
+
+        plot.on('plotly_click', function(data) {{
+            var pt = data.points[0];
+            if (pt.customdata) {{
+                var nodeIndex = pt.customdata[0];
+                var nodeName = pt.customdata[1];
+
+                // Find the node data
+                var nodeInfo = nodeData.find(function(n) {{ return n.node === nodeName; }});
+
+                if (nodeInfo) {{
+                    var header = document.createElement('h3');
+                    header.textContent = 'Node: ' + nodeName;
+
+                    var stateText = document.createElement('pre');
+                    stateText.textContent = nodeInfo.state_text;
+                    stateText.style.whiteSpace = 'pre-wrap';
+                    stateText.style.backgroundColor = '#f1f1f1';
+                    stateText.style.padding = '10px';
+                    stateText.style.borderRadius = '4px';
+                    stateText.style.maxHeight = 'calc(100% - 80px)';
+                    stateText.style.overflow = 'auto';
+
+                    stateTextDiv.innerHTML = '';
+                    stateTextDiv.appendChild(closeBtn);
+                    stateTextDiv.appendChild(header);
+                    stateTextDiv.appendChild(stateText);
+                    stateTextDiv.style.display = 'block';
+                }}
+            }}
+        }});
+    }});
+    </script>
+    """
+
+
+def visualize_tree(g: ig.Graph, layout: str = 'tree', color_attr: str = 'terminal_reason',
+                   node_size_attr: str = 'visits', output_file: Optional[str] = None):
+    """
+    Visualize the tree using Plotly and igraph.
+
+    Args:
+        g: igraph Graph object.
+        layout: Layout algorithm ('tree', 'force', or 'circle')
+        color_attr: Attribute to use for coloring nodes
+        node_size_attr: Attribute to use for node sizes
+        output_file: Path to save the visualization
+    """
+    # Prepare graph for visualization (calculate derived values)
+    g = prepare_graph_for_visualization(g)
+
+    # Calculate layout based on specified algorithm
+    if layout == 'force':
+        layout_coords = g.layout_fruchterman_reingold(weights=None)
+        layout_name = "force-directed"
+    elif layout == 'circle':
+        layout_coords = g.layout_circle()
+        layout_name = "circular"
+    else:
+        layout_coords = g.layout_reingold_tilford(root=[0])
+        layout_name = "tree"
+
+    # Convert layout to coordinates
+    layout_array = np.array(layout_coords.coords)
+    Xn, Yn = layout_array[:, 0], layout_array[:, 1]
+
+    # Create edges
+    Xe, Ye = [], []
+    for edge in g.es:
+        source, target = edge.tuple
+        Xe += [Xn[source], Xn[target], None]
+        Ye += [Yn[source], Yn[target], None]
+
+    # Calculate node visual properties
+    colors = calculate_node_colors(g, color_attr)
+    node_sizes = calculate_node_sizes(g, node_size_attr)
+    hover_texts = create_hover_texts(g)
+    node_texts = get_node_text_display(g)
+
+    # Prepare full state data for node clicks
+    full_state_data = []
+    for v in g.vs:
+        state_text = v["state_text"] if "state_text" in v.attributes() else ""
+        full_state_data.append({
+            "node": v["name"],
+            "state_text": state_text if state_text else "(No state text available)"
+        })
 
     # Create figure
     fig = go.Figure()
@@ -354,17 +524,7 @@ def visualize_tree(g: ig.Graph, color_attr: Optional[str] = 'value',
         hoverinfo='none'
     ))
 
-    # Add a click event handler to show full state content
-    full_state_data = []
-    for v in g.vs:
-        state_text = v.get("state_text", "")
-        node_info = {
-            "node": v["name"],
-            "state_text": state_text if state_text else "(No state text available)"
-        }
-        full_state_data.append(node_info)
-
-    # Add nodes with click events
+    # Add nodes
     fig.add_trace(go.Scatter(
         x=Xn,
         y=Yn,
@@ -378,66 +538,21 @@ def visualize_tree(g: ig.Graph, color_attr: Optional[str] = 'value',
         hovertext=hover_texts,
         hoverinfo='text',
         textposition='top center',
-        customdata=[[i, v["name"]] for i, v in enumerate(g.vs)],  # Include index and node name
+        customdata=[[i, v["name"]] for i, v in enumerate(g.vs)]
     ))
 
-    # Add JavaScript for node click handling
-    fig.update_layout(
-        clickmode='event',
-        # Add custom JavaScript to handle click events
-        updatemenus=[
-            dict(
-                type="buttons",
-                showactive=False,
-                buttons=[
-                    dict(
-                        label="View State",
-                        method="relayout",
-                        args=["annotations[1].text", "Click on a node to view its state"]
-                    )
-                ],
-                x=0.5,
-                xanchor="center",
-                y=1.02,
-                visible=False  # Hide this menu but keep the JavaScript
-            )
-        ]
-    )
+    # Build title with visualization info
+    visual_info = []
+    if color_attr:
+        visual_info.append(f"Color: '{color_attr}'")
+    if node_size_attr:
+        visual_info.append(f"Size: '{node_size_attr}'")
 
-    # Add JavaScript to show code in a sidebar on click
-    fig.update_layout(
-        # Add annotation where state text will be shown
-        annotations=[
-            # Title annotation (already defined)
-            dict(
-                text="Hover over nodes to see details. Click a node to view its full state content.",
-                showarrow=False,
-                xref="paper", yref="paper",
-                x=0.5, y=1.05,
-                font=dict(size=10)
-            ),
-            # State text annotation (will be updated on click)
-            dict(
-                text="Click on a node to view its state",
-                showarrow=False,
-                xref="paper", yref="paper",
-                x=0.5, y=-0.1,  # Position at bottom
-                font=dict(size=12),
-                bgcolor="rgba(240, 240, 240, 0.9)",
-                bordercolor="rgba(0, 0, 0, 0.5)",
-                borderwidth=1,
-                borderpad=10,
-                opacity=0.9
-            )
-        ]
-    )
-
-    # Update layout
-    title = 'Tree Visualization'
+    title = f'Tree Visualization ({layout_name} layout)'
     if visual_info:
         title += f' ({", ".join(visual_info)})'
 
-    # Add a modal for viewing full state content
+    # Update layout
     fig.update_layout(
         title=title,
         plot_bgcolor='white',
@@ -446,7 +561,7 @@ def visualize_tree(g: ig.Graph, color_attr: Optional[str] = 'value',
         margin=dict(b=10, l=10, r=10, t=40),
         xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
         yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-        # Add annotations explaining hover interaction
+        clickmode='event',
         annotations=[
             dict(
                 text="Hover over nodes to see details. Click a node to view its full state content.",
@@ -460,18 +575,22 @@ def visualize_tree(g: ig.Graph, color_attr: Optional[str] = 'value',
 
     # Show or save figure
     if output_file:
-        fig.write_html(output_file)
+        html_content = fig.to_html(include_plotlyjs='cdn')
+        js_code = generate_javascript_for_node_click(full_state_data)
+
+        # Insert JavaScript before the closing body tag
+        html_content = html_content.replace('</body>', js_code + '</body>')
+
+        with open(output_file, 'w') as f:
+            f.write(html_content)
+
+        print(f"Visualization saved to: {output_file}")
     else:
         fig.show()
 
 
 def generate_sample_json():
-    """
-    Generate a sample JSON format to use for node information.
-
-    Returns:
-        A string containing a sample JSON node.
-    """
+    """Generate a sample JSON format to use for node information."""
     sample = {
         "node": "0.1.2",
         "data": {
@@ -492,7 +611,7 @@ def generate_sample_json():
             "state_extra_info": "Additional information about this state",
 
             # Additional attributes that might be useful
-            "puct_score": 1.25  # Could be calculated using the puct_score() method
+            "puct_score": 1.25
         }
     }
     return json.dumps(sample, indent=2)
@@ -504,10 +623,16 @@ def main():
     parser = argparse.ArgumentParser(description='Visualize tree structures from log file.')
     parser.add_argument('log_file', nargs='?', help='Path to the log file.')
     parser.add_argument('--output', '-o', help='Path to save the visualization (optional).')
-    parser.add_argument('--color', '-c', help='Node attribute to use for coloring (optional).')
-    parser.add_argument('--size', '-s', help='Node attribute to use for sizing (optional).')
-    parser.add_argument('--max-depth', '-d', type=int, help='Maximum depth of nodes to include (optional).')
-    parser.add_argument('--sample', action='store_true', help='Print a sample JSON format for node data.')
+    parser.add_argument('--color', '-c', default='terminal_reason',
+                        help='Node attribute to use for coloring (default: terminal_reason).')
+    parser.add_argument('--size', '-s', default='visits',
+                        help='Node attribute to use for sizing (default: visits).')
+    parser.add_argument('--max-depth', '-d', type=int,
+                        help='Maximum depth of nodes to include (optional, default: no limit).')
+    parser.add_argument('--sample', action='store_true',
+                        help='Print a sample JSON format for node data.')
+    parser.add_argument('--layout', '-l', choices=['tree', 'force', 'circle'], default='tree',
+                        help='Layout algorithm to use (default: tree)')
 
     args = parser.parse_args()
 
@@ -547,15 +672,17 @@ def main():
 
     # Visualize tree
     try:
-        print("Generating visualization...")
-        visualize_tree(graph, args.color, args.size, args.output)
-
-        if args.output:
-            print(f"Visualization saved to: {args.output}")
-        else:
-            print("Displaying visualization...")
+        print(f"Using {args.layout} layout...")
+        visualize_tree(
+            graph,
+            layout=args.layout,
+            color_attr=args.color,
+            node_size_attr=args.size,
+            output_file=args.output
+        )
     except Exception as e:
         print(f"Error visualizing tree: {e}", file=sys.stderr)
+        traceback.print_exc()
         return
 
 
