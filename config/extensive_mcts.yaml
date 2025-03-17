@@ -13,9 +13,9 @@ reward-model: "Qwen/Qwen2.5-Coder-7B-Instruct"
 search-mode: "mcts"
 max-depth: 8
 temperature: 0.7
-num-simulations: 128
+num-simulations: 512
 c-puct: 2.0
-branching-factor: 8
+branching-factor: 6
 
 # System parameters
 gpus: 1
