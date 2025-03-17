@@ -1,4 +1,5 @@
 from typing import Any
+import os
 
 from arc_rstar.arc_task.task import ARCTask
 from arc_rstar.llms import PolicyModel, RewardModel
@@ -47,6 +48,14 @@ class Solver:
                 "code": final_code,
                 "outputs": outputs
             }
+
+            if success:
+                output_path = os.path.join(self.config.output_dir, f"detailed_logs", f"job_{self.config.job_id}",
+                                           f"{task.name}_solution.py")
+                with open(output_path, 'w') as f:
+                    f.write(final_code)
+
+                print(f"Python solution code saved to {output_path}")
 
             if self.config.verbose:
                 print(f"Search completed! Solution found: {result['success']}")

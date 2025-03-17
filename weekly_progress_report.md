@@ -40,10 +40,7 @@
 - **Issues and Questions**:
   - It seems the SLMs have very weak performance with the current system. What is the best way to mitigate this issue?
   - How do I effectively optimize the prompt for the policy SLM?
-  - I have a problem that kind of defeats the purpose of running this on a cluster: 
-    - Each time I start to jobs in parallel, they both "freeze up" and have to be canceled
-    - I suspect it has something to do with how vllm is implemented (e.g. port conflicts or something)
-    - I have not succeeded in finding a solution to this problem yet
+  - Sometimes the LLMs freeze up if I submit multiple jobs?
 
 
 ### Week 3 (17.03.2025)

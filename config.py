@@ -26,7 +26,7 @@ DEFAULT_POLICY_LLM = "Qwen/Qwen2.5-Coder-7B-Instruct"  # Policy model (generates
 DEFAULT_REWARD_LLM = "Qwen/Qwen2.5-Coder-7B-Instruct"  # Reward Model (evaluates steps)
 
 # Default hyperparameters
-DEFAULT_MAX_TOKENS = 2048  # Maximum tokens for model generation
+DEFAULT_MAX_TOKENS = 512  # Maximum tokens for model generation
 DEFAULT_MAX_DEPTH = 10  # Maximum depth of search tree (max steps)
 DEFAULT_BEAM_WIDTH = 3  # Width of beam in beam search (solutions to track)
 DEFAULT_BRANCHING_FACTOR = 3  # Number of child nodes to expand per parent
