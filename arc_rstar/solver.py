@@ -4,7 +4,7 @@ import os
 from arc_rstar.arc_task.task import ARCTask
 from arc_rstar.llms import PolicyModel, RewardModel
 from arc_rstar.agents import BeamSearch, MCTS
-from config import Config
+from config import Config, CODE_END, STEP_END
 
 
 class Solver:
@@ -55,7 +55,7 @@ class Solver:
 
                 try:
                     with open(output_path, 'w') as f:
-                        f.write(final_code)
+                        f.write(final_code.replace(CODE_END, '').replace(STEP_END, '').replace('\n\n', '\n'))
                 except Exception as e:
                     print(f"Error saving Python solution code to {output_path}: {e}")
 
