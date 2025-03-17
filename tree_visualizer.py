@@ -378,109 +378,37 @@ def get_node_text_display(g: ig.Graph, max_nodes: int = 50) -> List[str]:
         return labels
 
 
-def generate_javascript_for_node_click(node_state_data: List[Dict]) -> str:
+def generate_javascript_for_dark_mode() -> str:
     """
-    Generate JavaScript code for handling node clicks.
-
-    Args:
-        node_state_data: List of node data including state text
+    Generate JavaScript code for applying dark mode to the visualization.
 
     Returns:
         JavaScript code as a string
     """
-    return f"""
+    return """
     <script>
-    document.addEventListener('DOMContentLoaded', function() {{
+    document.addEventListener('DOMContentLoaded', function() {
         // Apply dark mode to the entire document
         document.body.style.backgroundColor = '#121212';
         document.body.style.color = '#e0e0e0';
 
-        var plot = document.querySelector('.plotly-graph-div');
-        var stateTextDiv = document.createElement('div');
-        stateTextDiv.id = 'stateTextDisplay';
-        stateTextDiv.style.position = 'fixed';
-        stateTextDiv.style.right = '0';
-        stateTextDiv.style.top = '0';
-        stateTextDiv.style.width = '400px';
-        stateTextDiv.style.height = '100%';
-        stateTextDiv.style.backgroundColor = '#1e1e1e';  // Dark background
-        stateTextDiv.style.color = '#e0e0e0';  // Light text
-        stateTextDiv.style.borderLeft = '1px solid #333333';  // Darker border
-        stateTextDiv.style.padding = '15px';
-        stateTextDiv.style.overflowY = 'auto';
-        stateTextDiv.style.display = 'none';
-        stateTextDiv.style.zIndex = '1000';
-        stateTextDiv.style.fontFamily = 'monospace';
-        document.body.appendChild(stateTextDiv);
-
-        var closeBtn = document.createElement('button');
-        closeBtn.textContent = '×';
-        closeBtn.style.position = 'absolute';
-        closeBtn.style.right = '15px';
-        closeBtn.style.top = '10px';
-        closeBtn.style.border = 'none';
-        closeBtn.style.background = 'none';
-        closeBtn.style.color = '#e0e0e0';  // Light text
-        closeBtn.style.fontSize = '24px';
-        closeBtn.style.cursor = 'pointer';
-        closeBtn.onclick = function() {{
-            stateTextDiv.style.display = 'none';
-        }};
-        stateTextDiv.appendChild(closeBtn);
-
-        // Store node data
-        var nodeData = {json.dumps(node_state_data)};
-
-        plot.on('plotly_click', function(data) {{
-            var pt = data.points[0];
-            if (pt.customdata) {{
-                var nodeIndex = pt.customdata[0];
-                var nodeName = pt.customdata[1];
-
-                // Find the node data
-                var nodeInfo = nodeData.find(function(n) {{ return n.node === nodeName; }});
-
-                if (nodeInfo) {{
-                    var header = document.createElement('h3');
-                    header.textContent = 'Node: ' + nodeName;
-                    header.style.color = '#e0e0e0';  // Light text
-
-                    var stateText = document.createElement('pre');
-                    stateText.textContent = nodeInfo.state_text;
-                    stateText.style.whiteSpace = 'pre-wrap';
-                    stateText.style.backgroundColor = '#2d2d2d';  // Darker background
-                    stateText.style.color = '#e0e0e0';  // Light text
-                    stateText.style.padding = '10px';
-                    stateText.style.borderRadius = '4px';
-                    stateText.style.maxHeight = 'calc(100% - 80px)';
-                    stateText.style.overflow = 'auto';
-
-                    stateTextDiv.innerHTML = '';
-                    stateTextDiv.appendChild(closeBtn);
-                    stateTextDiv.appendChild(header);
-                    stateTextDiv.appendChild(stateText);
-                    stateTextDiv.style.display = 'block';
-                }}
-            }}
-        }});
-
         // Apply dark mode to any tooltips that appear
-        const observer = new MutationObserver(function(mutations) {{
-            mutations.forEach(function(mutation) {{
-                if (mutation.addedNodes) {{
-                    mutation.addedNodes.forEach(function(node) {{
-                        if (node.classList && node.classList.contains('plotly-tooltip')) {{
+        const observer = new MutationObserver(function(mutations) {
+            mutations.forEach(function(mutation) {
+                if (mutation.addedNodes) {
+                    mutation.addedNodes.forEach(function(node) {
+                        if (node.classList && node.classList.contains('plotly-tooltip')) {
                             node.style.backgroundColor = '#2d2d2d';
                             node.style.color = '#e0e0e0';
                             node.style.border = '1px solid #444444';
-                        }}
-                    }});
-                }}
-            }});
-        }});
+                        }
+                    });
+                }
+            });
+        });
 
-        observer.observe(document.body, {{ childList: true, subtree: true }});
-    }});
+        observer.observe(document.body, { childList: true, subtree: true });
+    });
     </script>
     """
 
@@ -528,15 +456,6 @@ def visualize_tree(g: ig.Graph, layout: str = 'tree', color_attr: str = 'termina
     hover_texts = create_hover_texts(g)
     node_texts = get_node_text_display(g)
 
-    # Prepare full state data for node clicks
-    full_state_data = []
-    for v in g.vs:
-        state_text = v["state_text"] if "state_text" in v.attributes() else ""
-        full_state_data.append({
-            "node": v["name"],
-            "state_text": state_text if state_text else "(No state text available)"
-        })
-
     # Create figure with dark mode
     fig = go.Figure()
 
@@ -565,8 +484,7 @@ def visualize_tree(g: ig.Graph, layout: str = 'tree', color_attr: str = 'termina
         ),
         hovertext=hover_texts,
         hoverinfo='text',
-        textposition='top center',
-        customdata=[[i, v["name"]] for i, v in enumerate(g.vs)]
+        textposition='top center'
     ))
 
     # Build title with visualization info
@@ -602,23 +520,13 @@ def visualize_tree(g: ig.Graph, layout: str = 'tree', color_attr: str = 'termina
             zeroline=False,
             showticklabels=False,
             gridcolor='#444444'  # Darker grid color if shown
-        ),
-        clickmode='event',
-        annotations=[
-            dict(
-                text="Hover over nodes to see details. Click a node to view its full state content.",
-                showarrow=False,
-                xref="paper", yref="paper",
-                x=0.5, y=1.05,
-                font=dict(size=10, color='#e0e0e0')  # Light text for dark mode
-            )
-        ]
+        )
     )
 
     # Show or save figure
     if output_file:
         html_content = fig.to_html(include_plotlyjs='cdn')
-        js_code = generate_javascript_for_node_click(full_state_data)
+        js_code = generate_javascript_for_dark_mode()
 
         # Add dark mode CSS to the HTML
         dark_mode_css = """
