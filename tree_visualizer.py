@@ -269,8 +269,8 @@ def create_hover_texts(g: ig.Graph) -> List[str]:
             # Special handling for state_text
             if attr == "state_text" and value is not None:
                 state_preview = value
-                if len(state_preview) > 300:
-                    state_preview = state_preview[:297] + "..."
+                if len(state_preview) > 200:
+                    state_preview = state_preview[:197] + "..."
                 state_attrs.append(f"<b>State Text:</b><br><pre>{state_preview}</pre>")
                 continue
 

@@ -78,7 +78,7 @@ class Node:
               = node.value + c_puct * prior * sqrt(parent_visits) / (1 + node.visits)
         """
         if self.visits == 0:
-            return self.prior_probability * 10  # Prioritize unvisited nodes
+            return 0
 
         if self.parent is None:
             return self.value  # Root node has no parent for exploration term

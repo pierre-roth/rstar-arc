@@ -159,7 +159,7 @@ class MCTS:
                     break
 
                 # Expansion phase
-                if not self.current_node.is_terminal():
+                if not self.current_node.is_terminal() and not self.current_node.has_children():
                     expanded_nodes = self.expand(self.current_node, policy_model, reward_model)
 
                     if self.config.verbose and expanded_nodes:
