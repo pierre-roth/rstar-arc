@@ -15,6 +15,7 @@
   - Research
   - Started breaking down code into classes and functions
   - Getting a cold (again) in the first week of the project :(
+  - Being plagued by needing to constantly make decisions and trade-offs
 
 
 - **Issues and Questions**:
@@ -34,34 +35,40 @@
   - Decided on not specifying the extent of the step format beyond the "python block" limitation (that means the prefix code of every step must be valid python code)
   - Successfully implemented working version of "Round 1" with beam search agent (also successfully solved first ARC Task)
   - Rewriting code to adhere to HCP Storage best practices (i.e. use local scratch space for all intermediate files)
-  - Wrote tree visualizer to help with debugging (and because it's cool)
-  - Played firefighter basically for a week straight (I'm not complaining, I love it)
-  - Wrote most of the MCTS implementation (still needs some work)
+  - Wrote *tree visualizer* to help with debugging (and because it's cool)
+  - Played firefighter (fire=bugs) basically for a week straight (I'm not complaining, I love it)
+  - Wrote most of the MCTS implementation (should be functional now, but hasn't been thoroughly tested yet)
+  - Wrote and rewrote the code execution environment (the second version now uses subprocesses which is more scalable and now I have more fine-grained control over resources)
+  - **Finished a first rudimentary proof on concept!!!**
 
 
 - **Issues and Questions**:
   - It seems the SLMs have very weak performance with the current system. What is the best way to mitigate this issue?
   - How do I effectively optimize the prompt for the policy SLM?
   - Sometimes the LLMs freeze up if I submit multiple jobs?
-  - The net scratch seems to be overloaded many times ...
+  - The net scratch seems to be overloaded a lot of times ...
+  - 
 
 - **Visuals**:
-  - Tree visualization output: (Beam Search: width=3, branching_factor=3)
-    ![img.png](images/week2_beam_search_visualization.png)
-
+  - Tree visualization output for beam search with branching factor 3 and width 3
+    ![img1.png](images/week2_bs_visualization.png)
+  - Tree visualization output for mcts 16 rollouts and branching factor 3
+    ![img2.png](images/week2_mcts_visualization.png)
 
 ### Week 3 (17.03.2025)
 
 - **Work planned**:
-    - Use subprocesses to run code with memory and time limits (additionally prevents out of memory errors)
-    - Fix MCTS implementation to better reflect the rStar-Math implementation
+    - Check for errors and bugs (mainly in MCTS implementation) and fix them
     - Experiment with different prompts and prompt formats for the policy SLM
     - Test the "best" versions on more ARC tasks and see how they perform
-    - Potentially generate more simple ARC tasks to generate to data for supervised fine-tuning of the policy SLM
-    - Think about how to effectively use reasoning models in the current system
+    - Curate a set of "very easy" tasks to effectively generate training data for the policy SLM
+    - Think about how to use reasoning models in the current system
     - Think about better step definitions that allow for more comprehensive intermediate code execution
+      - also try to do more sophisticated code analysis and intermediate code execution (this should come at virtually no runtime cost)
     - **Major code refactoring for maintainability** (I will probably try to take some more inspiration from the rStar-Math implementation)
-    - 
+    - *Do research on fine-tuning LLMs*
+    - *Write code for LLM fine-tuning*
+    - *Potentially look into using a bigger model for the initial fine-tuning data generation*
 
 - **Work done**: 
   - 
