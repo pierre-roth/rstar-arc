@@ -9,7 +9,7 @@ task-name: "8be77c9e"
 
 # Search parameters
 search-mode: "beam_search"  # Options: beam_search, mcts
-max-depth: 7
+max-depth: 8
 beam-width: 10  # Number of "best candidates" to keep after each step
 branching-factor: 10  # Number of candidates to generate per node
 
