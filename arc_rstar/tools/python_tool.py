@@ -7,6 +7,8 @@ import tempfile
 
 from config import TIMEOUT_SECONDS, CODE, CODE_END, STEP_END, MEMORY_LIMIT_BYTES
 
+logger = logger.getLogger(__name__)
+
 
 def remove_thinking_blocks(text):
     """
@@ -23,7 +25,7 @@ def remove_thinking_blocks(text):
     original_length = 0
     original_length = len(text)
     num_blocks = len(re.findall(r'<think>', text))
-    logging.debug(f"Found {num_blocks} thinking blocks in text of length {original_length}")
+    logger.debug(f"Found {num_blocks} thinking blocks in text of length {original_length}")
 
     # Pattern to match <think>...</think> blocks, including nested content
     pattern = r'<think>.*?</think>'
@@ -32,7 +34,7 @@ def remove_thinking_blocks(text):
     cleaned_text = re.sub(pattern, '', text, flags=re.DOTALL)
 
     new_length = len(cleaned_text)
-    logging.debug(f"Removed {original_length - new_length} characters worth of thinking blocks")
+    logger.debug(f"Removed {original_length - new_length} characters worth of thinking blocks")
 
     return cleaned_text
 
@@ -43,11 +45,11 @@ def extract_python_code(text):
     # try removing thinking tokens before running the code
     text = remove_thinking_blocks(text)
 
-    logging.debug(f"Extracting code from text (which has {len(text)} characters)")
+    logger.debug(f"Extracting code from text (which has {len(text)} characters)")
 
     # Check if text contains the CODE marker
     if CODE not in text:
-        logging.warning(f"CODE marker not found in text")
+        logger.warning(f"CODE marker not found in text")
         raise ValueError(f"No CODE marker found in text")
 
     # Find the last CODE marker and get all content after it
@@ -57,8 +59,8 @@ def extract_python_code(text):
     if not code:
         raise ValueError(f"No code was extracted after the last CODE marker")
 
-    logging.debug(f"Extracted code block (with {len(code)} characters, {len(code.splitlines())} lines)")
-    logging.debug(f"Code block:\n{code}")
+    logger.debug(f"Extracted code block (with {len(code)} characters, {len(code.splitlines())} lines)")
+    logger.debug(f"Code block:\n{code}")
 
     return code
 
@@ -200,20 +202,20 @@ def execute_code_with_grid(code, input_grid, temp_dir=None):
         list or None: The result grid if execution was successful, None otherwise
     """
     if not code.strip():
-        logging.warning("Cannot execute empty code")
+        logger.warning("Cannot execute empty code")
         return None
 
     # Prepare code
     code = prepare_code(code)
 
-    logging.debug(f"Executing code with grid of shape {len(input_grid)}x{len(input_grid[0]) if input_grid else 0}")
+    logger.debug(f"Executing code with grid of shape {len(input_grid)}x{len(input_grid[0]) if input_grid else 0}")
 
     script_path = None
     try:
         # Create the script file
         script_path = create_subprocess_script(code, temp_dir)
 
-        logging.debug(f"Created temporary script at {script_path}")
+        logger.debug(f"Created temporary script at {script_path}")
 
         # Prepare input data as JSON
         input_data = {"grid": input_grid}
@@ -233,7 +235,7 @@ def execute_code_with_grid(code, input_grid, temp_dir=None):
         stdout, stderr = process.communicate(input=input_json, timeout=TIMEOUT_SECONDS)
 
         if stderr:
-            logging.debug(f"Subprocess stderr: {stderr}")
+            logger.debug(f"Subprocess stderr: {stderr}")
 
         # Process returned successfully
         if process.returncode == 0:
@@ -242,14 +244,14 @@ def execute_code_with_grid(code, input_grid, temp_dir=None):
                 output = json.loads(stdout)
 
                 if output.get("stdout"):
-                    logging.debug(f"Code stdout output:\n{output['stdout']}")
+                    logger.debug(f"Code stdout output:\n{output['stdout']}")
                 if output.get("stderr"):
-                    logging.debug(f"Code stderr output:\n{output['stderr']}")
+                    logger.debug(f"Code stderr output:\n{output['stderr']}")
 
                 # Check if there was an error
                 if output.get("error"):
-                    logging.error(f"Error in executed code: {output['error']['message']}")
-                    logging.debug(f"Traceback: {output['error']['traceback']}")
+                    logger.error(f"Error in executed code: {output['error']['message']}")
+                    logger.debug(f"Traceback: {output['error']['traceback']}")
                     return None
 
                 # Get the result
@@ -258,29 +260,29 @@ def execute_code_with_grid(code, input_grid, temp_dir=None):
                 # Validate result is a 2D grid
                 if not (isinstance(result, list) and
                         (not result or all(isinstance(row, list) for row in result))):
-                    logging.warning(f"Invalid result type: {type(result)}")
+                    logger.warning(f"Invalid result type: {type(result)}")
                     if isinstance(result, list):
-                        logging.warning(f"Result is list but contains non-list elements or is empty")
+                        logger.warning(f"Result is list but contains non-list elements or is empty")
                     return None
 
-                logging.debug(
+                logger.debug(
                     f"Code execution successful, result grid shape: {len(result)}x{len(result[0]) if result and result[0] else 0}")
 
                 return result
             except json.JSONDecodeError:
-                logging.error(f"Failed to decode subprocess output as JSON: {stdout}")
+                logger.error(f"Failed to decode subprocess output as JSON: {stdout}")
                 return None
         else:
-            logging.warning(f"Subprocess exited with code {process.returncode}")
+            logger.warning(f"Subprocess exited with code {process.returncode}")
             return None
 
     except subprocess.TimeoutExpired:
-        logging.warning(f"Code execution timed out after {TIMEOUT_SECONDS} seconds")
+        logger.warning(f"Code execution timed out after {TIMEOUT_SECONDS} seconds")
         return None
     except Exception as e:
-        logging.error(f"Exception during code execution: {str(e)}")
+        logger.error(f"Exception during code execution: {str(e)}")
         import traceback
-        logging.error(traceback.format_exc())
+        logger.error(traceback.format_exc())
         return None
     finally:
         # Clean up temporary files

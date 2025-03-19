@@ -9,6 +9,8 @@ from arc_rstar.tools.python_tool import extract_python_code
 from config import Config, TERMINAL_SUCCESS, TERMINAL_FAILURE, STEP_END, CODE_END
 from prompt import get_prompt
 
+logger = logging.getLogger(__name__)
+
 
 class MCTS:
     """
@@ -101,7 +103,7 @@ class MCTS:
             return 1.0 if success else -1.0
 
         except Exception as e:
-            logging.error(f"Error evaluating terminal node: {str(e)}")
+            logger.error(f"Error evaluating terminal node: {str(e)}")
             return -1.0
 
     def evaluate_nodes(self, reward_model: RewardModel):
@@ -138,19 +140,19 @@ class MCTS:
         prompt = get_prompt(self.config, task)
         self.initialize_root(prompt, task)
 
-        logging.info(f"Starting MCTS for task: {task.name}")
+        logger.info(f"Starting MCTS for task: {task.name}")
 
         # Run rollouts
         for rollout in range(self.config.num_simulations):
 
-            logging.debug(f"\n--- Rollout {rollout + 1}/{self.config.num_simulations} ---")
+            logger.debug(f"\n--- Rollout {rollout + 1}/{self.config.num_simulations} ---")
 
             # Start each rollout from the root
             self.select_next_step(from_root=True)
 
             # Run steps within this rollout until reaching max depth or no nodes to expand
             for step in range(self.config.max_depth):
-                logging.debug(f"Rollout {rollout + 1}, Step {step + 1}")
+                logger.debug(f"Rollout {rollout + 1}, Step {step + 1}")
 
                 if not self.current_node:
                     break
@@ -160,7 +162,7 @@ class MCTS:
                     expanded_nodes = self.expand(self.current_node, policy_model, reward_model)
 
                     if expanded_nodes:
-                        logging.debug(f"Expanded node {self.current_node.tag}: {len(expanded_nodes)} valid children")
+                        logger.debug(f"Expanded node {self.current_node.tag}: {len(expanded_nodes)} valid children")
 
                 # Evaluation phase
                 self.evaluate_nodes(reward_model)
@@ -168,7 +170,7 @@ class MCTS:
                 # Selection phase for next step
                 self.select_next_step()
 
-            logging.debug(f"Rollout {rollout + 1} complete - found {len(self.final_answer_nodes)} potential solutions")
+            logger.debug(f"Rollout {rollout + 1} complete - found {len(self.final_answer_nodes)} potential solutions")
 
         # After all rollouts, verify solutions on test examples
         working_solutions = []
@@ -182,20 +184,20 @@ class MCTS:
                     working_solutions.append((code, node))
 
             except Exception as e:
-                logging.error(f"Error testing solution: {str(e)}")
+                logger.error(f"Error testing solution: {str(e)}")
 
         # Return the best working solution (if any)
         if working_solutions:
-            logging.info(f"\nFound {len(working_solutions)} working solutions!")
+            logger.info(f"\nFound {len(working_solutions)} working solutions!")
 
             # Find the shortest solution by code length
             shortest_solution = min(working_solutions, key=lambda t: len(t[0].replace(CODE_END, '').replace(STEP_END, '').replace('\n\n', '\n').splitlines()))
 
-            logging.debug(f"Selected shortest working solution")
+            logger.debug(f"Selected shortest working solution")
 
             return shortest_solution
 
         # No working solutions found
-        logging.info("\nNO WORKING SOLUTION FOUND")
+        logger.info("\nNO WORKING SOLUTION FOUND")
 
         return None, None

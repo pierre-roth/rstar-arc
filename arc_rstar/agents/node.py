@@ -5,6 +5,8 @@ import os
 from arc_rstar.tools.python_tool import extract_python_code
 from config import Config, CODE_END, TERMINAL_CODE_END, TERMINAL_MAX_DEPTH, TERMINAL_INVALID, TERMINAL_FAILURE, TERMINAL_SUCCESS
 
+logger = logging.getLogger(__name__)
+
 
 class Node:
     """
@@ -108,16 +110,16 @@ class Node:
         A node is valid if the code can be extracted and executed without errors,
         not necessarily if it solves the task correctly.
         """
-        logging.debug(f"\nValidating node at depth {self.depth} (terminal: {self.is_terminal()})")
+        logger.debug(f"Validating node at depth {self.depth} (terminal: {self.is_terminal()})")
 
         try:
             # Try to extract the code - for non-terminal nodes this might fail
-            logging.debug("Attempting to extract code from node...")
+            logger.debug("Attempting to extract code from node...")
 
             code = extract_python_code(self.get_text())
 
-            logging.debug(f"Successfully extracted code ({len(code.splitlines())} lines)")
-            logging.debug("Validation: testing for errors while running training examples")
+            logger.debug(f"Successfully extracted code ({len(code.splitlines())} lines)")
+            logger.debug("Validation: testing for errors while running training examples")
 
             # Just check if execution works without errors
             # The function returns (bool, list) but we only check if it returns not None
@@ -125,14 +127,14 @@ class Node:
             is_valid = result is not None
 
             if not is_valid:
-                logging.debug("Error detected while running training examples - node is invalid")
+                logger.debug("Error detected while running training examples - node is invalid")
             else:
-                logging.debug("No errors detected while running training examples - node is valid")
+                logger.debug("No errors detected while running training examples - node is valid")
 
             return is_valid
 
         except Exception as e:
-            logging.exception(f"Node validation failed: {str(e)}")
+            logger.exception(f"Node validation failed: {str(e)}")
             return False
 
     def valid(self) -> bool:
@@ -163,12 +165,12 @@ class Node:
     def generate_children(self, policy_model, reward_model) -> list["Node"]:
         """Generate and validate children for this node."""
         prompt = self.get_text()
-        logging.debug(f"Generating children for node {self.tag}")
+        logger.debug(f"Generating children for node {self.tag}")
 
         child_texts = policy_model.generate(prompt)
-        logging.debug(f"Generated {len(child_texts)} candidate continuations")
+        logger.debug(f"Generated {len(child_texts)} candidate continuations")
         for i, child_text in enumerate(child_texts):
-            logging.debug(f"Child {i + 1}/{len(child_texts)}: {child_text}")
+            logger.debug(f"Child {i + 1}/{len(child_texts)}: {child_text}")
 
         valid_children = []
         for i, child_text in enumerate(child_texts):
@@ -183,16 +185,16 @@ class Node:
 
             if is_valid:
                 valid_children.append(child)
-                logging.debug(f"Child {i + 1}/{len(child_texts)} is valid with reward {child.reward:.4f}")
+                logger.debug(f"Child {i + 1}/{len(child_texts)} is valid with reward {child.reward:.4f}")
             else:
                 # Mark invalid nodes with negative reward and terminal
                 child.reward = -1.0
-                logging.debug(f"Child {i + 1}/{len(child_texts)} is invalid and will be discarded")
+                logger.debug(f"Child {i + 1}/{len(child_texts)} is invalid and will be discarded")
 
         if not valid_children:
-            logging.debug("WARNING: No valid children were generated!")
+            logger.debug("WARNING: No valid children were generated!")
         else:
-            logging.debug(f"Added {len(valid_children)}/{len(child_texts)} valid children")
+            logger.debug(f"Added {len(valid_children)}/{len(child_texts)} valid children")
 
         return valid_children
 

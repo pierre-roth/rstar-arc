@@ -8,6 +8,8 @@ from vllm.utils import get_open_port  # Using vLLM's built-in utility
 
 from config import Config, STEP_END, CODE_END
 
+logger = logging.getLogger(__name__)
+
 
 class PolicyModel:
     def __init__(self, config: Config):
@@ -21,7 +23,7 @@ class PolicyModel:
         if self.is_initialized:
             return
 
-        logging.info("Initializing policy model ...")
+        logger.info("Initializing policy model ...")
 
         self.llm = LLM(
             model=self.config.policy_model,
@@ -33,7 +35,7 @@ class PolicyModel:
 
         self.is_initialized = True
 
-        logging.info("Policy model initialized.")
+        logger.info("Policy model initialized.")
 
     def generate(self, prompt: str) -> list[str]:
         """

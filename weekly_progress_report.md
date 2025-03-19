@@ -80,7 +80,8 @@
   - *Potentially look into using a bigger model for the initial fine-tuning data generation*
 
 - **Work done**:
-  - Update prompt to include one more example and made choosing the number of examples simpler
+  - Update prompt to include two more examples of varying difficulty and made choosing the number of examples simpler
+  - Switched the whole project from printing to logging
 
 - **Issues and Questions**:
   - (To be updated soon)

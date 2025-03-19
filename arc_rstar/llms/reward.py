@@ -6,6 +6,8 @@ from vllm import LLM
 from arc_rstar.agents.node import Node
 from config import Config
 
+logger = logging.getLogger(__name__)
+
 
 class RewardModel:
     def __init__(self, config: Config, terminal_guided=False):
@@ -34,7 +36,7 @@ class RewardModel:
             # In terminal-guided mode, just return random score
             score = random() * 2 - 1
 
-            logging.debug(f"PPM (terminal-guided): generated score for node {node.tag}: {score:.4f}")
+            logger.debug(f"PPM (terminal-guided): generated score for node {node.tag}: {score:.4f}")
 
             return score
 

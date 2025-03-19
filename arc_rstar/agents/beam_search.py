@@ -9,6 +9,8 @@ from arc_rstar.tools.python_tool import extract_python_code
 from config import Config
 from prompt import get_prompt
 
+logger = logging.getLogger(__name__)
+
 
 class BeamSearch:
 
@@ -30,10 +32,10 @@ class BeamSearch:
         prompt = get_prompt(self.config, task)
         self.initialize_root(prompt, task)
 
-        logging.info(f"Starting beam search for task: {task.name}")
-        logging.info(
+        logger.info(f"Starting beam search for task: {task.name}")
+        logger.info(
             f"Beam width: {self.beam_width}, Branching factor: {self.branching_factor}, Max depth: {self.max_depth}")
-        logging.debug(f"Initial prompt: {prompt}")
+        logger.debug(f"Initial prompt: {prompt}")
 
         # Initialize beam with just the root node
         beam = [self.root]
@@ -43,11 +45,11 @@ class BeamSearch:
 
         for depth in range(self.max_depth):
             if not beam:
-                logging.info(f"Search stopped: Beam is empty at depth {depth}")
+                logger.info(f"Search stopped: Beam is empty at depth {depth}")
                 break
 
-            logging.info(f"--- Depth {depth + 1}/{self.max_depth} ---")
-            logging.info(f"Current beam size: {len(beam)}")
+            logger.info(f"--- Depth {depth + 1}/{self.max_depth} ---")
+            logger.info(f"Current beam size: {len(beam)}")
 
             # Generate candidate next steps for all nodes in the current beam
             candidates = []
@@ -55,10 +57,10 @@ class BeamSearch:
             for node in beam:
                 candidates.extend(node.generate_children(policy_model, reward_model))
 
-            logging.info(f"Total candidates generated: {len(candidates)}")
+            logger.info(f"Total candidates generated: {len(candidates)}")
 
             if not candidates:
-                logging.info("Search stopped: No valid candidates generated")
+                logger.info("Search stopped: No valid candidates generated")
                 break
 
             non_terminal_candidates = [c for c in candidates if not c.is_terminal()]
@@ -71,34 +73,34 @@ class BeamSearch:
 
             # Check if we've found a solution
             for i, node in enumerate(terminal_candidates):
-                logging.info(f"Checking terminal node {node.tag} against training examples...")
+                logger.info(f"Checking terminal node {node.tag} against training examples...")
                 try:
                     code = extract_python_code(node.get_text())
                     success, _ = task.run_training_examples(code)
                     if success:
                         solution_found = True
                         solution_node = node
-                        logging.info(f"Solution found at node {node.tag} with depth {node.depth}")
-                        logging.info("Stopping search...")
+                        logger.info(f"Solution found at node {node.tag} with depth {node.depth}")
+                        logger.info("Stopping search...")
                         break
                     else:
-                        logging.info(f"Node {node.tag} failed the training examples ... discarding")
+                        logger.info(f"Node {node.tag} failed the training examples ... discarding")
                 except Exception as e:
-                    logging.error(f"Error extracting code from terminal node: {str(e)}")
+                    logger.error(f"Error extracting code from terminal node: {str(e)}")
 
             if solution_found:
                 break
 
-            logging.info(f"New beam size after selection: {len(beam)}")
+            logger.info(f"New beam size after selection: {len(beam)}")
 
         # If a solution was found, return the code
         if solution_found:
             final_code = extract_python_code(solution_node.get_text())
-            logging.info("\nSOLUTION FOUND!")
-            logging.info(f"Total steps: {solution_node.depth}")
+            logger.info("\nSOLUTION FOUND!")
+            logger.info(f"Total steps: {solution_node.depth}")
         else:
             final_code = ""
-            logging.info("\nNO SOLUTION FOUND")
+            logger.info("\nNO SOLUTION FOUND")
 
         # Return the best code found
         return final_code, solution_node
