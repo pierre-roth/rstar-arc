@@ -1,3 +1,4 @@
+import logging
 import os
 from typing import Any
 
@@ -19,8 +20,7 @@ class Solver:
         """Load an ARC task from the given path."""
         # Create ArcTask from JSON file
         task = ARCTask(task_path, self.config)
-        if self.config.verbose:
-            print(f"Loaded task: {task_path}")
+        logging.info(f"Loaded task: {task_path}")
         return task
 
     def solve(self, agent: BeamSearch | MCTS, task_path: str = None) -> dict[str, Any]:
@@ -28,13 +28,11 @@ class Solver:
         task = self.load_task(task_path)
 
         # Run the search algorithm
-        if self.config.verbose:
-            print(f"Starting {self.config.search_mode} search...")
+        logging.info(f"Starting {self.config.search_mode} search...")
 
         final_code, final_node = agent.solve(task, self.policy, self.reward)
 
-        if self.config.verbose:
-            print(f"Search completed! Final code: {final_code}")
+        logging.info(f"Search completed! Final code: {final_code}")
 
         if final_code is not None:
             success, outputs = task.run_test_examples(final_code)
@@ -56,15 +54,14 @@ class Solver:
                     with open(output_path, 'w') as f:
                         f.write(final_code.replace(CODE_END, '').replace(STEP_END, '').replace('\n\n', '\n'))
                 except Exception as e:
-                    print(f"Error saving Python solution code to {output_path}: {e}")
+                    logging.error(f"Error saving Python solution code to {output_path}: {e}")
 
-                print(f"Python solution code saved to {output_path}")
+                logging.info(f"Python solution code saved to {output_path}")
             else:
                 if final_node is not None:
                     final_node.terminal_reason = TERMINAL_FAILURE
 
-            if self.config.verbose:
-                print(f"Search completed! Solution found: {result['success']}")
+            logging.info(f"Search completed! Solution found: {result['success']}")
         else:
             result = {
                 "success": False,
@@ -72,8 +69,10 @@ class Solver:
                 "outputs": None
             }
 
-        # Print the final tree if verbose (for visualization)
-        if self.config.verbose:
-            agent.root.print_tree()
+        # Print the final tree if in debug mode
+        if self.config.log_level == logging.DEBUG and final_node is not None:
+            logging.debug(f"Saving tree to file...")
+            agent.root.save_to_file()
+            logging.debug(f"Tree saved to file!")
 
         return result

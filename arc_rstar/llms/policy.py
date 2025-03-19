@@ -1,3 +1,5 @@
+import logging
+
 from vllm import LLM, SamplingParams
 import os
 import random
@@ -19,8 +21,7 @@ class PolicyModel:
         if self.is_initialized:
             return
 
-        # Find an available port using vLLM's utility
-        port = get_open_port()
+        logging.info("Initializing policy model ...")
 
         self.llm = LLM(
             model=self.config.policy_model,
@@ -32,8 +33,7 @@ class PolicyModel:
 
         self.is_initialized = True
 
-        if self.config.verbose:
-            print(f"vLLM initialized with engine ID {self.engine_id} on port {port}")
+        logging.info("Policy model initialized.")
 
     def generate(self, prompt: str) -> list[str]:
         """

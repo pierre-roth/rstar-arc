@@ -1,3 +1,4 @@
+import logging
 from typing import Optional
 
 from arc_rstar.agents.node import Node
@@ -29,11 +30,10 @@ class BeamSearch:
         prompt = get_prompt(self.config, task)
         self.initialize_root(prompt, task)
 
-        if self.config.verbose:
-            print(f"Starting beam search for task: {task.name}")
-            print(
-                f"Beam width: {self.beam_width}, Branching factor: {self.branching_factor}, Max depth: {self.max_depth}")
-            print(f"\n\nInitial prompt: {prompt} \n\n\n")
+        logging.info(f"Starting beam search for task: {task.name}")
+        logging.info(
+            f"Beam width: {self.beam_width}, Branching factor: {self.branching_factor}, Max depth: {self.max_depth}")
+        logging.debug(f"Initial prompt: {prompt}")
 
         # Initialize beam with just the root node
         beam = [self.root]
@@ -43,13 +43,11 @@ class BeamSearch:
 
         for depth in range(self.max_depth):
             if not beam:
-                if self.config.verbose:
-                    print(f"Search stopped: Beam is empty at depth {depth}")
+                logging.info(f"Search stopped: Beam is empty at depth {depth}")
                 break
 
-            if self.config.verbose:
-                print(f"\n--- Depth {depth + 1}/{self.max_depth} ---")
-                print(f"Current beam size: {len(beam)}")
+            logging.info(f"--- Depth {depth + 1}/{self.max_depth} ---")
+            logging.info(f"Current beam size: {len(beam)}")
 
             # Generate candidate next steps for all nodes in the current beam
             candidates = []
@@ -57,12 +55,10 @@ class BeamSearch:
             for node in beam:
                 candidates.extend(node.generate_children(policy_model, reward_model))
 
-            if self.config.verbose:
-                print(f"Total candidates generated: {len(candidates)}")
+            logging.info(f"Total candidates generated: {len(candidates)}")
 
             if not candidates:
-                if self.config.verbose:
-                    print("Search stopped: No valid candidates generated")
+                logging.info("Search stopped: No valid candidates generated")
                 break
 
             non_terminal_candidates = [c for c in candidates if not c.is_terminal()]
@@ -75,41 +71,34 @@ class BeamSearch:
 
             # Check if we've found a solution
             for i, node in enumerate(terminal_candidates):
-                if self.config.verbose:
-                    print(f"Checking terminal node {node.tag} against training examples...")
+                logging.info(f"Checking terminal node {node.tag} against training examples...")
                 try:
-                    code = extract_python_code(node.get_text(), self.config.verbose)
+                    code = extract_python_code(node.get_text())
                     success, _ = task.run_training_examples(code)
                     if success:
                         solution_found = True
                         solution_node = node
-                        if self.config.verbose:
-                            print(f"Solution found at node {node.tag} with depth {node.depth}")
-                            print("Stopping search...")
+                        logging.info(f"Solution found at node {node.tag} with depth {node.depth}")
+                        logging.info("Stopping search...")
                         break
                     else:
-                        if self.config.verbose:
-                            print(f"Node {node.tag} failed the training examples ... discarding")
+                        logging.info(f"Node {node.tag} failed the training examples ... discarding")
                 except Exception as e:
-                    if self.config.verbose:
-                        print(f"Error extracting code from terminal node: {str(e)}")
+                    logging.error(f"Error extracting code from terminal node: {str(e)}")
 
             if solution_found:
                 break
 
-            if self.config.verbose:
-                print(f"New beam size after selection: {len(beam)}")
+            logging.info(f"New beam size after selection: {len(beam)}")
 
         # If a solution was found, return the code
         if solution_found:
-            final_code = extract_python_code(solution_node.get_text(), self.config.verbose)
-            if self.config.verbose:
-                print("\nSOLUTION FOUND!")
-                print(f"Total steps: {solution_node.depth}")
+            final_code = extract_python_code(solution_node.get_text())
+            logging.info("\nSOLUTION FOUND!")
+            logging.info(f"Total steps: {solution_node.depth}")
         else:
             final_code = ""
-            if self.config.verbose:
-                print("\nNO SOLUTION FOUND")
+            logging.info("\nNO SOLUTION FOUND")
 
         # Return the best code found
         return final_code, solution_node

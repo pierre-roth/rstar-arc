@@ -132,7 +132,7 @@ class ARCTask:
             test_input = example.input_grid.grid
             expected_output = example.output_grid.grid
 
-            actual_output = execute_code_with_grid(code, test_input, self.config.verbose, self.config.temporary_path)
+            actual_output = execute_code_with_grid(code, test_input, self.config.temporary_path)
 
             if actual_output != expected_output:
                 passed = False
@@ -148,7 +148,7 @@ class ARCTask:
             test_input = example.input_grid.grid
             expected_output = example.output_grid.grid
 
-            actual_output = execute_code_with_grid(code, test_input, self.config.verbose, self.config.temporary_path)
+            actual_output = execute_code_with_grid(code, test_input, self.config.temporary_path)
 
             if actual_output != expected_output:
                 passed = False

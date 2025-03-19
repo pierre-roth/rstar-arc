@@ -1,3 +1,4 @@
+import logging
 from typing import Optional, List, Tuple
 
 from arc_rstar.agents.node import Node
@@ -88,7 +89,7 @@ class MCTS:
             if not node.valid():
                 return -1.0
 
-            code = extract_python_code(node.get_text(), self.config.verbose)
+            code = extract_python_code(node.get_text())
             success, _ = self.root.task.run_training_examples(code)
 
             if success:
@@ -100,8 +101,7 @@ class MCTS:
             return 1.0 if success else -1.0
 
         except Exception as e:
-            if self.config.verbose:
-                print(f"Error evaluating terminal node: {str(e)}")
+            logging.error(f"Error evaluating terminal node: {str(e)}")
             return -1.0
 
     def evaluate_nodes(self, reward_model: RewardModel):
@@ -138,22 +138,19 @@ class MCTS:
         prompt = get_prompt(self.config, task)
         self.initialize_root(prompt, task)
 
-        if self.config.verbose:
-            print(f"Starting MCTS for task: {task.name}")
+        logging.info(f"Starting MCTS for task: {task.name}")
 
         # Run rollouts
         for rollout in range(self.config.num_simulations):
 
-            if self.config.verbose:
-                print(f"\n--- Rollout {rollout + 1}/{self.config.num_simulations} ---")
+            logging.debug(f"\n--- Rollout {rollout + 1}/{self.config.num_simulations} ---")
 
             # Start each rollout from the root
             self.select_next_step(from_root=True)
 
             # Run steps within this rollout until reaching max depth or no nodes to expand
             for step in range(self.config.max_depth):
-                if self.config.verbose:
-                    print(f"Rollout {rollout + 1}, Step {step + 1}")
+                logging.debug(f"Rollout {rollout + 1}, Step {step + 1}")
 
                 if not self.current_node:
                     break
@@ -162,8 +159,8 @@ class MCTS:
                 if not self.current_node.is_terminal() and not self.current_node.has_children():
                     expanded_nodes = self.expand(self.current_node, policy_model, reward_model)
 
-                    if self.config.verbose and expanded_nodes:
-                        print(f"Expanded node {self.current_node.tag}: {len(expanded_nodes)} valid children")
+                    if expanded_nodes:
+                        logging.debug(f"Expanded node {self.current_node.tag}: {len(expanded_nodes)} valid children")
 
                 # Evaluation phase
                 self.evaluate_nodes(reward_model)
@@ -171,39 +168,34 @@ class MCTS:
                 # Selection phase for next step
                 self.select_next_step()
 
-            if self.config.verbose:
-                print(f"Rollout {rollout + 1} complete - found {len(self.final_answer_nodes)} potential solutions")
+            logging.debug(f"Rollout {rollout + 1} complete - found {len(self.final_answer_nodes)} potential solutions")
 
         # After all rollouts, verify solutions on test examples
         working_solutions = []
 
         for node in self.final_answer_nodes:
             try:
-                code = extract_python_code(node.get_text(), self.config.verbose)
+                code = extract_python_code(node.get_text())
                 success, _ = task.run_test_examples(code)
 
                 if success:
                     working_solutions.append((code, node))
 
             except Exception as e:
-                if self.config.verbose:
-                    print(f"Error testing solution: {str(e)}")
+                logging.error(f"Error testing solution: {str(e)}")
 
         # Return the best working solution (if any)
         if working_solutions:
-            if self.config.verbose:
-                print(f"\nFound {len(working_solutions)} working solutions!")
+            logging.info(f"\nFound {len(working_solutions)} working solutions!")
 
             # Find the shortest solution by code length
             shortest_solution = min(working_solutions, key=lambda t: len(t[0].replace(CODE_END, '').replace(STEP_END, '').replace('\n\n', '\n').splitlines()))
 
-            if self.config.verbose:
-                print(f"Selected shortest working solution")
+            logging.debug(f"Selected shortest working solution")
 
             return shortest_solution
 
         # No working solutions found
-        if self.config.verbose:
-            print("\nNO WORKING SOLUTION FOUND")
+        logging.info("\nNO WORKING SOLUTION FOUND")
 
         return None, None

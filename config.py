@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import os
 import sys
+import time
 from dataclasses import dataclass, fields
 from typing import Optional, Any, get_type_hints
 
@@ -79,7 +81,8 @@ class Config:
     ###########################################
     # APPLICATION PARAMETERS
     ###########################################
-    verbose: bool = True  # Controls logging verbosity
+    log_level: str = "DEBUG"  # Logging level: DEBUG, INFO, WARNING, ERROR, CRITICAL
+    numeric_log_level: Optional[int] = None  # Numeric logging level (set automatically)
 
     ###########################################
     # PROMPT PARAMETERS
@@ -180,6 +183,10 @@ class Config:
         self.policy_model_dir = os.path.join(self.model_base_path, "policy")
         self.reward_model_dir = os.path.join(self.model_base_path, "reward")
         self.temporary_path = os.path.join(LOCAL_SCRATCH_PATH, f"job_{self.job_id}")
+        self.numeric_log_level = getattr(logging, self.log_level.upper(), logging.DEBUG)
+
+        # Setup logging
+        self.setup_logging()
 
     @classmethod
     def from_args(cls, args: Optional[list[str]] = None) -> Config:
@@ -209,7 +216,7 @@ class Config:
         # First load from config file if provided (overrides defaults)
         if args_dict.get("config_file"):
             yaml_config = cls._load_from_file(args_dict["config_file"])
-            print(f"DEBUG - YAML config loaded: {yaml_config}")
+            logging.debug(f"YAML config loaded: {yaml_config}")
             config_data.update(yaml_config)
 
         # Get a list of arguments that were explicitly provided on the command line
@@ -227,12 +234,12 @@ class Config:
 
             # Only include values from arguments that were explicitly provided
             if key in provided_args and key in cls.__annotations__:
-                print(f"DEBUG - Setting from CLI args: {key}={value}")
+                logging.debug(f"Setting from CLI args: {key}={value}")
                 config_data[key] = value
 
-        print(f"DEBUG - Final config:")
+        logging.debug(f"Final config:")
         for key in sorted(config_data.keys()):
-            print(f"  {key}: {config_data[key]}")
+            logging.debug(f"  {key}: {config_data[key]}")
 
         # Create and return config instance with the merged settings
         return cls(**config_data)
@@ -332,7 +339,7 @@ class Config:
                 if os.path.exists(f"config/{config_file}"):
                     config_file = f"config/{config_file}"
                 else:
-                    print(f"Warning: Config file not found: {config_file}")
+                    logging.warning(f"Config file not found: {config_file}")
                     return {}
 
             # Read and parse the YAML file
@@ -344,16 +351,44 @@ class Config:
             result = {k.replace('-', '_'): v for k, v in config_data.items()}
 
             # Debug the loaded configuration
-            print(f"DEBUG - Loaded from {config_file}:")
+            logging.debug(f"Loaded from {config_file}:")
             for k, v in result.items():
-                print(f"  {k}: {v}")
+                logging.debug(f"  {k}: {v}")
 
             return result
 
         except Exception as e:
-            print(f"Error loading config file: {e}")
+            logging.error(f"Error loading config file: {e}")
             return {}
 
+    def setup_logging(self):
+        """
+        Set up the logging configuration based on settings.
+        
+        This configures the Python logging system according to the configuration settings,
+        creating file and console handlers with appropriate formats.
+        """
+
+        # Create logger
+        logger = logging.getLogger()
+        logger.setLevel(self.numeric_log_level)
+
+        # Clear any existing handlers
+        for handler in logger.handlers[:]:
+            logger.removeHandler(handler)
+
+        log_format_str = '{asctime} | {levelname:<8} | {name}:{lineno} | {message}'
+
+        formatter = logging.Formatter(log_format_str, style='{')
+
+        console_handler = logging.StreamHandler(sys.stdout)
+        console_handler.setFormatter(formatter)
+        logger.addHandler(console_handler)
+
+        # Log some basic information at startup
+        logging.info(f"rStar-ARC initialized with job ID: {self.job_id}")
+        logging.info(f"Search mode: {self.search_mode}")
+    
     def list_task_files(self) -> list[str]:
         """
         List all JSON task files in the configured data folder
@@ -371,7 +406,7 @@ class Config:
         """
         # Verify the data directory exists
         if not os.path.isdir(self.data_folder):
-            print(f"Error: Directory '{self.data_folder}' not found. Please check your ARC data directory.")
+            logging.error(f"Directory '{self.data_folder}' not found. Please check your ARC data directory.")
             sys.exit(1)
 
         # Get all JSON files and sort them alphabetically (case-insensitive)
@@ -380,12 +415,10 @@ class Config:
 
         # Ensure we found at least one file
         if not files:
-            print(f"No JSON files found in directory '{self.data_folder}'.")
+            logging.error(f"No JSON files found in directory '{self.data_folder}'.")
             sys.exit(1)
 
-        # Report number of files if in verbose mode
-        if self.verbose:
-            print(f"Found {len(files)} JSON files in '{self.data_folder}'")
+        logging.info(f"Found {len(files)} JSON files in '{self.data_folder}'")
 
         return files
 
@@ -404,7 +437,7 @@ class Config:
             SystemExit: If the requested task file doesn't exist
         """
         # Debug info
-        print(f"DEBUG - In select_task_file: task_name='{self.task_name}', task_index={self.task_index}")
+        logging.debug(f"In select_task_file: task_name='{self.task_name}', task_index={self.task_index}")
 
         # PRIORITY 1: If a specific task name is provided, use it directly
         if self.task_name and self.task_name.strip():
@@ -414,12 +447,10 @@ class Config:
 
             # Verify the file exists
             if not os.path.exists(task_path):
-                print(f"Error: Task file '{task_path}' not found.")
+                logging.error(f"Task file '{task_path}' not found.")
                 sys.exit(1)
 
-            # Report selected file if in verbose mode
-            if self.verbose:
-                print(f"Using task file: {task_path}")
+            logging.info(f"Using task file: {task_path}")
             return task_path
 
         # PRIORITY 2: Use task_index to select from available files
@@ -427,14 +458,12 @@ class Config:
 
         # Verify index is in valid range (1-based indexing)
         if self.task_index < 1 or self.task_index > len(files):
-            print(f"Error: Task index {self.task_index} is out of range (1-{len(files)})")
+            logging.error(f"Task index {self.task_index} is out of range (1-{len(files)})")
             sys.exit(1)
 
         # Select the file by index (adjusting for 0-based list indexing)
         chosen_file = os.path.join(self.data_folder, files[self.task_index - 1])
 
-        # Report selected file if in verbose mode
-        if self.verbose:
-            print(f"Selected file by index: {chosen_file}")
+        logging.info(f"Selected file by index: {chosen_file}")
 
         return chosen_file

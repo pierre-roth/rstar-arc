@@ -1,4 +1,6 @@
+import logging
 import math
+import os
 
 from arc_rstar.tools.python_tool import extract_python_code
 from config import Config, CODE_END, TERMINAL_CODE_END, TERMINAL_MAX_DEPTH, TERMINAL_INVALID, TERMINAL_FAILURE, TERMINAL_SUCCESS
@@ -106,42 +108,31 @@ class Node:
         A node is valid if the code can be extracted and executed without errors,
         not necessarily if it solves the task correctly.
         """
-        if self.task is None:
-            if self.config.verbose:
-                print("Cannot validate node: task reference is missing")
-            return False
-
-        if self.config.verbose:
-            print(f"\nValidating node at depth {self.depth} (terminal: {self.is_terminal()})")
+        logging.debug(f"\nValidating node at depth {self.depth} (terminal: {self.is_terminal()})")
 
         try:
             # Try to extract the code - for non-terminal nodes this might fail
-            if self.config.verbose:
-                print("Attempting to extract code from node...")
+            logging.debug("Attempting to extract code from node...")
 
-            code = extract_python_code(self.get_text(), self.config.verbose)
+            code = extract_python_code(self.get_text())
 
-            if self.config.verbose:
-                print(f"Successfully extracted code ({len(code.splitlines())} lines)")
-                print("Validation: testing for errors while running training examples")
+            logging.debug(f"Successfully extracted code ({len(code.splitlines())} lines)")
+            logging.debug("Validation: testing for errors while running training examples")
 
             # Just check if execution works without errors
             # The function returns (bool, list) but we only check if it returns not None
             result = self.task.run_training_examples(code)
             is_valid = result is not None
 
-            if self.config.verbose:
-                if not is_valid:
-                    print("Error detected while running training examples - node is invalid")
-                else:
-                    print("No errors detected while running training examples - node is valid")
+            if not is_valid:
+                logging.debug("Error detected while running training examples - node is invalid")
+            else:
+                logging.debug("No errors detected while running training examples - node is valid")
+
             return is_valid
 
         except Exception as e:
-            if self.config.verbose:
-                print(f"Node validation failed: {str(e)}")
-                import traceback
-                print(traceback.format_exc())
+            logging.exception(f"Node validation failed: {str(e)}")
             return False
 
     def valid(self) -> bool:
@@ -172,14 +163,12 @@ class Node:
     def generate_children(self, policy_model, reward_model) -> list["Node"]:
         """Generate and validate children for this node."""
         prompt = self.get_text()
-        if self.config.verbose:
-            print(f"Generating children for node {self.tag}")
+        logging.debug(f"Generating children for node {self.tag}")
 
         child_texts = policy_model.generate(prompt)
-        if self.config.verbose:
-            print(f"Generated {len(child_texts)} candidate continuations")
-            for i, child_text in enumerate(child_texts):
-                print(f"Child {i + 1}/{len(child_texts)}: {child_text}")
+        logging.debug(f"Generated {len(child_texts)} candidate continuations")
+        for i, child_text in enumerate(child_texts):
+            logging.debug(f"Child {i + 1}/{len(child_texts)}: {child_text}")
 
         valid_children = []
         for i, child_text in enumerate(child_texts):
@@ -194,18 +183,16 @@ class Node:
 
             if is_valid:
                 valid_children.append(child)
-                if self.config.verbose:
-                    print(f"Child {i + 1}/{len(child_texts)} is valid with reward {child.reward:.4f}")
+                logging.debug(f"Child {i + 1}/{len(child_texts)} is valid with reward {child.reward:.4f}")
             else:
                 # Mark invalid nodes with negative reward and terminal
                 child.reward = -1.0
-                if self.config.verbose:
-                    print(f"Child {i + 1}/{len(child_texts)} is invalid and will be discarded")
+                logging.debug(f"Child {i + 1}/{len(child_texts)} is invalid and will be discarded")
 
-        if not valid_children and self.config.verbose:
-            print("WARNING: No valid children were generated!")
-        elif self.config.verbose:
-            print(f"Added {len(valid_children)}/{len(child_texts)} valid children")
+        if not valid_children:
+            logging.debug("WARNING: No valid children were generated!")
+        else:
+            logging.debug(f"Added {len(valid_children)}/{len(child_texts)} valid children")
 
         return valid_children
 
@@ -232,13 +219,15 @@ class Node:
         }
         return json.dumps(node_json)
 
-    def print_tree(self):
-        """
-        Print the JSON string representation of the entire tree starting from this node.
-        This is designed to generate output that can be parsed by the tree visualizer.
-        """
-        print(self)
+    def tree_string(self):
+        """Return a string representation of the tree starting from this node."""
+        tree_str = str(self) + "\n"
         for child in self.children:
-            child.print_tree()
+            tree_str += child.tree_string()
+        return tree_str
 
+    def save_to_file(self):
+        output_path = os.path.join(self.config.output_dir, f"detailed_logs", f"job_{self.config.job_id}", f"tree.txt")
 
+        with open(output_path, 'w') as f:
+            f.write(self.tree_string())

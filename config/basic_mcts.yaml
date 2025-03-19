@@ -17,5 +17,5 @@ branching-factor: 3
 # System parameters
 
 # Runtime parameters
-verbose: true
+log-level: "DEBUG"
 

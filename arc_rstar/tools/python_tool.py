@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import subprocess
 import sys
@@ -7,13 +8,12 @@ import tempfile
 from config import TIMEOUT_SECONDS, CODE, CODE_END, STEP_END, MEMORY_LIMIT_BYTES
 
 
-def remove_thinking_blocks(text, verbose=False):
+def remove_thinking_blocks(text):
     """
     Remove all <think>...</think> blocks from text.
 
     Args:
         text (str): Text that may contain thinking blocks
-        verbose (bool): Whether to print debug information
 
     Returns:
         str: Text with thinking blocks removed
@@ -21,10 +21,9 @@ def remove_thinking_blocks(text, verbose=False):
     import re
 
     original_length = 0
-    if verbose:
-        original_length = len(text)
-        num_blocks = len(re.findall(r'<think>', text))
-        print(f"Found {num_blocks} thinking blocks in text of length {original_length}")
+    original_length = len(text)
+    num_blocks = len(re.findall(r'<think>', text))
+    logging.debug(f"Found {num_blocks} thinking blocks in text of length {original_length}")
 
     # Pattern to match <think>...</think> blocks, including nested content
     pattern = r'<think>.*?</think>'
@@ -32,26 +31,23 @@ def remove_thinking_blocks(text, verbose=False):
     # Replace all thinking blocks with empty string
     cleaned_text = re.sub(pattern, '', text, flags=re.DOTALL)
 
-    if verbose:
-        new_length = len(cleaned_text)
-        print(f"Removed {original_length - new_length} characters worth of thinking blocks")
+    new_length = len(cleaned_text)
+    logging.debug(f"Removed {original_length - new_length} characters worth of thinking blocks")
 
     return cleaned_text
 
 
-def extract_python_code(text, verbose=False):
+def extract_python_code(text):
     """Extract Python code from text after the last CODE marker, removing any CODE_END or STEP_END markers."""
 
     # try removing thinking tokens before running the code
-    text = remove_thinking_blocks(text, verbose)
+    text = remove_thinking_blocks(text)
 
-    if verbose:
-        print(f"Extracting code from text (which has {len(text)} characters)")
+    logging.debug(f"Extracting code from text (which has {len(text)} characters)")
 
     # Check if text contains the CODE marker
     if CODE not in text:
-        if verbose:
-            print(f"CODE marker not found in text")
+        logging.warning(f"CODE marker not found in text")
         raise ValueError(f"No CODE marker found in text")
 
     # Find the last CODE marker and get all content after it
@@ -61,9 +57,8 @@ def extract_python_code(text, verbose=False):
     if not code:
         raise ValueError(f"No code was extracted after the last CODE marker")
 
-    if verbose:
-        print(f"Extracted code block (with {len(code)} characters, {len(code.splitlines())} lines)")
-        print(f"Code block:\n{code}")
+    logging.debug(f"Extracted code block (with {len(code)} characters, {len(code.splitlines())} lines)")
+    logging.debug(f"Code block:\n{code}")
 
     return code
 
@@ -192,13 +187,12 @@ def indent_code(code, spaces=4):
     return '\n'.join(indented_lines)
 
 
-def execute_code_with_grid(code, input_grid, verbose=False, temp_dir=None):
+def execute_code_with_grid(code, input_grid, temp_dir=None):
     """Execute Python code with the provided input grid using a subprocess for isolation.
 
     Args:
         code (str): The Python code to execute
         input_grid (list): The input grid to pass to the solve function
-        verbose (bool, optional): Whether to print debug information
         temp_dir (str, optional): Directory where temporary files will be created.
                                  If None, system default temp directory is used.
 
@@ -206,23 +200,20 @@ def execute_code_with_grid(code, input_grid, verbose=False, temp_dir=None):
         list or None: The result grid if execution was successful, None otherwise
     """
     if not code.strip():
-        if verbose:
-            print("Cannot execute empty code")
+        logging.warning("Cannot execute empty code")
         return None
 
     # Prepare code
     code = prepare_code(code)
 
-    if verbose:
-        print(f"Executing code with grid of shape {len(input_grid)}x{len(input_grid[0]) if input_grid else 0}")
+    logging.debug(f"Executing code with grid of shape {len(input_grid)}x{len(input_grid[0]) if input_grid else 0}")
 
     script_path = None
     try:
         # Create the script file
         script_path = create_subprocess_script(code, temp_dir)
 
-        if verbose:
-            print(f"Created temporary script at {script_path}")
+        logging.debug(f"Created temporary script at {script_path}")
 
         # Prepare input data as JSON
         input_data = {"grid": input_grid}
@@ -241,8 +232,8 @@ def execute_code_with_grid(code, input_grid, verbose=False, temp_dir=None):
         # Send input data
         stdout, stderr = process.communicate(input=input_json, timeout=TIMEOUT_SECONDS)
 
-        if verbose and stderr:
-            print(f"Subprocess stderr: {stderr}")
+        if stderr:
+            logging.debug(f"Subprocess stderr: {stderr}")
 
         # Process returned successfully
         if process.returncode == 0:
@@ -250,17 +241,15 @@ def execute_code_with_grid(code, input_grid, verbose=False, temp_dir=None):
                 # Parse the JSON output
                 output = json.loads(stdout)
 
-                if verbose:
-                    if output.get("stdout"):
-                        print(f"Code stdout output:\n{output['stdout']}")
-                    if output.get("stderr"):
-                        print(f"Code stderr output:\n{output['stderr']}")
+                if output.get("stdout"):
+                    logging.debug(f"Code stdout output:\n{output['stdout']}")
+                if output.get("stderr"):
+                    logging.debug(f"Code stderr output:\n{output['stderr']}")
 
                 # Check if there was an error
                 if output.get("error"):
-                    if verbose:
-                        print(f"Error in executed code: {output['error']['message']}")
-                        print(f"Traceback: {output['error']['traceback']}")
+                    logging.error(f"Error in executed code: {output['error']['message']}")
+                    logging.debug(f"Traceback: {output['error']['traceback']}")
                     return None
 
                 # Get the result
@@ -269,35 +258,29 @@ def execute_code_with_grid(code, input_grid, verbose=False, temp_dir=None):
                 # Validate result is a 2D grid
                 if not (isinstance(result, list) and
                         (not result or all(isinstance(row, list) for row in result))):
-                    if verbose:
-                        print(f"Invalid result type: {type(result)}")
-                        if isinstance(result, list):
-                            print(f"Result is list but contains non-list elements or is empty")
+                    logging.warning(f"Invalid result type: {type(result)}")
+                    if isinstance(result, list):
+                        logging.warning(f"Result is list but contains non-list elements or is empty")
                     return None
 
-                if verbose:
-                    print(
-                        f"Code execution successful, result grid shape: {len(result)}x{len(result[0]) if result and result[0] else 0}")
+                logging.debug(
+                    f"Code execution successful, result grid shape: {len(result)}x{len(result[0]) if result and result[0] else 0}")
 
                 return result
             except json.JSONDecodeError:
-                if verbose:
-                    print(f"Failed to decode subprocess output as JSON: {stdout}")
+                logging.error(f"Failed to decode subprocess output as JSON: {stdout}")
                 return None
         else:
-            if verbose:
-                print(f"Subprocess exited with code {process.returncode}")
+            logging.warning(f"Subprocess exited with code {process.returncode}")
             return None
 
     except subprocess.TimeoutExpired:
-        if verbose:
-            print(f"Code execution timed out after {TIMEOUT_SECONDS} seconds")
+        logging.warning(f"Code execution timed out after {TIMEOUT_SECONDS} seconds")
         return None
     except Exception as e:
-        if verbose:
-            print(f"Exception during code execution: {str(e)}")
-            import traceback
-            print(traceback.format_exc())
+        logging.error(f"Exception during code execution: {str(e)}")
+        import traceback
+        logging.error(traceback.format_exc())
         return None
     finally:
         # Clean up temporary files

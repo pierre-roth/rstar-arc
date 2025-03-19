@@ -17,5 +17,5 @@ branching-factor: 10  # Number of candidates to generate per node
 
 
 # Runtime parameters
-verbose: true
+log-level: "DEBUG"
 
