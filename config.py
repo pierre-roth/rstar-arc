@@ -179,7 +179,7 @@ class Config:
         # Set computed model directories based on model_base_path
         self.policy_model_dir = os.path.join(self.model_base_path, "policy")
         self.reward_model_dir = os.path.join(self.model_base_path, "reward")
-        self.temporary_path = os.path.join(LOCAL_SCRATCH_PATH, f"log_{self.job_id}")
+        self.temporary_path = os.path.join(LOCAL_SCRATCH_PATH, f"job_{self.job_id}")
 
     @classmethod
     def from_args(cls, args: Optional[list[str]] = None) -> Config:
