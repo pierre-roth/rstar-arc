@@ -73,12 +73,6 @@ if [ $# -eq 1 ]; then
   CONFIG_FILE=$1
 fi
 
-# Validate config file exists
-if [ ! -f "${CONFIG_FILE}" ]; then
-  echo "Error: Config file ${CONFIG_FILE} not found" >&2
-  exit 1
-fi
-
 # Send noteworthy information to both SLURM log and our detailed log
 {
   echo "Running on node: $(hostname)"
