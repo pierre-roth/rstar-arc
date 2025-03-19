@@ -28,8 +28,6 @@ class PolicyModel:
             tensor_parallel_size=self.config.gpus,
             dtype=self.config.dtype,
             max_model_len=self.config.max_model_len,
-            # distributed_executor_backend='mp',  # use multiprocessing for distributed executor instead of Ray
-            # engine_args={"port": port, "engine_id": self.engine_id}
         )
 
         self.is_initialized = True
@@ -52,8 +50,8 @@ class PolicyModel:
 
         # Generate completions with default params
         sampling_params = SamplingParams(
-            temperature=self.config.temperature,
-            top_p=0.95,
+            temperature=self.config.policy_temperature,
+            top_p=self.config.top_p,
             max_tokens=self.config.max_tokens,
             n=self.config.branching_factor,  # Number of candidates to generate
             stop=[STEP_END, CODE_END],

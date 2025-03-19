@@ -8,15 +8,16 @@ from typing import Optional, Any, get_type_hints
 
 import yaml
 
-###########################################
-# DEFAULT CONFIGURATION VALUES
-###########################################
+#############################################
+# CONSTANTS AND DEFAULT CONFIGURATION VALUES
+#############################################
+
+ETH_USERNAME = "piroth"
 
 # Default paths for models, outputs and data
 # These paths are used if not overridden by command line or config file
-DEFAULT_MODEL_BASE_PATH = "/itet-stor/piroth/net_scratch/models"  # Base directory for models
-DEFAULT_OUTPUT_PATH = "/itet-stor/piroth/net_scratch/outputs"  # Where results will be saved
-DEFAULT_TEMPORARY_PATH_PREFIX = "/scratch/piroth/log_"  # Temporary output directory
+NET_SCRATCH_PATH = f"/itet-stor/{ETH_USERNAME}/net_scratch"  # network scratch directory
+LOCAL_SCRATCH_PATH = f"/scratch/{ETH_USERNAME}"  # local scratch directory
 
 DEFAULT_DATA_SAMPLE_PATH = "data_sample"  # Root folder for ARC data
 DEFAULT_TRAINING_DATA_PATH = "data_sample/training"  # Training data location
@@ -27,11 +28,11 @@ DEFAULT_POLICY_LLM = "Qwen/Qwen2.5-Coder-7B-Instruct"  # Policy model (generates
 DEFAULT_REWARD_LLM = "Qwen/Qwen2.5-Coder-7B-Instruct"  # Reward Model (evaluates steps)
 
 # Default hyperparameters
-DEFAULT_MAX_TOKENS = 512  # Maximum tokens for model generation
+DEFAULT_MAX_TOKENS = 1024  # Maximum tokens for model generation
 DEFAULT_MAX_DEPTH = 10  # Maximum depth of search tree (max steps)
 DEFAULT_BEAM_WIDTH = 3  # Width of beam in beam search (solutions to track)
 DEFAULT_BRANCHING_FACTOR = 3  # Number of child nodes to expand per parent
-DEFAULT_TEMPERATURE = 0.3  # Sampling temperature (lower = more deterministic)
+DEFAULT_POLICY_TEMPERATURE = 0.7  # Sampling temperature for policy model
 DEFAULT_SEED = 42  # Random seed for reproducibility
 DEFAULT_C_PUCT = 2.0  # PUCT exploration constant for MCTS
 
@@ -41,8 +42,7 @@ DEFAULT_C_PUCT = 2.0  # PUCT exploration constant for MCTS
 
 # Code execution timeout settings
 TIMEOUT_SECONDS = 15  # Maximum time allowed for code execution
-TIMEOUT_MESSAGE = f"Execution of the code snippet has timed out for exceeding {TIMEOUT_SECONDS} seconds."
-MEMORY_LIMIT_MB = 1024
+MEMORY_LIMIT_MB = 256
 MEMORY_LIMIT_BYTES = MEMORY_LIMIT_MB * 1024 * 1024
 
 # Terminal node constants
@@ -62,7 +62,7 @@ STEP_END = "<end_of_step>"  # Marks the end of a reasoning step
 
 # Code section markers
 CODE = "<code>"  # Begins a code section
-CODE_END = "</code>"  # Ends a code section
+CODE_END = "<end_of_code>"  # Ends a code section
 
 
 @dataclass
@@ -82,17 +82,31 @@ class Config:
     verbose: bool = True  # Controls logging verbosity
 
     ###########################################
+    # PROMPT PARAMETERS
+    ###########################################
+    num_examples: int = 2  # Controls the number of few shot examples in the prompt
+
+    ###########################################
     # MODEL CONFIGURATION
     ###########################################
     # Language model selection
     policy_model: str = DEFAULT_POLICY_LLM  # Model that generates reasoning steps
     reward_model: str = DEFAULT_REWARD_LLM  # Reward Model for evaluating steps
 
-    # Model loading settings
-    model_base_path: str = DEFAULT_MODEL_BASE_PATH  # Base path where models are stored
+    # general model configuration
+    model_base_path: str = os.path.join(NET_SCRATCH_PATH, "models")  # Base path where models are stored
+
+    # Policy model configuration
     max_tokens: int = DEFAULT_MAX_TOKENS  # Maximum tokens for generation
     dtype: str = "bfloat16"  # Data type for model (affects precision/speed)
-    max_model_len: int = 24576  # Affects the context window size
+    max_model_len: int = 16384  # Affects the context window size
+    top_p: float = 0.95  # Top-p sampling parameter (cumulative probability cutoff)
+    top_k: int = -1  # Top-k sampling parameter (number of candidates to consider)
+    policy_temperature: float = DEFAULT_POLICY_TEMPERATURE  # Sampling temperature for LLM generation
+    seed: int = DEFAULT_SEED  # Random seed for reproducibility
+    deterministic: bool = False  # Whether to enforce deterministic behavior
+
+    # Reward model configuration
 
     ###########################################
     # GENERATION PARAMETERS
@@ -111,9 +125,6 @@ class Config:
     # SEARCH ALGORITHM PARAMETERS
     ###########################################
     search_mode: str = "bs"  # Search algorithm - "bs" for beam search, "mcts" for Monte Carlo Tree Search
-    temperature: float = DEFAULT_TEMPERATURE  # Sampling temperature for LLM generation
-    seed: int = DEFAULT_SEED  # Random seed for reproducibility
-    deterministic: bool = False  # Whether to enforce deterministic behavior
 
     # BEAM search specific parameters
     beam_width: int = DEFAULT_BEAM_WIDTH  # Number of top-scoring beams to track
@@ -124,15 +135,15 @@ class Config:
     num_simulations: int = 8  # Number of simulations to run for MCTS
 
     ###########################################
-    # HARDWARE CONFIGURATION
+    # SLURM AND HARDWARE CONFIGURATION
     ###########################################
-    gpus: int = 1  # Number of GPUs to use
+    gpus: int = int(os.getenv("SLURM_GPUS", 1))  # Number of GPUs available (read from environment variable)
+    job_id: int = int(os.getenv("SLURM_JOB_ID", 0))  # N
 
     ###########################################
     # OUTPUT CONFIGURATION
     ###########################################
-    output_dir: str = DEFAULT_OUTPUT_PATH  # Directory to save results
-    hint: str = ""  # Optional hint to provide to the solver
+    output_dir: str = os.path.join(NET_SCRATCH_PATH, "outputs")  # Directory to save results
 
     ###########################################
     # CONFIG FILE
@@ -150,7 +161,6 @@ class Config:
     nodelist: Optional[str] = None  # Specific nodes to use
     constraint: Optional[str] = None  # Hardware constraints
     time: Optional[str] = None  # Time limit for job
-    job_id: int = int(os.getenv("SLURM_JOB_ID", 0))
 
     ###########################################
     # COMPUTED FIELDS
@@ -169,7 +179,7 @@ class Config:
         # Set computed model directories based on model_base_path
         self.policy_model_dir = os.path.join(self.model_base_path, "policy")
         self.reward_model_dir = os.path.join(self.model_base_path, "reward")
-        self.temporary_path = DEFAULT_TEMPORARY_PATH_PREFIX + str(self.job_id)
+        self.temporary_path = os.path.join(LOCAL_SCRATCH_PATH, f"log_{self.job_id}")
 
     @classmethod
     def from_args(cls, args: Optional[list[str]] = None) -> Config:

@@ -1,15 +1,16 @@
 # rSTAR meets ARC
+
 ## Weekly progress report
 
 ### Week 1 (03.03.2025)
 
-- **Work planned**: 
+- **Work planned**:
   - Do some more research on ARC and rSTAR
   - Start coding up a bare-bones working version of "Round 1"
     - Decide how to break down code into classes and functions
     - Defined "step format" in tree
 
-- **Work done**: 
+- **Work done**:
   - Research
   - Started breaking down code into classes and functions
   - Getting a cold (again) in the first week of the project :(
@@ -17,25 +18,29 @@
 
 - **Issues and Questions**:
   - Probably LLM fine-tuning and alignment needed before "Round 1" is feasible
-  - Would a reasoning model help with making sense of longer prompts and possibly give answers that have the correct format more often?
+  - Would a reasoning model help with making sense of longer prompts and possibly give answers that have the correct
+    format more often?
   - Discuss "step format" in more detail.
 
 ---
 
 ### Week 2 (10.03.2025)
 
-- **Work planned**: 
+- **Work planned**:
   - Finish coding up a bare-bones working version of "Round 1"
   - Clean up code and make it as "extendable" as possible
 
-- **Work done**: 
-  - Decided on not specifying the extent of the step format beyond the "python block" limitation (that means the prefix code of every step must be valid python code)
-  - Successfully implemented working version of "Round 1" with beam search agent (also successfully solved first ARC Task)
+- **Work done**:
+  - Decided on not specifying the extent of the step format beyond the "python block" limitation (that means the
+    prefix code of every step must be valid python code)
+  - Successfully implemented working version of "Round 1" with beam search agent (also successfully solved first ARC
+    Task)
   - Rewriting code to adhere to HCP Storage best practices (i.e. use local scratch space for all intermediate files)
   - Wrote *tree visualizer* to help with debugging (and because it's cool)
   - Played firefighter (fire=bugs) basically for a week straight (I'm not complaining, I love it)
   - Wrote most of the MCTS implementation (should be functional now, but hasn't been thoroughly tested yet)
-  - Wrote and rewrote the code execution environment (the second version now uses subprocesses which is more scalable and now I have more fine-grained control over resources)
+  - Wrote and rewrote the code execution environment (the second version now uses subprocesses which is more scalable
+    and now I have more fine-grained control over resources)
   - **Finished a first rudimentary proof of concept!!!**
 
 - **Issues and Questions**:
@@ -62,8 +67,14 @@
   - Curate a set of "very easy" tasks to effectively generate training data for the policy SLM
   - Think about how to use reasoning models in the current system
   - Think about better step definitions that allow for more comprehensive intermediate code execution
-    - Also try to do more sophisticated code analysis and intermediate code execution (this should come at virtually no runtime cost)
-  - **Major code refactoring for maintainability** (I will probably try to take some more inspiration from the rStar-Math implementation)
+    - Also try to do more sophisticated code analysis and intermediate code execution (this should come at virtually
+      no runtime cost)
+  - **Major code refactoring for maintainability** (I will probably try to take some more inspiration from the
+    rStar-Math implementation)
+    - use "logging" instead of "print" statements
+    - use "cProfile" to profile the code and find bottlenecks
+    - update vllm to the latest version and fix bugs that arise from this
+    - batch requests to the LLMs to reduce overhead
   - *Do research on fine-tuning LLMs*
   - *Write code for LLM fine-tuning*
   - *Potentially look into using a bigger model for the initial fine-tuning data generation*

@@ -2,29 +2,20 @@
 # All parameters are optional and will override defaults
 
 # Task parameters
-data-folder: "data_sample/training"
 task-name: "8be77c9e"
 
 # Model parameters
-policy-model: "Qwen/Qwen2.5-Coder-7B-Instruct"
-reward-model: "Qwen/Qwen2.5-Coder-7B-Instruct"
+
 
 # Search parameters
 search-mode: "mcts"
 max-depth: 6
-temperature: 0.7
 num-simulations: 16
 c-puct: 2.0
 branching-factor: 3
 
 # System parameters
-gpus: 1
-dtype: "bfloat16"  # Options: float16, bfloat16
-seed: 42
 
 # Runtime parameters
 verbose: true
-# Uncomment to run deterministic mode
-# deterministic: true
-# Uncomment to provide a hint
-# hint: "Try using pattern matching"
+

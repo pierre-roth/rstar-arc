@@ -94,25 +94,6 @@ class ARCTask:
 
         return True
 
-    def __str__(self):
-        """String representation of the ARCTask"""
-        result = [f"ARCTask {self.name}", f"Number of training examples: {len(self.training_examples)}",
-                  f"Number of test examples: {len(self.test_examples)}", "\nTraining examples: "]
-
-        # Add details for each training example
-        for i, example in enumerate(self.training_examples):
-            result.append(f"\nTraining Example {i + 1}:")
-            result.append(str(example))
-
-        result.append("\nTest examples: ")
-
-        # Add details for each test example
-        for i, example in enumerate(self.test_examples):
-            result.append(f"\nTest Example {i + 1}:")
-            result.append(str(example))
-
-        return "\n".join(result)
-
     def to_prompt(self) -> str:
         """Generate the initial prompt for the task to feed into the LLM."""
         prompt = [f"# ARC Task: {self.name}\n", "## Training Examples\n"]

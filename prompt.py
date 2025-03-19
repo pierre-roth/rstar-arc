@@ -3,35 +3,65 @@ from config import *
 
 
 def get_prompt(config: Config, task: ARCTask) -> str:
-    example_task = ARCTask(str(os.path.join(config.data_folder, "6d0aefbc.json")), config)
-
-    prompt = f"""You are a powerful agent with broad problem solving/pattern matching knowledge and great python programming skills. 
-You need to write Python code to solve ARC (Abstraction and Reasoning Corpus) tasks.
+    ### PROMPT PREFIX ###
+    prompt_prefix = f"""You are a powerful agent with broad problem solving/pattern matching knowledge and great python programming skills. You need to write Python code to solve an ARC (Abstraction and Reasoning Corpus) task, or more specifcally implement the transformation function that can transform the input grids into their corresponding output grids.
 
 ARC Task Description:
-    1. ARC tasks are rectangular grids of integers.
-    2. Each integer represents a color and there are only 10 color values (0-9).
-    3. Each task is made up of training and test input-output examples.
-    4. Your task is to write Python code that can transform the input grids into their corresponding output grids.
-    5. You will get access to the training input-output examples to learn the transformation function.
-    6. You need to write code that can generate the correct output grids for the test input grids.
+    - ARC tasks are composed of a set of training input-output examples and a set of test input grids.
+    - Each grid is a 2D list of integers and is given to you as a list of lists. (argument of the function "solve")
+    - Each integer represents a "color" and there are only 10 color values (0-9).
+    - Your task is to write Python code that can transform the input grids into their corresponding output grids.
+    - You will get access to the training input-output examples to learn the transformation function.
+    - The transformation function "solve" must be able to correctly transform the training input grids into their corresponding output grids.
+    - The transformation function "solve" must also be able to correctly transform the test input grids into their corresponding hidden output grids.
     
 Remember:
-    1. Write code that implements the transformation function step by step. The solution should include {CODE} {CODE_END} and intermediate steps.
-    2. The final code block should be valid Python code and implement the function `solve(I: list[list[int]]) -> list[list[int]]`. This function transforms input grids into their corresponding output grids.
-    3. You may use numpy functions (it is imported as "import numpy as np")
-    5. Always generate the next step and the next step only, that it up to the {STEP_END} marker.
-    6. Each step must be valid Python code. Steps can be as simple as a single line of code or as complex as a multi-line function.
-    7. Each step,combined with the steps before it, however must be a valid Python code block i.e. no partial code blocks.
-    8. If you generate a {CODE_END} marker instead of a {STEP_END} marker, this signals the end of the code block, and thus the end of the transformation function.
-    9. Please use the following template:
+    - Write code that implements the transformation function step by step. The solution must include {CODE}, {CODE_END} and {STEP_END} markers appropriately.
+    - The final code block must be valid Python code and implement the function `solve(I: list[list[int]]) -> list[list[int]]`. This function transforms input grids into their corresponding output grids.
+    - You may use Python built-in functions and libraries.
+    - You may use numpy functions (it is imported as "import numpy as np")
+    - Always generate the next step and the next step only, that it up and including the {STEP_END} marker.
+    - Each step must be valid Python code. Steps can be as simple as a single line of code or as complex as a multi-line function.
+    - Each step, combined with the steps before it, however must be a valid Python code block i.e. no partial code blocks.
+    - If you generate a {CODE_END} marker instead of a {STEP_END} marker, this signals the end of the code block, and thus the end of the transformation function.
+    - Please use the following template:
 
-Below follows an example task and solution. You need to write code to solve the task in the same format.
+{CODE}
+def solve(I):
+    
+    # comment explaining the step
+    python code for the step
+    {STEP_END}
+    
+    # comment explaining the step
+    python code for the step
+    {STEP_END}
+    
+    # comment explaining the step
+    O = the correct output grid
+    {STEP_END}
+    
+    # return the output grid
+    return O
+{CODE_END}"""
 
-{example_task.to_prompt()}
+    ### PROMPT SUFFIX ###
+    prompt_suffix = f"""Now it's your turn! Carefully analyze the input-output examples to infer the transformation function.
+Then write Python code to implement the transformation function.
+
+{task.to_prompt()}
 
 
 {CODE}
+def solve(I):"""
+
+    ### EXAMPLE PROMPTS ###
+    single_example_prompt = f"""Below is an example task with an example solution. They should give you an idea of what is expected."""
+    multiple_example_prompt = f"""Below are {config.num_examples} example tasks with example solutions. They should give you an idea of what is expected."""
+
+    ### EXAMPLES ###
+    example_task_1 = ARCTask(str(os.path.join(config.data_folder, "6d0aefbc.json")), config)
+    solution_code_1 = f"""{CODE}
 def solve(I):
     
     # vertically mirror the grid
@@ -43,20 +73,54 @@ def solve(I):
     {STEP_END}
     
     # return the output grid
-    return 0
-{CODE_END}
+    return O
+{CODE_END}"""
 
+    example_task_2 = ARCTask(str(os.path.join(config.data_folder, "1cf80156.json")), config)
+    solution_code_2 = f"""{CODE}
+def solve(I):
+    # Convert input to numpy array for easier slicing
+    I_np = np.array(I)
+    {STEP_END}
+    
+    # Find rows containing non-zero values
+    non_zero_rows = [i for i in range(len(I)) if any(val != 0 for val in I[i])]
+    min_row, max_row = min(non_zero_rows), max(non_zero_rows)
+    {STEP_END}
+    
+    # Find columns containing non-zero values
+    non_zero_cols = [j for j in range(len(I[0])) if any(I[i][j] != 0 for i in range(len(I)))]
+    min_col, max_col = min(non_zero_cols), max(non_zero_cols)
+    {STEP_END}
+    
+    # Extract the subgrid using numpy slicing
+    O = I_np[min_row:max_row+1, min_col:max_col+1].tolist()
+    {STEP_END}
+    
+    # Return the output subgrid
+    return O
+{CODE_END}"""
 
+    ### COMBINE PROMPT ###
+    examples = [(example_task_1, solution_code_1), (example_task_2, solution_code_2)]
 
+    assert config.num_examples <= len(
+        examples), f"Number of examples requested ({config.num_examples}) exceeds the number of available examples ({len(examples)})!"
 
+    if config.num_examples == 0:
+        return prompt_prefix + "\n\n" + prompt_suffix
+    else:
+        prompt = prompt_prefix + "\n\n"
 
-Now it's your turn! Write code to solve the task below. The code above is just an example and will not solve the task below.
-You need to come up with a solution that solves the task below. Use the input output example to infer the transformation function!
+        if config.num_examples == 1:
+            prompt += f"{single_example_prompt}\n\n"
+        else:
+            prompt += f"{multiple_example_prompt}\n\n"
 
-{task.to_prompt()}
+        for i, (example_task, solution_code) in enumerate(examples[:config.num_examples]):
+            prompt += f"Example {i + 1}:\n\n"
+            prompt += example_task.to_prompt() + "\n\n"
+            prompt += solution_code + "\n\n"
 
-
-{CODE}
-def solve(I):"""
-
-    return prompt
+        prompt += prompt_suffix
+        return prompt
