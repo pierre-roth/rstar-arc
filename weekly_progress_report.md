@@ -80,7 +80,7 @@
   - *Potentially look into using a bigger model for the initial fine-tuning data generation*
 
 - **Work done**:
-  - (To be updated soon)
+  - Update prompt to include one more example and made choosing the number of examples simpler
 
 - **Issues and Questions**:
   - (To be updated soon)

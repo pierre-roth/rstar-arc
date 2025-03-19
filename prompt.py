@@ -101,8 +101,77 @@ def solve(I):
     return O
 {CODE_END}"""
 
+    example_task_3 = ARCTask(str(os.path.join(config.data_folder, "00d62c1b.json")), config)
+    solution_code_3 = f"""{CODE}
+def solve(I):
+    # Define helper function to find a connected component using BFS
+    def find_component(grid, start_row, start_col, visited):
+        height, width = len(grid), len(grid[0])
+        value = grid[start_row][start_col]
+        component = []
+        queue = [(start_row, start_col)]
+        
+        while queue:
+            r, c = queue.pop(0)
+            if (r < 0 or r >= height or c < 0 or c >= width or 
+                visited[r][c] or grid[r][c] != value):
+                continue
+            
+            visited[r][c] = True
+            component.append((r, c))
+            
+            # Add the four adjacent neighbors (no diagonals)
+            queue.extend([(r+1, c), (r-1, c), (r, c+1), (r, c-1)])
+                
+        return value, component
+    {STEP_END}
+    
+    # Define helper function to check if a component touches the border
+    def is_border_touching(component, height, width):
+        for r, c in component:
+            if r == 0 or r == height-1 or c == 0 or c == width-1:
+                return True
+        return False
+    {STEP_END}
+    
+    # Copy the input grid and get dimensions
+    output = [row[:] for row in I]
+    height, width = len(I), len(I[0])
+    {STEP_END}
+    
+    # Initialize visited cells tracker
+    visited = [[False for _ in range(width)] for _ in range(height)]
+    {STEP_END}
+    
+    # Find all connected components in the grid
+    components = []
+    for i in range(height):
+        for j in range(width):
+            if not visited[i][j]:
+                value, component = find_component(I, i, j, visited)
+                if component:
+                    components.append((value, component))
+    {STEP_END}
+    
+    # Find all color 0 components that don't touch the border
+    non_border_components = []
+    for value, component in components:
+        if value == 0 and not is_border_touching(component, height, width):
+            non_border_components.append(component)
+    {STEP_END} 
+    
+    # Fill all cells in non-border components with value 4
+    for component in non_border_components:
+        for r, c in component:
+            output[r][c] = 4
+    {STEP_END}
+    
+    # Return the transformed grid
+    return output
+{CODE_END}"""
+
     ### COMBINE PROMPT ###
-    examples = [(example_task_1, solution_code_1), (example_task_2, solution_code_2)]
+    examples = [(example_task_1, solution_code_1), (example_task_2, solution_code_2), (example_task_3, solution_code_3)]
 
     assert config.num_examples <= len(
         examples), f"Number of examples requested ({config.num_examples}) exceeds the number of available examples ({len(examples)})!"
