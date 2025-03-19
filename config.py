@@ -58,18 +58,11 @@ TERMINAL_CODE_END = "Code end marker"
 # These tags are used to parse the model's output into structured sections
 
 # Step output markers
-OUTPUT = "<o>"  # Begins an output section
-OUTPUT_END = "<end_of_output>"  # Ends an output section
 STEP_END = "<end_of_step>"  # Marks the end of a reasoning step
 
 # Code section markers
 CODE = "<code>"  # Begins a code section
 CODE_END = "</code>"  # Ends a code section
-
-# Refinement markers
-REFINE = "<refine>"  # Begins a solution refinement section
-REFINE_PASS = "I am sure that my answer is correct"  # Indicates a confident solution
-REFINE_END = "<end_of_refine>"  # Ends a refinement section
 
 
 @dataclass

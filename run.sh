@@ -1,211 +1,91 @@
 #!/bin/bash
-
-# Set default values
-MEM="32G"
-CPUS=4
-GPUS=1
-PARTITION=""
-EXCLUDE=""
-NODELIST=""
-TIME=""
-VERBOSE=true
-ALL_TASKS=false
-DETERMINISTIC=false
-TASK_INDEX=1
-TASK_NAME="ac0a08a4"
-MAX_ITERATIONS=5
-MAX_DEPTH=10
-POLICY_MODEL="Qwen/Qwen2.5-Coder-7B-Instruct"
-REWARD_MODEL="Qwen/Qwen2.5-Coder-7B-Instruct"
-MAX_TOKENS=2048
-SEARCH_MODE="beam_search"
-BEAM_WIDTH=3
-TEMPERATURE=0.3
-SEED=42
-DTYPE="float16"
-OUTPUT_DIR=""
-HINT=""
-CONFIG_FILE=""
-DATA_FOLDER="data_sample/training"
-BRANCHING_FACTOR=3
-
-# Parse named command line arguments
-while [[ $# -gt 0 ]]; do
-    # Extract argument name without dashes and equals
-    ARG_NAME=$(echo "$1" | sed -E 's/^--([^=]+)(=.*)?$/\1/')
-    # Convert dashes to underscores and to uppercase for bash variable
-    BASH_VAR=$(echo "$ARG_NAME" | tr '-' '_' | tr '[:lower:]' '[:upper:]')
-    
-    # Handle the argument
-    if [[ "$1" == "--verbose" || "$1" == "--all-tasks" || "$1" == "--deterministic" ]]; then
-        # Boolean flags
-        declare "${BASH_VAR}=true"
-        shift
-    elif [[ "$1" == *"="* ]]; then
-        # Arguments with values
-        VALUE="${1#*=}"
-        declare "${BASH_VAR}=${VALUE}"
-        shift
-    else
-        echo "Unknown parameter format: $1"
-        echo "Usage: $0 [--param1=value1] [--param2=value2] [--flag]"
-        exit 1
-    fi
-done
-
-# Create temporary SBATCH script with the specified parameters
-TEMP_SCRIPT=$(mktemp)
-cat > "${TEMP_SCRIPT}" << EOL
-#!/bin/bash
-#SBATCH --mail-type=NONE
-#SBATCH --output=/itet-stor/piroth/net_scratch/outputs/jobs/%j.out
-#SBATCH --error=/itet-stor/piroth/net_scratch/outputs/jobs/%j.err
-#SBATCH --mem=${MEM}
+#SBATCH --mail-type=NONE # mail configuration: NONE, BEGIN, END, FAIL, REQUEUE, ALL
+#SBATCH --output=/itet-stor/piroth/net_scratch/outputs/jobs/%j.out # Keep minimal SLURM logging
+#SBATCH --error=/itet-stor/piroth/net_scratch/outputs/jobs/%j.err # Keep minimal SLURM logging
+#SBATCH --mem=60G
 #SBATCH --nodes=1
-#SBATCH --cpus-per-task=${CPUS}
-#SBATCH --gres=gpu:${GPUS}
+#SBATCH --cpus-per-task=4
+#SBATCH --gres=gpu:1
 #SBATCH --constraint='geforce_rtx_3090'
-EOL
+##SBATCH --exclude=tikgpu10,tikgpu[06-09]
+##SBATCH --nodelist=tikgpu01
+##SBATCH --partition=gpu
+##SBATCH --time=24:00:00
 
-# GPU names: geforce_rtx_3090,rtx_a6000,a100
-
-# Add optional SBATCH parameters if provided
-if [[ -n "${PARTITION}" ]]; then
-  echo "#SBATCH --partition=${PARTITION}" >> "${TEMP_SCRIPT}"
-fi
-
-if [[ -n "${EXCLUDE}" ]]; then
-  echo "#SBATCH --exclude=${EXCLUDE}" >> "${TEMP_SCRIPT}"
-fi
-
-if [[ -n "${NODELIST}" ]]; then
-  echo "#SBATCH --nodelist=${NODELIST}" >> "${TEMP_SCRIPT}"
-fi
-
-if [[ -n "${TIME}" ]]; then
-  echo "#SBATCH --time=${TIME}" >> "${TEMP_SCRIPT}"
-fi
-
-# Add the rest of the script
-cat >> "${TEMP_SCRIPT}" << EOL
-
-# Set environment variables
-ETH_USERNAME=${USER}
-PROJECT_DIR=/itet-stor/\${ETH_USERNAME}/net_scratch/rstar-arc
-CONDA_ENV=arc-solver
-DEFAULT_OUTPUT_DIR=/itet-stor/\${ETH_USERNAME}/net_scratch/outputs
+# Default application parameters
+ETH_USERNAME=piroth
+PROJECT_NAME=rstar-arc
+DIRECTORY=/itet-stor/${ETH_USERNAME}/net_scratch/${PROJECT_NAME}
+CONDA_ENVIRONMENT=arc-solver
+CONFIG_FILE="basic_bs.yaml"
 
 # Exit on errors
 set -o errexit
 
-# Create jobs directory if it doesn't exist
-mkdir -p /itet-stor/\${ETH_USERNAME}/net_scratch/outputs/jobs
+# Set up local scratch for detailed logging
+local_log_dir="/scratch/${ETH_USERNAME}/log_${SLURM_JOB_ID}"
+final_log_dir="/itet-stor/${ETH_USERNAME}/net_scratch/outputs/detailed_logs/job_${SLURM_JOB_ID}"
 
-# Log basic information and parameters
-echo "===== Job Configuration ====="
-echo "Running on node: \$(hostname)"
-echo "In directory: \$(pwd)"
-echo "Starting on: \$(date)"
-echo "SLURM_JOB_ID: \${SLURM_JOB_ID}"
-echo ""
-echo "===== Resource Parameters ====="
-echo "Memory: ${MEM}"
-echo "CPUs: ${CPUS}"
-echo "GPUs: ${GPUS}"
-if [[ ! -z "${PARTITION}" ]]; then echo "Partition: ${PARTITION}"; fi
-if [[ ! -z "${EXCLUDE}" ]]; then echo "Excluded nodes: ${EXCLUDE}"; fi
-if [[ ! -z "${NODELIST}" ]]; then echo "Node list: ${NODELIST}"; fi
-if [[ ! -z "${TIME}" ]]; then echo "Time limit: ${TIME}"; fi
-echo ""
-echo "===== Application Parameters ====="
-
-echo "Task Index: ${TASK_INDEX}"
-echo "Max Iterations: ${MAX_ITERATIONS}"
-echo "Policy Model: ${POLICY_MODEL}"
-echo "Reward Model: ${REWARD_MODEL}"
-echo "Model dtype: ${DTYPE}"
-if [[ ! -z "${HINT}" ]]; then echo "Hint: ${HINT}"; fi
-
-# Activate conda
-eval "\$(/itet-stor/\${ETH_USERNAME}/net_scratch/conda/bin/conda shell.bash hook)"
-conda activate \${CONDA_ENV}
-echo "Conda environment activated"
-
-# Pass through parameters from bash to Python
-PYTHON_ARGS=()
-
-# Add task parameters
-PYTHON_ARGS+=(--task-index="${TASK_INDEX}")
-if [[ ! -z "${TASK_NAME}" ]]; then
-    PYTHON_ARGS+=(--task-name="${TASK_NAME}")
+# Create local scratch directory
+if ! mkdir -p "${local_log_dir}"; then
+    echo "Failed to create local scratch directory" >&2
+    exit 1
 fi
 
-# Add model parameters
-PYTHON_ARGS+=(--policy-model="${POLICY_MODEL}")
-PYTHON_ARGS+=(--reward-model="${REWARD_MODEL}")
-PYTHON_ARGS+=(--max-tokens="${MAX_TOKENS}")
-
-# Add search parameters
-PYTHON_ARGS+=(--search-mode="${SEARCH_MODE}")
-PYTHON_ARGS+=(--max-depth="${MAX_DEPTH}")
-PYTHON_ARGS+=(--max-iterations="${MAX_ITERATIONS}")
-PYTHON_ARGS+=(--beam-width="${BEAM_WIDTH}")
-PYTHON_ARGS+=(--branching-factor="${BRANCHING_FACTOR}")
-PYTHON_ARGS+=(--temperature="${TEMPERATURE}")
-PYTHON_ARGS+=(--seed="${SEED}")
-
-# Add hardware parameters
-PYTHON_ARGS+=(--gpus="${GPUS}")
-PYTHON_ARGS+=(--dtype="${DTYPE}")
-
-# Add output parameters
-if [ ! -z "${OUTPUT_DIR}" ]; then
-    PYTHON_ARGS+=(--output-dir="${OUTPUT_DIR}")
-else
-    PYTHON_ARGS+=(--output-dir="\${DEFAULT_OUTPUT_DIR}")
+# Create net scratch directory
+if ! mkdir -p "${final_log_dir}"; then
+    echo "Failed to create net scratch directory" >&2
+    exit 1
 fi
 
-if [ ! -z "${HINT}" ]; then
-    PYTHON_ARGS+=(--hint="${HINT}")
+
+
+# Set up automatic cleanup when job ends
+trap "exit 1" HUP INT TERM
+trap 'echo "Transferring logs and cleaning up...";
+      mkdir -p "${final_log_dir}";
+      rsync -av --inplace "${local_log_dir}"/ "${final_log_dir}"/;
+      echo "Logs transferred to ${final_log_dir}";
+      rm -rf "${local_log_dir}"' EXIT
+
+# Allow specifying a different config file as the only CLI argument
+# Usage: ./run.sh [config_file]
+if [ $# -eq 1 ]; then
+  CONFIG_FILE=$1
 fi
 
-# Add config file if specified
-if [ ! -z "${CONFIG_FILE}" ]; then
-    PYTHON_ARGS+=(--config-file="${CONFIG_FILE}")
-fi
+# Send noteworthy information to both SLURM log and our detailed log
+{
+  echo "Running on node: $(hostname)"
+  echo "In directory: $(pwd)"
+  echo "Starting on: $(date)"
+  echo "SLURM_JOB_ID: ${SLURM_JOB_ID}"
+  echo "Using config file: ${CONFIG_FILE}"
+  echo "Detailed logs will be saved to: ${final_log_dir}"
+} | tee "${local_log_dir}/job_info.log"
 
-# Add data folder
-PYTHON_ARGS+=(--data-folder="${DATA_FOLDER}")
+# Activate conda environment
+[[ -f /itet-stor/${ETH_USERNAME}/net_scratch/conda/bin/conda ]] && eval "$(/itet-stor/${ETH_USERNAME}/net_scratch/conda/bin/conda shell.bash hook)"
+conda activate ${CONDA_ENVIRONMENT}
+echo "Conda activated" | tee -a "${local_log_dir}/job_info.log"
+cd ${DIRECTORY}
 
-# Add boolean flags
-if [ "${VERBOSE}" = "true" ]; then
-    PYTHON_ARGS+=(--verbose)
-fi
+# Execute the Python application with output redirected to local scratch
+echo "Running: python main.py --config-file ${CONFIG_FILE}" | tee -a "${local_log_dir}/job_info.log"
 
-if [ "${ALL_TASKS}" = "true" ]; then
-    PYTHON_ARGS+=(--all-tasks)
-fi
+# setting relevant environment variables
+export VLLM_LOGGING_LEVEL=DEBUG
 
-if [ "${DETERMINISTIC}" = "true" ]; then
-    PYTHON_ARGS+=(--deterministic)
-fi
+# Run the program with output going to local scratch
+python main.py --config-file ${CONFIG_FILE} > "${local_log_dir}/program_output.log" 2> "${local_log_dir}/program_error.log"
 
-# Build and execute the command
-CMD="python \${PROJECT_DIR}/main.py \${PYTHON_ARGS[@]}"
-echo "Executing: \${CMD}"
-cd \${PROJECT_DIR}
-eval \${CMD}
+# Send completion information to both SLURM log and our detailed log
+{
+  echo "Program completed with exit code: $?"
+  echo "Finished at: $(date)"
+  echo "Logs will be available at: ${final_log_dir}"
+} | tee -a "${local_log_dir}/job_info.log"
 
-# Cleanup
-echo "Finished at: \$(date)"
+# The EXIT trap will automatically transfer logs and clean up
+# End the script with exit code 0
 exit 0
-EOL
-
-# Make the temporary script executable
-chmod +x "${TEMP_SCRIPT}"
-
-# Execute the script with sbatch
-sbatch "${TEMP_SCRIPT}"
-
-# Remove the temporary script
-rm "${TEMP_SCRIPT}"
