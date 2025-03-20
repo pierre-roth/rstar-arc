@@ -2,11 +2,11 @@
 #SBATCH --mail-type=NONE # mail configuration: NONE, BEGIN, END, FAIL, REQUEUE, ALL
 #SBATCH --output=/itet-stor/piroth/net_scratch/outputs/jobs/%j.out # Keep minimal SLURM logging
 #SBATCH --error=/itet-stor/piroth/net_scratch/outputs/jobs/%j.err # Keep minimal SLURM logging
-#SBATCH --mem=60G
+#SBATCH --mem=128G
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=4
 #SBATCH --gres=gpu:1
-#SBATCH --constraint='geforce_rtx_3090'
+#SBATCH --constraint='a100'
 ##SBATCH --exclude=tikgpu10,tikgpu[06-09]
 ##SBATCH --nodelist=tikgpu01
 ##SBATCH --partition=gpu
@@ -17,9 +17,8 @@
 # Default application parameters
 ETH_USERNAME=piroth
 PROJECT_NAME=rstar-arc
-DIRECTORY=/home/${ETH_USERNAME}/${PROJECT_NAME}
+DIRECTORY=/home/${ETH_USERNAME}/${PROJECT_NAME}/bootstrap
 CONDA_ENVIRONMENT=arc-solver
-CONFIG_FILE="basic_bs.yaml"
 
 # Exit on errors
 set -o errexit
@@ -95,13 +94,13 @@ echo "Conda activated" | tee -a "${local_job_dir}/job_info.log"
 cd ${DIRECTORY}
 
 # Execute the Python application with output redirected to local scratch
-echo "Running: python main.py --config-file ${CONFIG_FILE}" | tee -a "${local_job_dir}/job_info.log"
+echo "Running: python main.py" | tee -a "${local_job_dir}/job_info.log"
 
 # Setting relevant environment variables
 export VLLM_LOGGING_LEVEL=DEBUG
 
 # Run the program with output going to local scratch
-python main.py --config-file ${CONFIG_FILE} > "${local_job_dir}/program_output.log" 2> "${local_job_dir}/program_error.log"
+python main.py > "${local_job_dir}/program_output.log" 2> "${local_job_dir}/program_error.log"
 EXIT_CODE=$?
 
 # Send completion information to both SLURM log and our detailed log

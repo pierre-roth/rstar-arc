@@ -64,7 +64,7 @@
   - Check for errors and bugs (mainly in MCTS implementation) and fix them
   - Experiment with different prompts and prompt formats for the policy SLM
   - Test the "best" versions on more ARC tasks and see how they perform
-  - Curate a set of "very easy" tasks to effectively generate training data for the policy SLM
+  - Curate a set of "very easy" tasks to use as reference when making changes to the system
   - Think about how to use reasoning models in the current system
   - Think about better step definitions that allow for more comprehensive intermediate code execution
     - Also try to do more sophisticated code analysis and intermediate code execution (this should come at virtually
@@ -85,6 +85,7 @@
   - Updated to the newest version of vllm to enable usage of the newest thinking models (updated all other libraries
     too)
   - Decided on trying to fine tune the initial policy LLM with data generated from a thinking model (QwQ-32B)
+  - Started writing code to generate bootstrapping data for the policy LLM
   -
 
 - **Issues and Questions**:

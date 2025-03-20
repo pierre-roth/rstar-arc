@@ -322,7 +322,7 @@ class Config:
         Load configuration settings from a YAML file
         
         This method:
-        1. Checks if the file exists (in current directory or config/ subfolder)
+        1. Checks if the file exists (in current directory or configs/ subfolder)
         2. Loads and parses the YAML content
         3. Converts kebab-case keys to snake_case for Python compatibility
         
@@ -336,8 +336,8 @@ class Config:
             # Check if file exists at the specified path
             if not os.path.exists(config_file):
                 # If not, try looking in the config/ directory
-                if os.path.exists(f"config/{config_file}"):
-                    config_file = f"config/{config_file}"
+                if os.path.exists(f"configs/{config_file}"):
+                    config_file = f"configs/{config_file}"
                 else:
                     logging.warning(f"Config file not found: {config_file}")
                     return {}
@@ -358,7 +358,7 @@ class Config:
             return result
 
         except Exception as e:
-            logging.error(f"Error loading config file: {e}")
+            logging.error(f"Error loading configs file: {e}")
             return {}
 
     def setup_logging(self):
