@@ -18,7 +18,7 @@ if __name__ == '__main__':
     # Create config from command line arguments
     config = Config.from_args()
 
-    config.data_folder = os.path.join(DEFAULT_DATA_SAMPLE_PATH, "very_easy")
+    config.data_folder = os.path.join("..", DEFAULT_DATA_SAMPLE_PATH, "very_easy")
 
     llm = LLM(
         model="Qwen/QwQ-32B",
