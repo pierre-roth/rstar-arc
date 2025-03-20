@@ -81,7 +81,11 @@
 
 - **Work done**:
   - Update prompt to include two more examples of varying difficulty and made choosing the number of examples simpler
-  - Switched the whole project from printing to logging
+  - Switched the whole project from printing to hierarchical logging
+  - Updated to the newest version of vllm to enable usage of the newest thinking models (updated all other libraries
+    too)
+  - Decided on trying to fine tune the initial policy LLM with data generated from a thinking model (QwQ-32B)
+  -
 
 - **Issues and Questions**:
   - (To be updated soon)

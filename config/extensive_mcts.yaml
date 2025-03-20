@@ -8,10 +8,10 @@ task-name: "8be77c9e"
 
 # Search parameters
 search-mode: "mcts"
-max-depth: 9
-num-simulations: 64
+max-depth: 7
+num-simulations: 32
 c-puct: 2.0
-branching-factor: 6
+branching-factor: 10
 
 # System parameters
 
