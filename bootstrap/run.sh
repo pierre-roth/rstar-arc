@@ -68,11 +68,6 @@ trap 'echo "Transferring logs and cleaning up...";
       echo "All files transferred to ${final_job_dir}";
       rm -rf "${local_job_dir}"' EXIT
 
-# Allow specifying a different config file as the only CLI argument
-# Usage: ./run.sh [config_file]
-if [ $# -eq 1 ]; then
-  CONFIG_FILE=$1
-fi
 
 # Send noteworthy information to both SLURM log and our detailed log
 {
@@ -80,7 +75,6 @@ fi
   echo "In directory: $(pwd)"
   echo "Starting on: $(date)"
   echo "SLURM_JOB_ID: ${SLURM_JOB_ID}"
-  echo "Using config file: ${CONFIG_FILE}"
   echo "Detailed job data will be saved to: ${final_job_dir}"
 } | tee "${local_job_dir}/job_info.log"
 
