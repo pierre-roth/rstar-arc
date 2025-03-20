@@ -9,7 +9,7 @@ parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.append(parent_dir)
 
 from prompt import get_bootstrap_prompt
-from config import Config, DEFAULT_DATA_SAMPLE_PATH
+from config import Config, DEFAULT_DATA_SAMPLE_PATH, LOCAL_SCRATCH_PATH
 from arc_rstar.arc_task.task import ARCTask
 
 # The idea is to use QwQ-32B to generate a lot of potential solutions (all steps in one go)
@@ -22,7 +22,7 @@ if __name__ == '__main__':
 
     llm = LLM(
         model="Qwen/QwQ-32B",
-        download_dir=config.policy_model_dir,
+        download_dir=os.path.join(LOCAL_SCRATCH_PATH, "models", "policy"),
         tensor_parallel_size=1,
         dtype="bfloat16",
         max_model_len=16384,
