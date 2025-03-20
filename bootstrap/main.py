@@ -14,26 +14,26 @@ if __name__ == '__main__':
 
     config.data_folder = os.path.join(DEFAULT_DATA_SAMPLE_PATH, "very_easy")
 
+    llm = LLM(
+        model="Qwen/QwQ-32B",
+        download_dir=config.policy_model_dir,
+        tensor_parallel_size=1,
+        dtype="bfloat16",
+        max_model_len=16384,
+    )
+
+    sampling_params = SamplingParams(
+        temperature=config.policy_temperature,
+        top_p=config.top_p,
+        max_tokens=8192,
+        n=1
+    )
+
     for file_name in os.listdir(config.data_folder):
         task_path = os.path.join(config.data_folder, file_name)
         task = ARCTask(task_path, config)
 
         prompt = get_bootstrap_prompt(config, task)
-
-        llm = LLM(
-            model="Qwen/QwQ-32B",
-            download_dir=config.policy_model_dir,
-            tensor_parallel_size=1,
-            dtype="bfloat16",
-            max_model_len=16384,
-        )
-
-        sampling_params = SamplingParams(
-            temperature=config.policy_temperature,
-            top_p=config.top_p,
-            max_tokens=8192,
-            n=1
-        )
 
         request_outputs = llm.generate([prompt], sampling_params=sampling_params)
 
