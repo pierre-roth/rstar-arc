@@ -7,7 +7,7 @@ import tempfile
 
 from config import TIMEOUT_SECONDS, CODE, CODE_END, STEP_END, MEMORY_LIMIT_BYTES
 
-logger = logger.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def remove_thinking_blocks(text):
