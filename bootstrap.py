@@ -1,12 +1,6 @@
 import logging
 import os.path
-import sys
 from vllm import LLM, SamplingParams
-
-# Get the parent directory
-parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-# Add the parent directory to sys.path
-sys.path.append(parent_dir)
 
 from prompt import get_bootstrap_prompt
 from config import Config, DEFAULT_DATA_SAMPLE_PATH, LOCAL_SCRATCH_PATH
@@ -18,7 +12,7 @@ if __name__ == '__main__':
     # Create config from command line arguments
     config = Config.from_args()
 
-    config.data_folder = os.path.join("..", DEFAULT_DATA_SAMPLE_PATH, "very_easy")
+    config.data_folder = os.path.join(DEFAULT_DATA_SAMPLE_PATH, "very_easy")
 
     llm = LLM(
         model="Qwen/QwQ-32B",

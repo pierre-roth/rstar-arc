@@ -88,7 +88,7 @@ echo "Conda activated" | tee -a "${local_job_dir}/job_info.log"
 cd ${DIRECTORY}
 
 # Execute the Python application with output redirected to local scratch
-echo "Running: python main.py" | tee -a "${local_job_dir}/job_info.log"
+echo "Running: python bootstrap.py" | tee -a "${local_job_dir}/job_info.log"
 
 # Setting relevant environment variables
 export VLLM_LOGGING_LEVEL=DEBUG
