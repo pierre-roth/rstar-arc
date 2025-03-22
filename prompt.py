@@ -60,7 +60,7 @@ def solve(I):"""
     multiple_example_prompt = f"""Below are {config.num_examples} example tasks with example solutions. They should give you an idea of what is expected."""
 
     ### EXAMPLES ###
-    example_task_1 = ARCTask(config, str(os.path.join(config.data_folder, "6d0aefbc.json")))
+    example_task_1 = ARCTask(config, str(os.path.join(DEFAULT_EXAMPLE_DATA_PATH, "6d0aefbc.json")))
     solution_code_1 = f"""{CODE}
 def solve(I):
     
@@ -76,7 +76,7 @@ def solve(I):
     return O
 {CODE_END}"""
 
-    example_task_2 = ARCTask(config, str(os.path.join(config.data_folder, "1cf80156.json")))
+    example_task_2 = ARCTask(config, str(os.path.join(DEFAULT_EXAMPLE_DATA_PATH, "1cf80156.json")))
     solution_code_2 = f"""{CODE}
 def solve(I):
     # Convert input to numpy array for easier slicing
@@ -101,7 +101,7 @@ def solve(I):
     return O
 {CODE_END}"""
 
-    example_task_3 = ARCTask(config, str(os.path.join(config.data_folder, "00d62c1b.json")))
+    example_task_3 = ARCTask(config, str(os.path.join(DEFAULT_EXAMPLE_DATA_PATH, "00d62c1b.json")))
     solution_code_3 = f"""{CODE}
 def solve(I):
     # Define helper function to find a connected component using BFS
