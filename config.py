@@ -206,15 +206,14 @@ class Config:
         2. Loads and parses the YAML content
         3. Updates the instance with values from the config file
         """
-        config_file = self.config_file
 
         try:
             # Check if file exists at the specified path
-            if not os.path.isfile(os.path.join("configs", config_file)):
-                raise FileNotFoundError(f"Config file not found: {config_file}")
+            if not os.path.isfile(os.path.join("configs", self.config_file)):
+                raise FileNotFoundError(f"Config file not found: {self.config_file}")
 
             # Read and parse the YAML file
-            with open(config_file, 'r') as f:
+            with open(os.path.join("configs", self.config_file), 'r') as f:
                 config_data = yaml.safe_load(f) or {}
 
             # Convert kebab-case keys to snake_case for Python compatibility
@@ -224,7 +223,7 @@ class Config:
             for key, value in config_data.items():
                 if hasattr(self, key):
                     setattr(self, key, value)
-                    logging.debug(f"Loaded from {config_file}: {key}={value}")
+                    logging.debug(f"Loaded from {self.config_file}: {key}={value}")
 
         except Exception as e:
             logging.error(f"Error loading config file: {e}")
