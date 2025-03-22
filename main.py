@@ -6,6 +6,8 @@ from arc_rstar import Solver
 from config import Config
 from utils import setup_logging, load_tasks, batch
 
+logger = logging.getLogger(__name__)
+
 if __name__ == '__main__':
     start_time: datetime = datetime.now()
 
@@ -35,10 +37,10 @@ if __name__ == '__main__':
         outputs = solver.solve(agents)
 
         for output in outputs:
-            print(
+            logger.info(
                 f"Task {output[0].task.name} passed: {any(node.is_terminal() and node.valid() and node.passes_training for node in output)}")
 
-        # logging.debug(outputs)
+        logging.debug(outputs)
 
     end_time: datetime = datetime.now()
 
