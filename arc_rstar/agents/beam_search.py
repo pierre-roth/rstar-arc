@@ -1,7 +1,7 @@
 import logging
 from typing import Any
 
-from vllm.outputs import RequestOutput
+from vllm.outputs import RequestOutput, CompletionOutput
 
 from arc_rstar.agents.node import Node
 from arc_rstar.arc_task.task import ARCTask

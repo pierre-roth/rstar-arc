@@ -1,7 +1,7 @@
 import logging
 from typing import Any
 
-from vllm.outputs import RequestOutput
+from vllm.outputs import RequestOutput, CompletionOutput
 
 from arc_rstar.agents.node import Node
 from arc_rstar.arc_task.task import ARCTask
@@ -20,10 +20,13 @@ class MCTS:
         self.config: Config = config
         self.task = task
         self.root: Node | None = None
-        self.current_node: Node | None = None
-        self.beam_width: int = config.beam_width
-        self.branching_factor: int = config.branching_factor
+        self.current_nodes: list[Node] = []
+        self.candidate_nodes: list[Node] = []
+        self.final_answer_nodes: list[Node] = []
         self.max_depth: int = config.max_depth
+        self.rollout_idx: int = 0
+
+        self.create_root(get_prompt(config, task), task)
 
     def create_root(self, prompt: str, task: ARCTask):
         """Initialize the root node with the given state."""
@@ -75,120 +78,41 @@ class MCTS:
         for current_node in current_nodes:
             if not is_value_only and self.is_ignored_node(current_node):
                 continue
-            partial_solution = self.collect_partial_solution(current_node)
-            prompt = self.prompt_wrap(
-                self.question,
-                partial_solution,
-                self.config
-            )
-            if is_value_only:
-                prompt = {
-                    "prefix": "",
-                    "text": prompt,
-                }
+            prompt = current_node.collect_partial_solution()
             prompts.append(prompt)
 
         return prompts
 
     @staticmethod
     def is_valid_final_answer_node(node: Node) -> bool:
-        if node.is_terminal and node.state["final_answer"] and \
-                node.state["final_answer"] not in [NO_VALID_CHILD, TOO_MANY_STEPS, TOO_MANY_CODE_ERRORS]:
-            return True
-        return False
+        return node.is_terminal() and node.is_valid() and node.passes_training
 
-    def select_next_step(self, outputs=None, from_root=False) -> None:
+    def select_next_step(self, scores: list[float] | None, from_root=False) -> None:
         self.current_nodes = []
-        if outputs is not None:
-            for candidate_node, output in zip(self.candidate_nodes, outputs):
-                candidate_node.value = output.value_estimate if output.value_estimate is not None else 0
+        if scores is not None:
+            for candidate_node, score in zip(self.candidate_nodes, scores):
+                candidate_node.value = score
 
         self.candidate_nodes = sorted(self.candidate_nodes, key=lambda x: x.value, reverse=True)
         self.current_nodes = self.candidate_nodes[:]
 
         for current_node in self.current_nodes[:]:
-            if self.__class__.is_valid_final_answer_node(current_node):
+            if self.is_valid_final_answer_node(current_node):
                 self.final_answer_nodes.append(current_node)
                 self.current_nodes.remove(current_node)
-                self.current_top_num -= 1
-            elif current_node.is_terminal or current_node.depth > self.config.max_depth:
+            elif current_node.is_terminal():
                 self.current_nodes.remove(current_node)
-        self.current_nodes = self.candidate_nodes[:self.current_top_num]
+
+        self.current_nodes = self.candidate_nodes[:self.config.beam_width]
 
     def generate_next_step(self, outputs: list[RequestOutput]) -> None:
         self.candidate_nodes = []
-        for current_node, output in zip(self.current_nodes, outputs):
-            self.current_node = current_node
-            for idx, output in enumerate(output.outputs):
-                if not output.stop_reason: output.stop_reason = ""
-                step_result, parser_result = self.step_unwrap(output.text + output.stop_reason)
-                self.create_child(step_result, parser_result, current_node)
+        for current_node, request_output in zip(self.current_nodes, outputs):
+            for i, output in enumerate(request_output.outputs):
+                current_node.add_child(output.text)
             self.candidate_nodes.extend(current_node.children)
 
-    def create_node(self, parent: Node | None = None) -> Node:
-        return Node(parent=parent, additional_state_keys=self.NODE_KEYS)
-
-    def create_child(self, step_result: str, parser_result: dict[str, str], node: Node) -> None:
-        new_node = self.create_node(parent=node)
-        parent_child_count = len(node.children)
-        new_node.tag = f"{node.tag}.{parent_child_count + 1}"
-        new_node.depth = node.depth + 1
-
-        if parser_result is None:
-            new_node.is_terminal = True
-            new_node.state["text"] = step_result
-            new_node.state["final_answer"] = NO_VALID_CHILD
-        elif parser_result["final_answer"]:
-            new_node.is_terminal = True
-            new_node.state["text"] = step_result
-            new_node.state["final_answer"] = parser_result["final_answer"]
-        elif parser_result["action"]:
-            observation = code_execution(node, parser_result)
-            new_node.state["action"] = parser_result["action"]
-            new_node.state["action_input"] = parser_result["action_input"]
-            new_node.state["observation"] = observation
-            if CODE_END in parser_result["action_input"]:
-                observation = self.obs_wrap(observation)
-                new_node.state["text"] = f"{step_result}{self.config.step_delim}{observation}"
-                if "Error" in observation:
-                    new_node.is_terminal = True
-                    new_node.state["final_answer"] = TOO_MANY_CODE_ERRORS
-            else:
-                new_node.state["text"] = step_result
-
-            if "error" in observation.lower():
-                observation = self.obs_wrap(observation)
-                step_result = step_result + CODE_END if CODE_END not in step_result else step_result
-                new_node.state["text"] = f"{step_result}{self.config.step_delim}{observation}"
-                new_node.is_terminal = True
-                new_node.state["final_answer"] = TOO_MANY_CODE_ERRORS
-
-        else:
-            new_node.state["text"] = step_result
-
-        if not new_node.is_terminal and new_node.depth > self.config.max_depth:
-            new_node.is_terminal = True
-            new_node.state["final_answer"] = TOO_MANY_STEPS
-
-        node.children.append(new_node)
-
-    def get_steps(self):
-        final_answer_states = []
-        for cur_node in self.final_answer_nodes:
-            states = {
-                "question": self.question,
-                "ground_truth": self.ground_truth,
-                "value": cur_node.value,
-                "final_answer": cur_node.state["final_answer"],
-                "solution": self.collect_partial_solution(cur_node),
-                "tag": cur_node.tag,
-            }
-            final_answer_states.append(states)
-
-        solutions = sorted(final_answer_states, key=lambda x: x['value'], reverse=True)
-        return solutions
-
-    def selection(self, from_root=False) -> Optional[Type[MCTSNode]]:
+    def selection(self, from_root=False) -> Node | None:
         if from_root:
             start_node = self.root
         else:
@@ -203,7 +127,7 @@ class MCTS:
             node = next_node
         return None if (node is None or node.is_terminal) else node
 
-    def select_child(self, node: Type[MCTSNode]) -> Optional[Type[MCTSNode]]:
+    def select_child(self, node: Node) -> Node | None:
         best_value = -float("inf")
         best_childs = []
 
@@ -220,71 +144,10 @@ class MCTS:
         # return random.choice(best_childs) if best_childs else None
         return best_childs[0] if best_childs else None
 
-    def expand_node(self, outputs: List[CompletionOutput], node: Type[MCTSNode]) -> None:
+    def expand_node(self, outputs: list[CompletionOutput], node: Node) -> None:
         for idx, output in enumerate(outputs):
             if not output.stop_reason: output.stop_reason = ""
-            step_result, parser_result = self.step_unwrap(output.text + output.stop_reason)
-            self.create_child(step_result, parser_result, node, idx)
-
-    def create_child(self, step_result: str, parser_result: Dict[str, str], node: Type[MCTSNode], idx: int) -> None:
-        new_node = self.create_node(parent=node)
-        parent_child_count = len(node.children)
-        new_node.tag = f"{node.tag}.{parent_child_count + 1}"
-        new_node.depth = node.depth + 1
-
-        if parser_result is None:
-            new_node.is_terminal = True
-            new_node.state["text"] = step_result
-            new_node.state["final_answer"] = NO_VALID_CHILD
-            self.eval_final_answer(new_node)
-        elif parser_result["final_answer"]:
-            new_node.is_terminal = True
-            new_node.state["text"] = step_result
-            new_node.state["final_answer"] = parser_result["final_answer"]
-            self.eval_final_answer(new_node)
-        elif parser_result["action"]:
-            observation = code_execution(node, parser_result)
-            new_node.state["action"] = parser_result["action"]
-            new_node.state["action_input"] = parser_result["action_input"]
-            new_node.state["observation"] = observation
-            if CODE_END in parser_result["action_input"]:
-                observation = self.obs_wrap(observation)
-                new_node.state["text"] = f"{step_result}{self.config.step_delim}{observation}"
-            else:
-                new_node.state["text"] = step_result
-
-            if "error" in observation.lower():
-                new_node.consecutive_errors = node.consecutive_errors + 1
-                if new_node.consecutive_errors >= self.config.errors_threshold:
-                    observation = self.obs_wrap(observation)
-                    step_result = step_result + CODE_END if CODE_END not in step_result else step_result
-                    new_node.state["text"] = f"{step_result}{self.config.step_delim}{observation}"
-                    new_node.is_terminal = True
-                    new_node.state["final_answer"] = TOO_MANY_CODE_ERRORS
-                    self.eval_final_answer(new_node)
-        else:
-            new_node.state["text"] = step_result
-
-        if not new_node.is_terminal and new_node.depth > self.config.max_depth:
-            new_node.is_terminal = True
-            new_node.state["final_answer"] = TOO_MANY_STEPS
-            self.eval_final_answer(new_node)
-
-        node.children.append(new_node)
-
-    def eval_final_answer(self, node: Type[MCTSNode]) -> None:
-        if node.state["final_answer"] in [NO_VALID_CHILD, TOO_MANY_STEPS, TOO_MANY_CODE_ERRORS]:
-            # if the final answer is not valid, update the node with negative reward
-            node.update(self.config.negative_reward)
-            return
-
-        if self.config.is_sampling:
-            final_answer = node.state["final_answer"]
-            correct = is_equiv(self.ground_truth, final_answer)
-            node.update_recursive(self.config.positive_reward if correct else self.config.negative_reward)
-        else:
-            # just append the node to candidate_nodes, will update the value in select_next_step()
-            self.candidate_nodes.append(node)
+            node.add_child(output.text)
 
     def select_next_step(self, outputs=None, from_root=False) -> None:
         self.search_node = self.current_nodes[0] if self.current_nodes else None
@@ -300,7 +163,7 @@ class MCTS:
                 # backup
                 if candidate_node.is_terminal and candidate_node.state["final_answer"]:
                     # for terminal node: update_recursive
-                    if candidate_node.state["final_answer"] in [NO_VALID_CHILD, TOO_MANY_STEPS, TOO_MANY_CODE_ERRORS]:
+                    if candidate_node.state["final_answer"] in []:
                         candidate_node.update(self.config.negative_reward)
                     else:
                         # save intermediate metric
@@ -321,7 +184,7 @@ class MCTS:
         if selection_node is not None:
             self.current_nodes.append(selection_node)
 
-    def generate_next_step(self, outputs: List[RequestOutput]) -> None:
+    def generate_next_step(self, outputs: list[RequestOutput]) -> None:
         self.candidate_nodes = []
         for current_node, output in zip(self.current_nodes, outputs):
             value_estimate = output.value_estimate

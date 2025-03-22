@@ -128,6 +128,8 @@ class Config:
     # MCTS search specific parameters
     c_puct: float = DEFAULT_C_PUCT  # PUCT exploration constant
     num_simulations: int = 8  # Number of simulations to run for MCTS
+    negative_reward: float = -1.0  # Negative reward for invalid/incorrect code
+    positive_reward: float = 1.0  # Positive reward for correct code
 
     ###########################################
     # SLURM AND HARDWARE CONFIGURATION
