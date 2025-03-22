@@ -114,6 +114,7 @@ class Solver:
                 logger.debug(f"----------------- Current Rollout: {rollout} -----------------")
                 logger.debug(f"----------------- Current Step: {step} -----------------")
 
+                # TODO: handle valid_rewards
                 prompts, prompts_span, valid_agents, invalid_agents, expanded_agents, valid_rewards = self.generate_preprocess(
                     agents)
 
@@ -132,11 +133,11 @@ class Solver:
                 prompts, prompts_span = self.value_preprocess(valid_agents)
 
                 scores = self.reward.score(prompts)
-                reconstructed_outputs = [scores[bos_idx: eos_idx] for bos_idx, eos_idx in
+                reconstructed_scores = [scores[bos_idx: eos_idx] for bos_idx, eos_idx in
                                          zip(prompts_span, prompts_span[1:])]
 
                 # selection
-                valid_agents = self.value_postprocess(reconstructed_outputs, valid_agents)
+                valid_agents = self.value_postprocess(reconstructed_scores, valid_agents)
                 # for expanded agents, just do selection step
                 expanded_agents = self.value_postprocess([None] * len(expanded_agents), expanded_agents)
 

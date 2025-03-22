@@ -96,10 +96,10 @@ class BS:
         self.current_nodes = self.candidate_nodes[:]
 
         for current_node in self.current_nodes[:]:
-            if self.__class__.is_valid_final_answer_node(current_node):
+            if self.is_valid_final_answer_node(current_node):
                 self.final_answer_nodes.append(current_node)
                 self.current_nodes.remove(current_node)
-            elif current_node.is_terminal or current_node.depth > self.config.max_depth:
+            elif current_node.is_terminal():
                 self.current_nodes.remove(current_node)
 
         self.current_nodes = self.candidate_nodes[:self.config.beam_width]

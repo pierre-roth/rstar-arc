@@ -281,7 +281,7 @@ class MCTS:
         if self.config.is_sampling:
             final_answer = node.state["final_answer"]
             correct = is_equiv(self.ground_truth, final_answer)
-            node.update_recursive(self.config.positive_reward if correct else self.config.negative_reward, self.root)
+            node.update_recursive(self.config.positive_reward if correct else self.config.negative_reward)
         else:
             # just append the node to candidate_nodes, will update the value in select_next_step()
             self.candidate_nodes.append(node)
@@ -307,7 +307,7 @@ class MCTS:
                         self.record_intermediate_metric(answer=candidate_node.state["final_answer"],
                                                         value_estimate=value_estimate)
 
-                        candidate_node.update_recursive(value_estimate, self.root)
+                        candidate_node.update_recursive(value_estimate)
                 else:
                     # for intermediate node: just update the value
                     if self.config.terminal_sample:

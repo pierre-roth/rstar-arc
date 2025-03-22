@@ -100,13 +100,11 @@ class Node:
         self.__visit_count += 1
         self.__value_sum += value
 
-    def update_recursive(self, value: float, start_node: "Node") -> None:
-        if isinstance(value, list):
-            value = float(value[0])
+    def update_recursive(self, value: float) -> None:
         self.update(value)
-        if self.tag == start_node.tag:
+        if self.tag == "0":
             return
-        self.parent.update_recursive(value, start_node)
+        self.parent.update_recursive(value)
 
     def puct(self) -> float:
         if not self.parent:
