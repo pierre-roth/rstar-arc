@@ -6,7 +6,7 @@
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=4
 #SBATCH --gres=gpu:1
-#SBATCH --constraint='a100'
+#SBATCH --constraint='geforce_rtx_3090'
 ##SBATCH --exclude=tikgpu10,tikgpu[06-09]
 ##SBATCH --nodelist=tikgpu01
 ##SBATCH --partition=gpu
