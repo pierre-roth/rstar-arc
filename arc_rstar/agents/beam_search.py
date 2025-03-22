@@ -1,5 +1,7 @@
 import logging
-from typing import Optional
+from typing import Any
+
+from vllm.outputs import RequestOutput
 
 from arc_rstar.agents.node import Node
 from arc_rstar.arc_task.task import ARCTask
@@ -12,95 +14,99 @@ from prompt import get_prompt
 logger = logging.getLogger(__name__)
 
 
-class BeamSearch:
+class BS:
 
-    def __init__(self, config: Config):
+    def __init__(self, config: Config, task: ARCTask):
         self.config: Config = config
-        self.root: Optional[Node] = None
-        self.beam_width: int = config.beam_width
-        self.branching_factor: int = config.branching_factor
+        self.task = task
+        self.root: Node | None = None
+        self.current_nodes: list[Node] = []
+        self.candidate_nodes: list[Node] = []
+        self.final_answer_nodes: list[Node] = []
         self.max_depth: int = config.max_depth
+        self.rollout_idx: int = 0
 
-    def initialize_root(self, prompt: str, task: ARCTask):
+        self.create_root(get_prompt(config, task), task)
+
+    def create_root(self, prompt: str, task: ARCTask):
         """Initialize the root node with the given state."""
         self.root = Node(self.config)
         self.root.state["text"] = prompt
         self.root.task = task
 
-    def solve(self, task: ARCTask, policy_model: PolicyModel, reward_model: RewardModel) -> (Optional[str], Optional[Node]):
+    def get_nodes(self) -> list[Node]:
+        nodes = []
+        candidates = [self.root]
+        while candidates:
+            node = candidates.pop(0)
+            nodes.append(node)
+            if node.has_children():
+                candidates.extend(node.children)
+        return nodes
 
-        prompt = get_prompt(self.config, task)
-        self.initialize_root(prompt, task)
-
-        logger.info(f"Starting beam search for task: {task.name}")
-        logger.info(
-            f"Beam width: {self.beam_width}, Branching factor: {self.branching_factor}, Max depth: {self.max_depth}")
-        logger.debug(f"Initial prompt: {prompt}")
-
-        # Initialize beam with just the root node
-        beam = [self.root]
-
-        solution_found = False
-        solution_node = None
-
-        for depth in range(self.max_depth):
-            if not beam:
-                logger.info(f"Search stopped: Beam is empty at depth {depth}")
+    def should_generate_next(self) -> bool:
+        need_generate = False
+        for step_node in self.current_nodes:
+            if not step_node.is_terminal():
+                need_generate = True
                 break
+        return need_generate
 
-            logger.info(f"--- Depth {depth + 1}/{self.max_depth} ---")
-            logger.info(f"Current beam size: {len(beam)}")
+    def has_expanded(self) -> bool:
+        if not self.current_nodes:
+            return False
+        step_node = self.current_nodes[0]
+        if step_node.has_children():
+            return True
+        return False
 
-            # Generate candidate next steps for all nodes in the current beam
-            candidates = []
+    def get_rewards(self):
+        rewards = []
+        for node in self.current_nodes:
+            rewards.append(node.reward if node.reward is not None else 0)  # default reward is 0
+        return rewards
 
-            for node in beam:
-                candidates.extend(node.generate_children(policy_model, reward_model))
+    def create_prompts(self, is_value_only: bool = False) -> list[str]:
+        """
+        if is_value_only, the prompt is used to produce value estimate.
+        """
+        prompts = []
+        current_nodes = self.candidate_nodes if is_value_only else self.current_nodes
+        for current_node in current_nodes:
+            if not is_value_only and current_node.is_terminal():
+                continue
+            prompt = current_node.collect_partial_solution()
+            prompts.append(prompt)
 
-            logger.info(f"Total candidates generated: {len(candidates)}")
+        return prompts
 
-            if not candidates:
-                logger.info("Search stopped: No valid candidates generated")
-                break
+    @staticmethod
+    def is_valid_final_answer_node(node: Node) -> bool:
+        if node.is_terminal() and node.is_valid() and node.passes_training:
+            return True
+        return False
 
-            non_terminal_candidates = [c for c in candidates if not c.is_terminal()]
-            terminal_candidates = [c for c in candidates if c.is_terminal()]
+    def select_next_step(self, scores: list[float] | None, from_root=False) -> None:
+        self.current_nodes = []
+        if scores is not None:
+            for candidate_node, score in zip(self.candidate_nodes, scores):
+                candidate_node.value = score
 
-            sorted_non_terminal_candidates = sorted(non_terminal_candidates, key=lambda x: -x.reward)
+        self.candidate_nodes = sorted(self.candidate_nodes, key=lambda x: x.value, reverse=True)
+        self.current_nodes = self.candidate_nodes[:]
 
-            # Select top-k candidates for the next beam
-            beam = sorted_non_terminal_candidates[:self.beam_width]
+        for current_node in self.current_nodes[:]:
+            if self.__class__.is_valid_final_answer_node(current_node):
+                self.final_answer_nodes.append(current_node)
+                self.current_nodes.remove(current_node)
+            elif current_node.is_terminal or current_node.depth > self.config.max_depth:
+                self.current_nodes.remove(current_node)
 
-            # Check if we've found a solution
-            for i, node in enumerate(terminal_candidates):
-                logger.info(f"Checking terminal node {node.tag} against training examples...")
-                try:
-                    code = extract_python_code(node.get_text())
-                    success, _ = task.run_training_examples(code)
-                    if success:
-                        solution_found = True
-                        solution_node = node
-                        logger.info(f"Solution found at node {node.tag} with depth {node.depth}")
-                        logger.info("Stopping search...")
-                        break
-                    else:
-                        logger.info(f"Node {node.tag} failed the training examples ... discarding")
-                except Exception as e:
-                    logger.error(f"Error extracting code from terminal node: {str(e)}")
+        self.current_nodes = self.candidate_nodes[:self.config.beam_width]
 
-            if solution_found:
-                break
-
-            logger.info(f"New beam size after selection: {len(beam)}")
-
-        # If a solution was found, return the code
-        if solution_found:
-            final_code = extract_python_code(solution_node.get_text())
-            logger.info("\nSOLUTION FOUND!")
-            logger.info(f"Total steps: {solution_node.depth}")
-        else:
-            final_code = ""
-            logger.info("\nNO SOLUTION FOUND")
-
-        # Return the best code found
-        return final_code, solution_node
+    def generate_next_step(self, outputs: list[RequestOutput]) -> None:
+        self.candidate_nodes = []
+        for current_node, request_output in zip(self.current_nodes, outputs):
+            for i, output in enumerate(request_output.outputs):
+                current_node.add_child(output.text)
+            self.candidate_nodes.extend(current_node.children)

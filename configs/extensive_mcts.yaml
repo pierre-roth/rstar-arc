@@ -1,20 +1,2 @@
-# Example configuration file for rstar-arc
-# All parameters are optional and will override defaults
-
-# Task parameters
-task-name: "8be77c9e"
-
-# Model parameters
-
-# Search parameters
 search-mode: "mcts"
-max-depth: 7
-num-simulations: 32
-c-puct: 2.0
-branching-factor: 10
-
-# System parameters
-
-
-# Runtime parameters
 log-level: "DEBUG"

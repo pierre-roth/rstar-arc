@@ -1,4 +1,6 @@
 import json
+from typing import Optional, Tuple, List
+import os
 
 from arc_rstar.tools.python_tool import execute_code_with_grid
 from config import Config
@@ -25,26 +27,32 @@ class Grid:
 class Example:
     """Class representing an input-output pair in an ARC task"""
 
-    def __init__(self, input_grid: Grid, output_grid: Grid):
+    def __init__(self, input_grid: Grid, output_grid: Optional[Grid] = None):
         self.input_grid = input_grid
         self.output_grid = output_grid
 
     def __eq__(self, other: "Example"):
-        return self.input_grid == other.input_grid and self.output_grid == other.output_grid
+        input_match = self.input_grid == other.input_grid
+        if self.output_grid is None or other.output_grid is None:
+            return input_match
+        return input_match and self.output_grid == other.output_grid
 
     def __str__(self):
         result = "Input:\n\n"
         result += str(self.input_grid)
-        result += "\n\nOutput: \n\n"
-        result += str(self.output_grid)
+        if self.output_grid:
+            result += "\n\nOutput: \n\n"
+            result += str(self.output_grid)
+        else:
+            result += "\n\nOutput: Not available"
         return result
 
 
 class ARCTask:
-    def __init__(self, path, config: Config):
+    def __init__(self, config: Config, path):
         self.path = path
         self.config = config
-        self.name = path.split("/")[-1].split(".")[0]
+        self.name = os.path.splitext(os.path.basename(path))[0]
         self.training_examples = []
         self.test_examples = []
         self._load_data()
@@ -66,16 +74,22 @@ class ARCTask:
             # Process test data
             if 'test' in data:
                 for item in data['test']:
-                    self.test_examples.append(Example(
-                        input_grid=Grid(item['input']),
-                        output_grid=Grid(item['output'])
-                    ))
+                    # Handle test examples that might not have output
+                    if 'output' in item:
+                        self.test_examples.append(Example(
+                            input_grid=Grid(item['input']),
+                            output_grid=Grid(item['output'])
+                        ))
+                    else:
+                        self.test_examples.append(Example(
+                            input_grid=Grid(item['input'])
+                        ))
+
         except Exception as e:
             print(f"Error loading task data: {e}")
 
     def __eq__(self, other: 'ARCTask'):
         """Check if two ARCTask objects are equal by comparing their train and test data"""
-
         # Compare training data
         if len(self.training_examples) != len(other.training_examples):
             return False
@@ -124,7 +138,7 @@ class ARCTask:
 
         return "\n".join(prompt)
 
-    def run_training_examples(self, code: str) -> (bool, list):
+    def run_training_examples(self, code: str) -> Tuple[bool, List[List[List[int]]]]:
         passed = True
         outputs = []
 
@@ -140,18 +154,30 @@ class ARCTask:
 
         return passed, outputs
 
-    def run_test_examples(self, code: str) -> (bool, list):
+    def run_test_examples(self, code: str) -> Tuple[bool, List[List[List[int]]]]:
         passed = True
         outputs = []
 
         for i, example in enumerate(self.test_examples):
             test_input = example.input_grid.grid
-            expected_output = example.output_grid.grid
-
             actual_output = execute_code_with_grid(code, test_input, self.config.temporary_path)
-
-            if actual_output != expected_output:
-                passed = False
             outputs.append(actual_output)
 
+            # Only check against expected output if it exists
+            if example.output_grid is not None:
+                expected_output = example.output_grid.grid
+                if actual_output != expected_output:
+                    passed = False
+
         return passed, outputs
+
+    def predict_test_examples(self, code: str) -> List[List[List[int]]]:
+        """Generate predictions for test examples without validation."""
+        predictions = []
+
+        for example in self.test_examples:
+            test_input = example.input_grid.grid
+            prediction = execute_code_with_grid(code, test_input, self.config.temporary_path)
+            predictions.append(prediction)
+
+        return predictions

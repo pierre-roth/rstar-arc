@@ -1,20 +1,45 @@
 import logging
-from run_tasks import run_all_tasks, run_single_task
+from datetime import datetime
+
+from arc_rstar.agents import BS, MCTS
+from arc_rstar import Solver
 from config import Config
+from utils import setup_logging, load_tasks, batch
 
 if __name__ == '__main__':
-    # Create config from command line arguments
-    config = Config.from_args()
-    
-    # Debug info
-    logging.info(f"Task name from config: '{config.task_name}'")
-    logging.info(f"Task index from config: {config.task_index}")
-    logging.info(f"Data folder: {config.data_folder}")
-    logging.info(f"Search mode: {config.search_mode}")
+    start_time: datetime = datetime.now()
 
-    if config.all_tasks:
-        run_all_tasks(config)
-    else:
-        run_single_task(config)
+    # Create config object
+    config = Config()
 
-    logging.info("Done!")
+    # Setup logging
+    setup_logging(config)
+
+    # Job start info logging
+    logging.info(f"Starting job with {config}")
+
+    # load all tasks from data folder
+    tasks = load_tasks(config)
+
+    # instantiate the solver
+    solver = Solver(config)
+
+    # select the search agent
+    agent = BS if config.search_mode == "bs" else MCTS
+
+    # process tasks in batches
+    for i, task_batch in enumerate(batch(tasks, config.batch_size)):
+        logging.info(f"Solving batch {i} of {len(task_batch)} tasks")
+        agents = [agent(config, task) for task in task_batch]
+
+        outputs = solver.solve(agents)
+
+        for output in outputs:
+            print(
+                f"Task {output[0].task.name} passed: {any(node.is_terminal() and node.valid() and node.passes_training for node in output)}")
+
+        # logging.debug(outputs)
+
+    end_time: datetime = datetime.now()
+
+    logging.info(f"DONE! Total time taken: {end_time - start_time}")

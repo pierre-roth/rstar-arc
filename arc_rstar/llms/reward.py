@@ -1,47 +1,33 @@
 import logging
-from random import random
+from vllm import LLM, SamplingParams, RequestOutput
 
-from vllm import LLM
-
-from arc_rstar.agents.node import Node
-from config import Config
+from config import Config, STEP_END, CODE_END
 
 logger = logging.getLogger(__name__)
 
 
 class RewardModel:
-    def __init__(self, config: Config, terminal_guided=False):
+    def __init__(self, config: Config):
         self.config = config
-        self.llm = None
-        self.tg = terminal_guided
-        self.is_initialized = False
 
-    def init_llm(self):
-        if self.is_initialized or self.tg:
-            return
+    def init(self):
+        """Initialize the language model."""
 
-        self.llm = LLM(
-            model=self.config.reward_model,
-            download_dir=self.config.reward_model_dir,
-            tensor_parallel_size=self.config.gpus,
-            dtype=self.config.dtype
-        )
+        logger.info("Initializing reward model ...")
 
-        self.is_initialized = True
+        logger.info("Reward model initialized.")
 
-    # the score function is used to evaluate the quality of a node
-    # the value is a float between -1 and 1
-    def score(self, node: Node):
-        if self.tg:
-            # In terminal-guided mode, just return random score
-            score = random() * 2 - 1
+    def score(self, prompts: list[str]) -> list[float]:
+        """
+        Generate completions for a given list of prompts
 
-            logger.debug(f"PPM (terminal-guided): generated score for node {node.tag}: {score:.4f}")
+        Args:
+            prompts: the list of prompts to generate completions for
 
-            return score
+        Returns:
+            List of floats
+        """
 
-        raise NotImplementedError
+        # TODO: add if value_func block if reward model code is implemented
 
-        # sampling_params = SamplingParams(temperature=self.config.temperature)
-        # return self.llm.generate(node, sampling_params=sampling_params)
-
+        return [0.0] * len(prompts)

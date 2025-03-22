@@ -1,80 +1,146 @@
 import logging
 import os
 from typing import Any
+import json
 
-from arc_rstar.agents import BeamSearch, MCTS
-from arc_rstar.arc_task.task import ARCTask
+from vllm.outputs import RequestOutput
+
+from pebble import ProcessPool
+
+from arc_rstar.agents import BS, MCTS
 from arc_rstar.llms import PolicyModel, RewardModel
-from config import Config, CODE_END, STEP_END, TERMINAL_SUCCESS, TERMINAL_FAILURE
+from config import Config, TIMEOUT_SECONDS
 
 logger = logging.getLogger(__name__)
+
+Agent = BS | MCTS
 
 
 class Solver:
     def __init__(self, config: Config):
-        self.config = config
+        self.config: Config = config
+
         self.policy = PolicyModel(config)
-        self.reward = RewardModel(config, terminal_guided=True)
-        self.policy.init_llm()  # Initialize the policy model
-        self.reward.init_llm()  # Initialize the reward model
+        self.reward = RewardModel(config)
 
-    def load_task(self, task_path: str) -> ARCTask:
-        """Load an ARC task from the given path."""
-        # Create ArcTask from JSON file
-        task = ARCTask(task_path, self.config)
-        logger.info(f"Loaded task: {task_path}")
-        return task
+        self.policy.init()  # Initialize the policy model
+        self.reward.init()  # Initialize the reward model
 
-    def solve(self, agent: BeamSearch | MCTS, task_path: str = None) -> dict[str, Any]:
-        # Load the task if a path is provided
-        task = self.load_task(task_path)
+    @staticmethod
+    def processor(agent: Agent, output: list[RequestOutput]) -> Agent:
+        agent.generate_next_step(output)
+        return agent
 
-        # Run the search algorithm
-        logger.info(f"Starting {self.config.search_mode} search...")
+    @staticmethod
+    def selector(agent: Agent, score: list[float]) -> Agent:
+        agent.select_next_step(score)
+        return agent
 
-        final_code, final_node = agent.solve(task, self.policy, self.reward)
+    @staticmethod
+    def generate_preprocess(agents):
+        prompts = []
+        rewards = []
+        prompts_span = [0]
+        valid_agents = []
+        invalid_agents = []
+        expanded_agents = []
 
-        logger.info(f"Search completed! Final code: {final_code}")
-
-        if final_code is not None:
-            success, outputs = task.run_test_examples(final_code)
-
-            result = {
-                "success": success,
-                "code": final_code,
-                "outputs": outputs
-            }
-
-            if success:
-                if final_node is not None:
-                    final_node.terminal_reason = TERMINAL_SUCCESS
-
-                output_path = os.path.join(self.config.output_dir, f"detailed_logs", f"job_{self.config.job_id}",
-                                           f"{task.name}_solution.py")
-
-                try:
-                    with open(output_path, 'w') as f:
-                        f.write(final_code.replace(CODE_END, '').replace(STEP_END, '').replace('\n\n', '\n'))
-                except Exception as e:
-                    logger.error(f"Error saving Python solution code to {output_path}: {e}")
-
-                logger.info(f"Python solution code saved to {output_path}")
+        for agent in agents:
+            if agent.should_generate_next():
+                if agent.has_expanded():
+                    expanded_agents.append(agent)
+                else:
+                    agent_prompts = agent.create_prompts()
+                    rewards.extend(agent.get_rewards())
+                    prompts.extend(agent_prompts)
+                    prompts_span.append(prompts_span[-1] + len(agent_prompts))
+                    valid_agents.append(agent)
             else:
-                if final_node is not None:
-                    final_node.terminal_reason = TERMINAL_FAILURE
+                invalid_agents.append(agent)
+        return prompts, prompts_span, valid_agents, invalid_agents, expanded_agents, rewards
 
-            logger.info(f"Search completed! Solution found: {result['success']}")
-        else:
-            result = {
-                "success": False,
-                "code": None,
-                "outputs": None
-            }
+    def generate_postprocess(self, outputs: list[list[RequestOutput]], valid_agents: list[Agent]) -> list[Agent]:
+        post_agents = []
 
-        # Print the final tree if in debug mode
-        if self.config.log_level == logging.DEBUG and final_node is not None:
-            logger.debug(f"Saving tree to file...")
-            agent.root.save_to_file()
-            logger.debug(f"Tree saved to file!")
+        with ProcessPool(max_workers=min(len(valid_agents), self.config.cpus - 1)) as pool:
+            future = pool.map(self.__class__.processor, valid_agents, outputs, timeout=TIMEOUT_SECONDS)
+            iterator = future.result()
 
-        return result
+        while True:
+            try:
+                result = next(iterator)
+                post_agents.append(result)
+            except StopIteration:
+                break
+            except Exception as error:
+                logger.error(f"Exception while generating postprocess: {error}")
+                post_agents.append(None)
+
+        # update agents
+        updated_agents = [
+            post_agent if post_agent is not None else valid_agent
+            for post_agent, valid_agent in zip(post_agents, valid_agents)
+        ]
+        return updated_agents
+
+    @staticmethod
+    def value_preprocess(agents: list[Agent]) -> (list[str], list[int]):
+        prompts = []
+        prompts_span = [0]
+        for agent in agents:
+            agent_prompts = agent.create_prompts(is_value_only=True)
+            prompts.extend(agent_prompts)
+            prompts_span.append(prompts_span[-1] + len(agent_prompts))
+        return prompts, prompts_span
+
+    def value_postprocess(self, scores, valid_agents) -> list[Agent]:
+        for agent, score in zip(valid_agents, scores):
+            if agent is not None:
+                self.selector(agent, score)
+        return valid_agents
+
+    def output(self, agents: list[Agent]):
+        return [agent.get_nodes() for agent in agents]
+
+    def solve(self, agents: list[Agent]):
+
+        for rollout in range(self.config.num_simulations):
+            # Initialize the initial search starting point of agents, and the initial point of each rollout is root
+            for agent in agents:
+                agent.select_next_step(from_root=True)
+                agent.rollout_idx = rollout
+
+            for step in range(self.config.max_depth):
+                logger.debug(f"----------------- Current Rollout: {rollout} -----------------")
+                logger.debug(f"----------------- Current Step: {step} -----------------")
+
+                prompts, prompts_span, valid_agents, invalid_agents, expanded_agents, valid_rewards = self.generate_preprocess(
+                    agents)
+
+                if not valid_agents + expanded_agents:
+                    break
+
+                outputs = self.policy.generate(prompts)
+
+                reconstructed_outputs = [outputs[bos_idx: eos_idx] for bos_idx, eos_idx in
+                                         zip(prompts_span, prompts_span[1:])]
+
+                # process output and run python code
+                valid_agents = self.generate_postprocess(reconstructed_outputs, valid_agents)
+
+                # step evaluation
+                prompts, prompts_span = self.value_preprocess(valid_agents)
+
+                scores = self.reward.score(prompts)
+                reconstructed_outputs = [scores[bos_idx: eos_idx] for bos_idx, eos_idx in
+                                         zip(prompts_span, prompts_span[1:])]
+
+                # selection
+                valid_agents = self.value_postprocess(reconstructed_outputs, valid_agents)
+                # for expanded agents, just do selection step
+                expanded_agents = self.value_postprocess([None] * len(expanded_agents), expanded_agents)
+
+                # keep all agents
+                agents = valid_agents + invalid_agents + expanded_agents
+
+        return self.output(agents)

@@ -1,5 +1,5 @@
-from arc_rstar.agents.node import Node
-from arc_rstar.agents.beam_search import BeamSearch
-from arc_rstar.agents.mcts import MCTS
+from .node import Node
+from .beam_search import BS
+from .mcts import MCTS
 
-__all__ = ['Node', 'BeamSearch', 'MCTS']
+__all__ = ["Node", "BS", "MCTS"]

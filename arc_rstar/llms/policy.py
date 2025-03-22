@@ -1,10 +1,5 @@
 import logging
-
-from vllm import LLM, SamplingParams
-import os
-import random
-import time
-from vllm.utils import get_open_port  # Using vLLM's built-in utility
+from vllm import LLM, SamplingParams, RequestOutput
 
 from config import Config, STEP_END, CODE_END
 
@@ -15,13 +10,10 @@ class PolicyModel:
     def __init__(self, config: Config):
         self.config = config
         self.llm = None
-        self.is_initialized = False
-        self.engine_id = f"vllm_engine_{config.job_id}_{int(time.time())}"
+        self.sampling_params = None
 
-    def init_llm(self):
+    def init(self):
         """Initialize the language model."""
-        if self.is_initialized:
-            return
 
         logger.info("Initializing policy model ...")
 
@@ -33,40 +25,28 @@ class PolicyModel:
             max_model_len=self.config.max_model_len,
         )
 
-        self.is_initialized = True
-
-        logger.info("Policy model initialized.")
-
-    def generate(self, prompt: str) -> list[str]:
-        """
-        Generate completions for the given prompt.
-
-        Args:
-            prompt: The prompt to generate completions for
-
-        Returns:
-            List of completions
-        """
-        if not self.is_initialized:
-            self.init_llm()
-
-        # Generate completions with default params
-        sampling_params = SamplingParams(
+        self.sampling_params = SamplingParams(
             temperature=self.config.policy_temperature,
             top_p=self.config.top_p,
             max_tokens=self.config.max_tokens,
-            n=self.config.branching_factor,  # Number of candidates to generate
+            n=self.config.branching_factor,
             stop=[STEP_END, CODE_END],
             include_stop_str_in_output=True
         )
 
-        request_outputs = self.llm.generate([prompt], sampling_params=sampling_params)
+        logger.info("Policy model initialized.")
 
-        request_output = request_outputs[0]
-        completion_outputs = request_output.outputs
+    def generate(self, prompts: list[str]) -> list[RequestOutput]:
+        """
+        Generate completions for a given list of prompts
 
-        outputs = [completion_output.text for completion_output in completion_outputs]
+        Args:
+            prompts: the list of prompts to generate completions for
 
-        # Return the completions
-        return outputs
+        Returns:
+            List of RequestOutput objects
+        """
 
+        request_outputs = self.llm.generate(prompts, sampling_params=self.sampling_params)
+
+        return request_outputs

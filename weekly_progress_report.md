@@ -86,7 +86,12 @@
     too)
   - Decided on trying to fine tune the initial policy LLM with data generated from a thinking model (QwQ-32B)
   - Started writing code to generate bootstrapping data for the policy LLM
-  -
+  - Started with the major code refactoring: (days of planning and work)
+    - Complete ground up code rewrite inspired by rStar-Math codebase
+    - cleaner code
+    - batching requests to the LLM
+    - using multiprocessing for node verification
+    -
 
 - **Issues and Questions**:
   - (To be updated soon)

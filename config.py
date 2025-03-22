@@ -4,9 +4,8 @@ import argparse
 import logging
 import os
 import sys
-import time
-from dataclasses import dataclass, fields
-from typing import Optional, Any, get_type_hints
+from dataclasses import dataclass
+from typing import Optional
 
 import yaml
 
@@ -16,18 +15,18 @@ import yaml
 
 ETH_USERNAME = "piroth"
 
-# Default paths for models, outputs and data
-# These paths are used if not overridden by command line or config file
-NET_SCRATCH_PATH = f"/itet-stor/{ETH_USERNAME}/net_scratch"  # network scratch directory
+NET_SCRATCH_PATH = f"/itet-stor/{ETH_USERNAME}/net_scratch"  # net-scratch directory
 LOCAL_SCRATCH_PATH = f"/scratch/{ETH_USERNAME}"  # local scratch directory
+HOME_PATH = f"/home/{ETH_USERNAME}"  # home directory
 
-DEFAULT_DATA_SAMPLE_PATH = "data_sample"  # Root folder for ARC data
-DEFAULT_TRAINING_DATA_PATH = "data_sample/training"  # Training data location
-DEFAULT_EVALUATION_DATA_PATH = "data_sample/evaluation"  # Evaluation data location
+DEFAULT_DATA_FOLDER = f"{HOME_PATH}/rstar-arc/data_sample"  # path for sample data in git repo
+DEFAULT_TRAINING_DATA_PATH = f"{DEFAULT_DATA_FOLDER}/training"  # Training data location
+DEFAULT_EVALUATION_DATA_PATH = f"{DEFAULT_DATA_FOLDER}/evaluation"  # Evaluation data location
+DEFAULT_DATA_PATH = f"{DEFAULT_DATA_FOLDER}/default"
+DEFAULT_EXAMPLE_DATA_PATH = f"{DEFAULT_DATA_FOLDER}/examples"  # path to prompt examples
 
-# Default model names - identifies which language models to use
-DEFAULT_POLICY_LLM = "Qwen/Qwen2.5-Coder-7B-Instruct"  # Policy model (generates reasoning steps)
-DEFAULT_REWARD_LLM = "Qwen/Qwen2.5-Coder-7B-Instruct"  # Reward Model (evaluates steps)
+DEFAULT_POLICY_LLM = "Qwen/Qwen2.5-Coder-7B-Instruct"  # Policy model
+DEFAULT_REWARD_LLM = "Qwen/Qwen2.5-Coder-7B-Instruct"  # Reward Model
 
 # Default hyperparameters
 DEFAULT_MAX_TOKENS = 1024  # Maximum tokens for model generation
@@ -44,7 +43,7 @@ DEFAULT_C_PUCT = 2.0  # PUCT exploration constant for MCTS
 
 # Code execution timeout settings
 TIMEOUT_SECONDS = 15  # Maximum time allowed for code execution
-MEMORY_LIMIT_MB = 256
+MEMORY_LIMIT_MB = 128  # Maximum memory allowed for each code execution process
 MEMORY_LIMIT_BYTES = MEMORY_LIMIT_MB * 1024 * 1024
 
 # Terminal node constants
@@ -58,11 +57,7 @@ TERMINAL_CODE_END = "Code end marker"
 # OUTPUT FORMAT MARKERS
 ###########################################
 # These tags are used to parse the model's output into structured sections
-
-# Step output markers
 STEP_END = "<end_of_step>"  # Marks the end of a reasoning step
-
-# Code section markers
 CODE = "<code>"  # Begins a code section
 CODE_END = "<end_of_code>"  # Ends a code section
 
@@ -71,13 +66,10 @@ CODE_END = "<end_of_code>"  # Ends a code section
 class Config:
     """
     Unified configuration class for rStar-ARC
-    
-    This class handles all configuration aspects of the rStar-ARC system:
-    - Loading config from YAML files and command-line arguments
-    - Providing default values
-    - Processing and validating configuration options
-    """
 
+    This class handles all configuration aspects of the rStar-ARC system,
+    loading configuration from a YAML file and providing default values.
+    """
     ###########################################
     # APPLICATION PARAMETERS
     ###########################################
@@ -97,7 +89,7 @@ class Config:
     reward_model: str = DEFAULT_REWARD_LLM  # Reward Model for evaluating steps
 
     # general model configuration
-    model_base_path: str = os.path.join(NET_SCRATCH_PATH, "models")  # Base path where models are stored
+    model_base_path: str = os.path.join(LOCAL_SCRATCH_PATH, "models")  # Base path where models are stored
 
     # Policy model configuration
     max_tokens: int = DEFAULT_MAX_TOKENS  # Maximum tokens for generation
@@ -112,14 +104,9 @@ class Config:
     # Reward model configuration
 
     ###########################################
-    # GENERATION PARAMETERS
-    ###########################################
-    max_depth: int = DEFAULT_MAX_DEPTH  # Maximum number of reasoning steps
-
-    ###########################################
     # DATA CONFIGURATION
     ###########################################
-    data_folder: str = DEFAULT_TRAINING_DATA_PATH  # Path to ARC task data
+    data_folder: str = DEFAULT_DATA_PATH  # Path to ARC task data
     task_index: int = 1  # Index of task to run (1-based indexing)
     task_name: str = ""  # Name of specific task (overrides task_index if provided)
     all_tasks: bool = False  # Whether to run all tasks in data_folder
@@ -128,6 +115,11 @@ class Config:
     # SEARCH ALGORITHM PARAMETERS
     ###########################################
     search_mode: str = "bs"  # Search algorithm - "bs" for beam search, "mcts" for Monte Carlo Tree Search
+    value_func: bool = False  # Whether to use terminal-guided search
+    is_sampling: bool = True  # whether to sample probabilistically to find multiple solutions
+
+    max_depth: int = DEFAULT_MAX_DEPTH  # Maximum number of reasoning steps
+    batch_size: int = -1  # Batch size for parallel inference (-1 means all at once, otherwise batch size)
 
     # BEAM search specific parameters
     beam_width: int = DEFAULT_BEAM_WIDTH  # Number of top-scoring beams to track
@@ -140,8 +132,11 @@ class Config:
     ###########################################
     # SLURM AND HARDWARE CONFIGURATION
     ###########################################
-    gpus: int = int(os.getenv("SLURM_GPUS", 1))  # Number of GPUs available (read from environment variable)
-    job_id: int = int(os.getenv("SLURM_JOB_ID", 0))  # N
+    job_id: int = int(os.getenv("SLURM_JOB_ID", 0))  # Job ID (read from environment variable)
+    cpus: int = int(os.getenv("SLURM_CPUS_PER_TASK", 4))  # Number of CPUs available
+    gpus: int = int(os.getenv("SLURM_GPUS", 1))  # Number of GPUs available
+    mem: int = int(os.getenv("SLURM_MEM_PER_NODE", 128))  # Memory per node
+    nodelist: str = os.getenv("SLURM_JOB_NODELIST", "")  # List of nodes assigned to the job
 
     ###########################################
     # OUTPUT CONFIGURATION
@@ -157,12 +152,8 @@ class Config:
     # SLURM PARAMETERS
     ###########################################
     # These parameters are used by the SLURM script, not directly by the Python application
-    mem: Optional[str] = None  # Memory allocation for SLURM
-    cpus: Optional[int] = None  # Number of CPUs for SLURM
     partition: Optional[str] = None  # SLURM partition to use
     exclude: Optional[str] = None  # Nodes to exclude
-    nodelist: Optional[str] = None  # Specific nodes to use
-    constraint: Optional[str] = None  # Hardware constraints
     time: Optional[str] = None  # Time limit for job
 
     ###########################################
@@ -171,299 +162,67 @@ class Config:
     # These are calculated automatically in __post_init__
     policy_model_dir: Optional[str] = None  # Full path to policy model
     reward_model_dir: Optional[str] = None  # Full path to reward model
+    temporary_path: Optional[str] = None  # Temporary path for job
 
     def __post_init__(self):
         """
-        Initialize computed fields after instance creation
-        
+        Initialize computed fields and load configuration from file if provided
+
         This method runs automatically after the dataclass is instantiated,
-        calculating derived values based on the provided configuration.
+        loading configuration from a file (if specified) and calculating derived values.
         """
-        # Set computed model directories based on model_base_path
+        # Parse command line arguments to get config file path
+        parser = argparse.ArgumentParser(description='rSTAR meets ARC')
+        parser.add_argument('--config-file', type=str, help='Path to YAML config file')
+        args, _ = parser.parse_known_args()
+
+        # If config file path is provided via command line, update the config_file field
+        if args.config_file:
+            self.config_file = args.config_file
+
+        # Load configuration from file
+        self._load_from_file()
+
+        # Set computed model directories and other derived values
         self.policy_model_dir = os.path.join(self.model_base_path, "policy")
         self.reward_model_dir = os.path.join(self.model_base_path, "reward")
         self.temporary_path = os.path.join(LOCAL_SCRATCH_PATH, f"job_{self.job_id}")
         self.numeric_log_level = getattr(logging, self.log_level.upper(), logging.DEBUG)
 
-        # Setup logging
-        self.setup_logging()
+        # Handle search mode specific settings
+        if self.search_mode == "bs":
+            self.num_simulations = 1
+        elif self.search_mode == "mcts":
+            self.beam_width = 1
 
-    @classmethod
-    def from_args(cls, args: Optional[list[str]] = None) -> Config:
-        """
-        Create a configuration from command line arguments
-        
-        This method:
-        1. Parses command line arguments
-        2. Loads configuration from YAML file (if specified)
-        3. Overrides file settings with command line arguments
-        
-        Args:
-            args: Command line arguments to parse (uses sys.argv if None)
-            
-        Returns:
-            Configured Config instance
-        """
-        # Create and use argument parser
-        parser = cls._create_argument_parser()
-        parsed_args = parser.parse_args(args)
-        args_dict = vars(parsed_args)
-
-        # Start with defaults from the dataclass
-        config_data = {field.name: field.default for field in fields(cls)
-                       if field.name not in ['policy_model_dir', 'reward_model_dir']}
-
-        # First load from config file if provided (overrides defaults)
-        if args_dict.get("config_file"):
-            yaml_config = cls._load_from_file(args_dict["config_file"])
-            logging.debug(f"YAML config loaded: {yaml_config}")
-            config_data.update(yaml_config)
-
-        # Get a list of arguments that were explicitly provided on the command line
-        provided_args = set()
-        if args:
-            for i, arg in enumerate(args):
-                if arg.startswith('--'):
-                    arg_name = arg[2:].replace('-', '_')  # Convert from kebab-case to snake_case
-                    provided_args.add(arg_name)
-
-        # Then override with command line arguments (highest priority), but only if explicitly provided
-        for key, value in args_dict.items():
-            if key == "config_file":
-                continue  # Skip config_file, we've already processed it
-
-            # Only include values from arguments that were explicitly provided
-            if key in provided_args and key in cls.__annotations__:
-                logging.debug(f"Setting from CLI args: {key}={value}")
-                config_data[key] = value
-
-        logging.debug(f"Final config:")
-        for key in sorted(config_data.keys()):
-            logging.debug(f"  {key}: {config_data[key]}")
-
-        # Create and return config instance with the merged settings
-        return cls(**config_data)
-
-    @classmethod
-    def _create_argument_parser(cls) -> argparse.ArgumentParser:
-        """
-        Create an argument parser with all configuration options
-        
-        This method dynamically builds a command-line parser based on the
-        Config class fields, converting them to appropriate CLI arguments.
-        
-        Returns:
-            Configured ArgumentParser instance
-        """
-        parser = argparse.ArgumentParser(description='rSTAR meets ARC')
-
-        # Get type information for all fields using Python's typing system
-        hints = get_type_hints(cls)
-
-        # Process each field in the dataclass to create corresponding CLI arguments
-        for field_obj in fields(cls):
-            field_name = field_obj.name
-            field_def = field_obj
-
-            # Skip private fields and computed fields
-            if (field_name.startswith('_') or
-                    field_name in ['policy_model_dir', 'reward_model_dir']):
-                continue
-
-            # Convert snake_case field names to kebab-case for CLI flags
-            flag_name = f"--{field_name.replace('_', '-')}"
-
-            # Get the field's type and default value
-            field_type = hints.get(field_name, Any)
-            help_text = field_def.metadata.get('help', '')
-
-            # Handle Optional types by extracting the inner type
-            if hasattr(field_type, '__origin__') and field_type.__origin__ is Optional:
-                field_type = field_type.__args__[0]
-
-            # Add argument to parser based on its type
-            if field_type is bool:
-                # For boolean args, add both --flag and --no-flag options
-                # This makes the CLI intent explicit for boolean values
-                group = parser.add_mutually_exclusive_group()
-
-                # The --flag option sets the value to True
-                group.add_argument(
-                    flag_name,
-                    action='store_true',
-                    dest=field_name,
-                    help=f"{help_text} (enable)"
-                )
-
-                # The --no-flag option sets the value to False
-                group.add_argument(
-                    f"--no-{field_name.replace('_', '-')}",
-                    action='store_false',
-                    dest=field_name,
-                    help=f"{help_text} (disable)"
-                )
-            else:
-                # All other argument types
-                parser.add_argument(
-                    flag_name,
-                    # Use the field's type, defaulting to str for Any or unknown types
-                    type=field_type if field_type is not Any else str,
-                    dest=field_name,
-                    default=None,  # This is fine - we're checking if the arg was provided in from_args
-                    help=help_text,
-                    required=False
-                )
-
-        return parser
-
-    @staticmethod
-    def _load_from_file(config_file: str) -> dict[str, Any]:
+    def _load_from_file(self):
         """
         Load configuration settings from a YAML file
-        
+
         This method:
         1. Checks if the file exists (in current directory or configs/ subfolder)
         2. Loads and parses the YAML content
-        3. Converts kebab-case keys to snake_case for Python compatibility
-        
-        Args:
-            config_file: Path to the YAML configuration file
-            
-        Returns:
-            Dictionary of configuration values
+        3. Updates the instance with values from the config file
         """
+        config_file = self.config_file
+
         try:
             # Check if file exists at the specified path
-            if not os.path.exists(config_file):
-                # If not, try looking in the config/ directory
-                if os.path.exists(f"configs/{config_file}"):
-                    config_file = f"configs/{config_file}"
-                else:
-                    logging.warning(f"Config file not found: {config_file}")
-                    return {}
+            if not os.path.isfile(os.path.join("configs", config_file)):
+                raise FileNotFoundError(f"Config file not found: {config_file}")
 
             # Read and parse the YAML file
             with open(config_file, 'r') as f:
                 config_data = yaml.safe_load(f) or {}
 
-            # Convert kebab-case keys (like "model-name") to snake_case (like "model_name")
-            # This ensures compatibility with Python variable naming conventions
-            result = {k.replace('-', '_'): v for k, v in config_data.items()}
+            # Convert kebab-case keys to snake_case for Python compatibility
+            config_data = {k.replace('-', '_'): v for k, v in config_data.items()}
 
-            # Debug the loaded configuration
-            logging.debug(f"Loaded from {config_file}:")
-            for k, v in result.items():
-                logging.debug(f"  {k}: {v}")
-
-            return result
+            # Update instance attributes with values from config file
+            for key, value in config_data.items():
+                if hasattr(self, key):
+                    setattr(self, key, value)
+                    logging.debug(f"Loaded from {config_file}: {key}={value}")
 
         except Exception as e:
-            logging.error(f"Error loading configs file: {e}")
-            return {}
-
-    def setup_logging(self):
-        """
-        Set up the logging configuration based on settings.
-        
-        This configures the Python logging system according to the configuration settings,
-        creating file and console handlers with appropriate formats.
-        """
-
-        # Create logger
-        logger = logging.getLogger()
-        logger.setLevel(self.numeric_log_level)
-
-        # Clear any existing handlers
-        for handler in logger.handlers[:]:
-            logger.removeHandler(handler)
-
-        log_format_str = '{asctime} | {levelname:<8} | {name}:{lineno} | {message}'
-
-        formatter = logging.Formatter(log_format_str, style='{')
-
-        console_handler = logging.StreamHandler(sys.stdout)
-        console_handler.setFormatter(formatter)
-        logger.addHandler(console_handler)
-
-        # Log some basic information at startup
-        logging.info(f"rStar-ARC initialized with job ID: {self.job_id}")
-        logging.info(f"Search mode: {self.search_mode}")
-    
-    def list_task_files(self) -> list[str]:
-        """
-        List all JSON task files in the configured data folder
-        
-        This method:
-        1. Verifies the data directory exists
-        2. Finds all JSON files in the directory
-        3. Sorts them alphabetically (case-insensitive)
-        
-        Returns:
-            List of JSON filenames (without directory path)
-            
-        Raises:
-            SystemExit: If directory doesn't exist or no JSON files are found
-        """
-        # Verify the data directory exists
-        if not os.path.isdir(self.data_folder):
-            logging.error(f"Directory '{self.data_folder}' not found. Please check your ARC data directory.")
-            sys.exit(1)
-
-        # Get all JSON files and sort them alphabetically (case-insensitive)
-        files = sorted([f for f in os.listdir(self.data_folder) if f.endswith('.json')],
-                       key=lambda x: x.lower())
-
-        # Ensure we found at least one file
-        if not files:
-            logging.error(f"No JSON files found in directory '{self.data_folder}'.")
-            sys.exit(1)
-
-        logging.info(f"Found {len(files)} JSON files in '{self.data_folder}'")
-
-        return files
-
-    def select_task_file(self) -> str:
-        """
-        Select a specific ARC task file based on configuration
-        
-        This method determines which task file to use based on:
-        1. First, specific task name if provided (task_name)
-        2. Otherwise, task index if provided (task_index)
-        
-        Returns:
-            Full path to the selected task file
-            
-        Raises:
-            SystemExit: If the requested task file doesn't exist
-        """
-        # Debug info
-        logging.debug(f"In select_task_file: task_name='{self.task_name}', task_index={self.task_index}")
-
-        # PRIORITY 1: If a specific task name is provided, use it directly
-        if self.task_name and self.task_name.strip():
-            # Convert task name to filename with .json extension
-            task_file = f"{self.task_name}.json"
-            task_path = os.path.join(self.data_folder, task_file)
-
-            # Verify the file exists
-            if not os.path.exists(task_path):
-                logging.error(f"Task file '{task_path}' not found.")
-                sys.exit(1)
-
-            logging.info(f"Using task file: {task_path}")
-            return task_path
-
-        # PRIORITY 2: Use task_index to select from available files
-        files = self.list_task_files()
-
-        # Verify index is in valid range (1-based indexing)
-        if self.task_index < 1 or self.task_index > len(files):
-            logging.error(f"Task index {self.task_index} is out of range (1-{len(files)})")
-            sys.exit(1)
-
-        # Select the file by index (adjusting for 0-based list indexing)
-        chosen_file = os.path.join(self.data_folder, files[self.task_index - 1])
-
-        logging.info(f"Selected file by index: {chosen_file}")
-
-        return chosen_file
+            logging.error(f"Error loading config file: {e}")

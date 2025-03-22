@@ -3,7 +3,7 @@ import os.path
 from vllm import LLM, SamplingParams
 
 from prompt import get_bootstrap_prompt
-from config import Config, DEFAULT_DATA_SAMPLE_PATH, LOCAL_SCRATCH_PATH
+from config import Config, DEFAULT_DATA_FOLDER, LOCAL_SCRATCH_PATH
 from arc_rstar.arc_task.task import ARCTask
 
 # The idea is to use QwQ-32B to generate a lot of potential solutions (all steps in one go)
@@ -12,7 +12,7 @@ if __name__ == '__main__':
     # Create config from command line arguments
     config = Config.from_args()
 
-    config.data_folder = os.path.join(DEFAULT_DATA_SAMPLE_PATH, "very_easy")
+    config.data_folder = os.path.join(DEFAULT_DATA_FOLDER, "very_easy")
 
     llm = LLM(
         model="Qwen/QwQ-32B",
@@ -31,7 +31,7 @@ if __name__ == '__main__':
 
     for file_name in os.listdir(config.data_folder):
         task_path = os.path.join(config.data_folder, file_name)
-        task = ARCTask(task_path, config)
+        task = ARCTask(config, task_path)
 
         prompt = get_bootstrap_prompt(config, task)
 

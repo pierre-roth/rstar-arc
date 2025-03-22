@@ -85,8 +85,6 @@ fi
   echo "Detailed job data will be saved to: ${final_job_dir}"
 } | tee "${local_job_dir}/job_info.log"
 
-# Log GPU information
-nvidia-smi > "${local_job_dir}/gpu_info.log" 2>&1
 
 # Activate conda environment
 [[ -f /itet-stor/${ETH_USERNAME}/net_scratch/conda/bin/conda ]] && eval "$(/itet-stor/${ETH_USERNAME}/net_scratch/conda/bin/conda shell.bash hook)"
