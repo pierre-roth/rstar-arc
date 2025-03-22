@@ -86,7 +86,7 @@ class BS:
             return True
         return False
 
-    def select_next_step(self, scores: list[float] | None, from_root=False) -> None:
+    def select_next_step(self, scores: list[float] | None = None, from_root=False) -> None:
         self.current_nodes = []
         if scores is not None:
             for candidate_node, score in zip(self.candidate_nodes, scores):
