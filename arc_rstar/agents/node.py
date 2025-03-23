@@ -33,7 +33,7 @@ class Node:
 
         self.prior_probability: float = 1.0  # Prior probability from policy model (used for PUCT)
 
-        self.terminal_reason: str | None = None  # Reason for terminal node (if applicable)
+        self.terminal_reason: str | None = None  # Reason for terminal node (will be set when terminal)
         self.valid: bool | None = None  # Will be set to True/False when validated
         self.passes_training: bool = False  # Whether the node passes training examples
 

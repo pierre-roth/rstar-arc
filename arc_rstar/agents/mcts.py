@@ -93,23 +93,25 @@ class MCTS:
         if from_root:
             start_node = self.root
         else:
-            start_node = self.search_node
+            start_node = self.current_nodes[0]
+
         # select a child node
         node = start_node
-        if node is None: return None
-        if node.has_children() or node.is_terminal:
-            next_node = self.select_child(node)  # To encourage exploration, select from non-terminal children
-            if next_node is None:  # if None，it mean all children are terminal
-                node.is_terminal = True
-            node = next_node
-        return None if (node is None or node.is_terminal) else node
+        if node is None:
+            return None
+
+        next_node = None
+        if node.has_children():
+            next_node = self.select_child(node)
+
+        return next_node
 
     def select_child(self, node: Node) -> Node | None:
         best_value = -float("inf")
         best_children = []
 
         for child in node.children:
-            if child.is_terminal:
+            if child.is_terminal():
                 continue
             puct_value = child.puct()
             if puct_value == best_value:
