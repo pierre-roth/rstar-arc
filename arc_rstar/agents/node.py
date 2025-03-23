@@ -1,11 +1,10 @@
 import logging
-import math
-import os
+
 import numpy as np
 
+from arc_rstar.arc_task.task import ARCTask
 from arc_rstar.tools.python_tool import extract_python_code
 from config import Config, CODE_END, TERMINAL_CODE_END, TERMINAL_MAX_DEPTH, TERMINAL_INVALID
-from arc_rstar.arc_task.task import ARCTask
 
 logger = logging.getLogger(__name__)
 

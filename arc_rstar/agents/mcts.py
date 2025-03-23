@@ -1,14 +1,10 @@
 import logging
-from typing import Any
 
-from vllm.outputs import RequestOutput, CompletionOutput
+from vllm.outputs import RequestOutput
 
 from arc_rstar.agents.node import Node
 from arc_rstar.arc_task.task import ARCTask
-from arc_rstar.llms.policy import PolicyModel
-from arc_rstar.llms.reward import RewardModel
-from arc_rstar.tools.python_tool import extract_python_code
-from config import Config
+from config import Config, TERMINAL_INVALID
 from prompt import get_prompt
 
 logger = logging.getLogger(__name__)
@@ -48,20 +44,24 @@ class MCTS:
         return nodes
 
     def should_generate_next(self) -> bool:
-        need_generate = False
-        for step_node in self.current_nodes:
-            if not step_node.is_terminal():
-                need_generate = True
-                break
+        """Check if we need to generate for current nodes."""
+        if not self.current_nodes:
+            logger.debug("No current nodes to generate from")
+            return False
+
+        # Check if any current node is non-terminal
+        need_generate = any(not node.is_terminal() for node in self.current_nodes)
+        logger.debug(f"Need generation: {need_generate} "
+                     f"(nodes: {len(self.current_nodes)})")
         return need_generate
 
     def has_expanded(self) -> bool:
+        """Check if current nodes have already been expanded."""
         if not self.current_nodes:
             return False
-        step_node = self.current_nodes[0]
-        if step_node.has_children():
-            return True
-        return False
+
+        # Check if all current nodes have children
+        return all(node.has_children() for node in self.current_nodes)
 
     def get_rewards(self):
         rewards = []
@@ -90,70 +90,107 @@ class MCTS:
         return False
 
     def selection(self, from_root=False) -> Node | None:
+        """Select a node for expansion following MCTS tree policy."""
+        # Determine starting point for selection
         if from_root:
-            start_node = self.root
+            current = self.root
         else:
-            start_node = self.current_nodes[0] if self.current_nodes else self.root
+            if not self.current_nodes:
+                return None
+            current = self.current_nodes[0]
 
-        # select a child node
-        node = start_node
-        if node is None:
+        # If the node is terminal, nothing to select
+        if current.is_terminal():
             return None
 
         # If node has no children, return the node itself for expansion
-        if not node.has_children():
-            return node
+        if not current.has_children():
+            return current
 
-        next_node = self.select_child(node)
-        return next_node if next_node is not None else node
+        # Otherwise, select child according to tree policy
+        best_child = self.select_child(current)
+        if best_child is None:
+            # If no valid children, mark node as terminal
+            current.terminal_reason = TERMINAL_INVALID
+            return None
+
+        # Recursively select from best child
+        return best_child if not best_child.is_terminal() else None
 
     def select_child(self, node: Node) -> Node | None:
-        best_value = -float("inf")
+        """Select the best child of a node according to PUCT formula."""
+        best_value = float("-inf")
         best_children = []
 
-        for child in node.children:
-            if child.is_terminal():
-                continue
+        # Only consider non-terminal children
+        valid_children = [child for child in node.children if not child.is_terminal()]
+        if not valid_children:
+            return None
+
+        for child in valid_children:
             puct_value = child.puct()
-            if puct_value == best_value:
-                best_children.append(child)
-            elif puct_value > best_value:
+            if puct_value > best_value:
                 best_value = puct_value
                 best_children = [child]
+            elif puct_value == best_value:
+                best_children.append(child)
 
-        # return random.choice(best_children) if best_children else None
+        # Return the best child (first one if multiple have same value)
         return best_children[0] if best_children else None
 
-    def expand_node(self, outputs: list[CompletionOutput], node: Node) -> None:
-        for idx, output in enumerate(outputs):
-            node.add_child(output.text)
-
     def select_next_step(self, scores: list[float] | None = None, from_root=False) -> None:
-        self.current_nodes = []
+        """Process evaluations and select next nodes for expansion."""
+        # Process candidate nodes if scores are provided
         if scores:
             for candidate_node, score in zip(self.candidate_nodes, scores):
-                # backup
+                # Update node statistics
                 if candidate_node.is_terminal():
-                    # for terminal node: update_recursive
-                    if not candidate_node.is_valid() or not candidate_node.passes_training:
-                        candidate_node.update(self.config.negative_reward)
+                    # For terminal nodes with solutions
+                    if candidate_node.passes_training:
+                        candidate_node.update_recursive(self.config.positive_reward)
                     else:
-                        candidate_node.update(self.config.positive_reward)
+                        candidate_node.update_recursive(self.config.negative_reward)
                 else:
+                    # For non-terminal nodes
                     candidate_node.update(score)
 
+                # Store valid solutions
                 if self.is_valid_final_answer_node(candidate_node):
                     self.final_answer_nodes.append(candidate_node)
 
-        selection_node = self.selection(from_root=from_root)
-        # Always add the selection_node to current_nodes, even if it's the root
-        if selection_node is not None:
-            self.current_nodes.append(selection_node)
-        elif from_root:  # If selection returned None but we're starting from root
-            self.current_nodes.append(self.root)  # Add root node as fallback
+        # Clear current nodes for new selection
+        self.current_nodes = []
+
+        # Initialize search from appropriate node
+        if from_root:
+            # For new rollout, start from root
+            if not self.root.is_terminal():
+                self.current_nodes.append(self.root)
+        else:
+            # Select next node based on tree search
+            next_node = self.selection(from_root=False)
+            if next_node:
+                self.current_nodes.append(next_node)
+
+        # Log current selection state
+        logger.debug(f"Selected {len(self.current_nodes)} nodes for next step")
 
     def generate_next_step(self, outputs: list[RequestOutput]) -> None:
+        """Generate and add child nodes from model outputs."""
         self.candidate_nodes = []
+
+        # For each current node, expand with corresponding outputs
         for current_node, request_output in zip(self.current_nodes, outputs):
-            self.expand_node(request_output.outputs, current_node)
-            self.candidate_nodes.extend(current_node.children)
+            logger.debug(f"Expanding node at depth {current_node.depth} "
+                         f"with {len(request_output.outputs)} outputs")
+
+            # Create children from outputs
+            new_children = []
+            for output in request_output.outputs:
+                child = current_node.add_child(output.text)
+                new_children.append(child)
+
+            # Add all new children to candidate nodes for evaluation
+            self.candidate_nodes.extend(new_children)
+
+        logger.debug(f"Added {len(self.candidate_nodes)} candidate nodes")

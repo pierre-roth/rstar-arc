@@ -1,8 +1,8 @@
 import logging
 from datetime import datetime
 
-from arc_rstar.agents import BS, MCTS
 from arc_rstar import Solver
+from arc_rstar.agents import BS, MCTS
 from config import Config
 from utils import setup_logging, load_tasks, batch, save_nodes
 

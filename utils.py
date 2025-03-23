@@ -1,10 +1,10 @@
+import json
 import logging
 import os
 import sys
-import json
 
-from arc_rstar.arc_task.task import ARCTask
 from arc_rstar.agents import Node
+from arc_rstar.arc_task.task import ARCTask
 from config import Config
 
 logger = logging.getLogger(__name__)

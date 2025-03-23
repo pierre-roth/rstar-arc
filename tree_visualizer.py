@@ -1,10 +1,12 @@
 import os
-import igraph
 import webbrowser
+
+import igraph
 import plotly.graph_objects as go
-from utils import load_nodes
+
 from arc_rstar.tools.python_tool import extract_python_code
 from config import STEP_END, CODE_END
+from utils import load_nodes
 
 
 def build_graph_from_nodes(nodes):
@@ -61,7 +63,7 @@ def build_graph_from_nodes(nodes):
     return G
 
 
-def visualize_tree(json_filename):
+def visualize_tree(json_filename, open=True):
     # Load nodes from file.
     nodes = load_nodes(json_filename)
     if not nodes:
@@ -137,7 +139,8 @@ def visualize_tree(json_filename):
     json_dir = os.path.dirname(os.path.abspath(json_filename))
     output_html = os.path.join(json_dir, f"tree_{nodes[0].task}_visualization.html")
     fig.write_html(output_html)
-    webbrowser.open('file://' + os.path.realpath(output_html))
+    if open:
+        webbrowser.open('file://' + os.path.realpath(output_html))
 
 
 if __name__ == "__main__":
@@ -146,7 +149,8 @@ if __name__ == "__main__":
     if os.path.isfile(input_path):
         visualize_tree(input_path)
     else:
+        open_all = input("Do you want to open all visualizations? (y/n): ")
         # visualize tree for every json file in the directory
         for filename in os.listdir(input_path):
             if filename.endswith(".json"):
-                visualize_tree(os.path.join(input_path, filename))
+                visualize_tree(os.path.join(input_path, filename), open=open_all.strip().lower() == "y")

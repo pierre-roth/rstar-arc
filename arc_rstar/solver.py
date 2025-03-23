@@ -1,11 +1,7 @@
 import logging
-import os
-from typing import Any
-import json
-
-from vllm.outputs import RequestOutput
 
 from pebble import ProcessPool
+from vllm.outputs import RequestOutput
 
 from arc_rstar.agents import BS, MCTS
 from arc_rstar.llms import PolicyModel, RewardModel
@@ -136,7 +132,7 @@ class Solver:
 
                 scores = self.reward.score(prompts)
                 reconstructed_scores = [scores[bos_idx: eos_idx] for bos_idx, eos_idx in
-                                         zip(prompts_span, prompts_span[1:])]
+                                        zip(prompts_span, prompts_span[1:])]
 
                 # selection
                 valid_agents = self.value_postprocess(reconstructed_scores, valid_agents)
