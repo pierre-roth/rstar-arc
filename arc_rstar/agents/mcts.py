@@ -93,18 +93,19 @@ class MCTS:
         if from_root:
             start_node = self.root
         else:
-            start_node = self.current_nodes[0]
+            start_node = self.current_nodes[0] if self.current_nodes else self.root
 
         # select a child node
         node = start_node
         if node is None:
             return None
 
-        next_node = None
-        if node.has_children():
-            next_node = self.select_child(node)
+        # If node has no children, return the node itself for expansion
+        if not node.has_children():
+            return node
 
-        return next_node
+        next_node = self.select_child(node)
+        return next_node if next_node is not None else node
 
     def select_child(self, node: Node) -> Node | None:
         best_value = -float("inf")
@@ -145,8 +146,11 @@ class MCTS:
                     self.final_answer_nodes.append(candidate_node)
 
         selection_node = self.selection(from_root=from_root)
+        # Always add the selection_node to current_nodes, even if it's the root
         if selection_node is not None:
             self.current_nodes.append(selection_node)
+        elif from_root:  # If selection returned None but we're starting from root
+            self.current_nodes.append(self.root)  # Add root node as fallback
 
     def generate_next_step(self, outputs: list[RequestOutput]) -> None:
         self.candidate_nodes = []
