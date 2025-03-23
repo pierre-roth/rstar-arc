@@ -45,7 +45,7 @@ if __name__ == '__main__':
             save_nodes(config, nodelist)
 
         # save summary of the batch
-        save_summary(outputs)
+        save_summary(config, outputs, i)
 
     end_time: datetime = datetime.now()
 

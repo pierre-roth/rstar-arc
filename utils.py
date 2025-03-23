@@ -5,7 +5,8 @@ import sys
 
 from arc_rstar.agents import Node
 from arc_rstar.arc_task.task import ARCTask
-from config import Config
+from arc_rstar.tools.python_tool import extract_python_code
+from config import Config, STEP_END, CODE_END
 
 logger = logging.getLogger(__name__)
 
@@ -202,6 +203,36 @@ def load_nodes(filename):
     return list(nodes_by_tag.values())
 
 
-def save_summary(node_lists: list[list[Node]]):
-    # TODO implement this method
-    pass
+def save_summary(config, node_lists: list[list[Node]], batch_number: int):
+    result = []
+    for nodelist in node_lists:
+
+        task_result = []
+
+        valid_final_answer_nodes = [node for node in nodelist if node.is_valid_final_answer_node()]
+
+        correct_answer_nodes = []
+        for node in valid_final_answer_nodes:
+            code = extract_python_code(node.collect_partial_solution())
+            error, passed, outputs = node.task.run_test_examples(code)
+            if passed:
+                correct_answer_nodes.append(node)
+
+        # sort nodes by solution length
+        correct_answer_nodes.sort(key=lambda node: len(node.collect_partial_solution().split()))
+
+        if correct_answer_nodes:
+            task_result.append(
+                f"### Found {len(correct_answer_nodes)} correct solutions for task {correct_answer_nodes[0].task.name} ###")
+            for i, node in enumerate(correct_answer_nodes):
+                task_result.append(f"## Solution {i + 1} ##")
+                task_result.append(
+                    extract_python_code(node.collect_partial_solution()).replace(STEP_END, f"# {STEP_END}\n").replace(
+                        CODE_END, "") + "\n")
+        else:
+            task_result.append(f"### No correct solutions found for task {nodelist[0].task.name} ###")
+
+        result.append("\n".join(task_result))
+
+    with open(os.path.join(config.temporary_path, f"summary_{batch_number + 1}.py"), "w") as f:
+        f.write("\n\n\n\n".join(result))
