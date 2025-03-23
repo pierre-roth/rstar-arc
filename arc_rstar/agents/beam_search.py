@@ -34,8 +34,6 @@ class BS:
         self.root.state["text"] = prompt
         self.root.task = task
 
-        self.current_nodes.append(self.root)
-
     def get_nodes(self) -> list[Node]:
         nodes = []
         candidates = [self.root]
@@ -89,22 +87,39 @@ class BS:
         return False
 
     def select_next_step(self, scores: list[float] | None = None, from_root=False) -> None:
-        self.current_nodes = []
+        """
+        Select the next nodes to expand in the beam search.
+
+        Args:
+            scores: Optional scores for candidate nodes
+            from_root: If True, restart search from the root node
+        """
+        # Special case: reset search to start from root
+        if from_root:
+            self.current_nodes = [self.root]
+            self.candidate_nodes = [self.root]
+            return
+
+        # Regular case: process candidate nodes from previous expansion
         if scores is not None:
+            # Update candidate nodes with their scores
             for candidate_node, score in zip(self.candidate_nodes, scores):
                 candidate_node.value = score
 
+        # Sort all candidates by their value (highest first)
         self.candidate_nodes = sorted(self.candidate_nodes, key=lambda x: x.value, reverse=True)
-        self.current_nodes = self.candidate_nodes[:]
 
-        for current_node in self.current_nodes[:]:
-            if self.is_valid_final_answer_node(current_node):
-                self.final_answer_nodes.append(current_node)
-                self.current_nodes.remove(current_node)
-            elif current_node.is_terminal():
-                self.current_nodes.remove(current_node)
+        # Process terminal nodes: collect successful solutions
+        for node in self.candidate_nodes:
+            if self.is_valid_final_answer_node(node):
+                self.final_answer_nodes.append(node)
 
-        self.current_nodes = self.candidate_nodes[:self.config.beam_width]
+        # Keep only non-terminal nodes for expansion
+        non_terminal_nodes = [node for node in self.candidate_nodes
+                              if not node.is_terminal()]
+
+        # Select top-k non-terminal nodes as the beam for next expansion
+        self.current_nodes = non_terminal_nodes[:self.config.beam_width]
 
     def generate_next_step(self, outputs: list[RequestOutput]) -> None:
         self.candidate_nodes = []
