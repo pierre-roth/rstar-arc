@@ -1,6 +1,7 @@
 import logging
 
 from vllm.outputs import RequestOutput
+from random import choice
 
 from arc_rstar.agents.node import Node
 from arc_rstar.arc_task.task import ARCTask
@@ -117,7 +118,8 @@ class MCTS:
         # Recursively select from best child
         return best_child if not best_child.is_terminal() else None
 
-    def select_child(self, node: Node) -> Node | None:
+    @staticmethod
+    def select_child(node: Node) -> Node | None:
         """Select the best child of a node according to PUCT formula."""
         best_value = float("-inf")
         best_children = []
@@ -135,8 +137,8 @@ class MCTS:
             elif puct_value == best_value:
                 best_children.append(child)
 
-        # Return the best child (first one if multiple have same value)
-        return best_children[0] if best_children else None
+        # return a random child if multiple children have the same value
+        return choice(best_children) if best_children else None
 
     def select_next_step(self, scores: list[float] | None = None, from_root=False) -> None:
         """Process evaluations and select next nodes for expansion."""
@@ -163,9 +165,7 @@ class MCTS:
 
         # Initialize search from appropriate node
         if from_root:
-            # For new rollout, start from root
-            if not self.root.is_terminal():
-                self.current_nodes.append(self.root)
+            self.current_nodes.append(self.root)
         else:
             # Select next node based on tree search
             next_node = self.selection(from_root=False)
@@ -181,8 +181,7 @@ class MCTS:
 
         # For each current node, expand with corresponding outputs
         for current_node, request_output in zip(self.current_nodes, outputs):
-            logger.debug(f"Expanding node at depth {current_node.depth} "
-                         f"with {len(request_output.outputs)} outputs")
+            logger.debug(f"Expanding node at depth {current_node.depth} with {len(request_output.outputs)} children")
 
             # Create children from outputs
             new_children = []
@@ -193,4 +192,4 @@ class MCTS:
             # Add all new children to candidate nodes for evaluation
             self.candidate_nodes.extend(new_children)
 
-        logger.debug(f"Added {len(self.candidate_nodes)} candidate nodes")
+        logger.debug(f"Added {len(self.candidate_nodes)} candidate nodes (i.e. children)")
