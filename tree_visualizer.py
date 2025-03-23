@@ -151,4 +151,12 @@ def visualize_tree(json_filename):
 
 
 if __name__ == "__main__":
-    visualize_tree(input("Enter the path to the JSON file: "))
+    input_path = input("Enter the path to the JSON file: ")
+
+    if os.path.isfile(input_path):
+        visualize_tree(input_path)
+    else:
+        # visualize tree for every json file in the directory
+        for filename in os.listdir(input_path):
+            if filename.endswith(".json"):
+                visualize_tree(os.path.join(input_path, filename))
