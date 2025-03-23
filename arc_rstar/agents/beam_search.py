@@ -33,6 +33,7 @@ class BS:
         self.root = Node(self.config)
         self.root.state["text"] = prompt
         self.root.task = task
+        self.root.valid = True
 
         self.candidate_nodes.append(self.root)
 
