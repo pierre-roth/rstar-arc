@@ -123,6 +123,8 @@ class Solver:
 
                 outputs = self.policy.generate(prompts)
 
+                logger.debug(f"Number of outputs: {len(outputs)}")
+
                 reconstructed_outputs = [outputs[bos_idx: eos_idx] for bos_idx, eos_idx in
                                          zip(prompts_span, prompts_span[1:])]
 
