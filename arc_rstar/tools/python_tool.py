@@ -10,40 +10,8 @@ from config import TIMEOUT_SECONDS, CODE, CODE_END, STEP_END, MEMORY_LIMIT_BYTES
 logger = logging.getLogger(__name__)
 
 
-def remove_thinking_blocks(text):
-    """
-    Remove all <think>...</think> blocks from text.
-
-    Args:
-        text (str): Text that may contain thinking blocks
-
-    Returns:
-        str: Text with thinking blocks removed
-    """
-    import re
-
-    original_length = 0
-    original_length = len(text)
-    num_blocks = len(re.findall(r'<think>', text))
-    logger.debug(f"Found {num_blocks} thinking blocks in text of length {original_length}")
-
-    # Pattern to match <think>...</think> blocks, including nested content
-    pattern = r'<think>.*?</think>'
-
-    # Replace all thinking blocks with empty string
-    cleaned_text = re.sub(pattern, '', text, flags=re.DOTALL)
-
-    new_length = len(cleaned_text)
-    logger.debug(f"Removed {original_length - new_length} characters worth of thinking blocks")
-
-    return cleaned_text
-
-
 def extract_python_code(text):
     """Extract Python code from text after the last CODE marker, removing any CODE_END or STEP_END markers."""
-
-    # try removing thinking tokens before running the code
-    text = remove_thinking_blocks(text)
 
     logger.debug(f"Extracting code from text (which has {len(text)} characters)")
 
