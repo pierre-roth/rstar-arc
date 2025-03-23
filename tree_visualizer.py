@@ -1,1 +1,111 @@
-# TODO write new tree visualizer
+import igraph
+import plotly.graph_objects as go
+from utils import load_nodes
+
+
+def build_graph_from_nodes(nodes):
+    """
+    Create an igraph.Graph from a list of nodes.
+    It assumes that each node has a unique 'tag' attribute and that the
+    'parent' attribute is set (None for root) so that an edge exists from the parent
+    to the child.
+    """
+    # Create a list of tags for vertices.
+    tags = [node.tag for node in nodes]
+    tag_to_index = {tag: idx for idx, tag in enumerate(tags)}
+
+    # Build edge list: add an edge from parent to node for each node with a parent.
+    edges = []
+    for node in nodes:
+        if node.parent is not None:
+            # Use the parent's tag and this node's tag to get indices.
+            parent_idx = tag_to_index[node.parent.tag]
+            child_idx = tag_to_index[node.tag]
+            edges.append((parent_idx, child_idx))
+
+    # Create a directed graph.
+    G = igraph.Graph(directed=True)
+    G.add_vertices(len(tags))
+    G.vs["label"] = tags
+    if edges:
+        G.add_edges(edges)
+    return G
+
+
+def visualize_tree(json_filename):
+    # Load nodes from file.
+    nodes = load_nodes(json_filename)
+    if not nodes:
+        print("No nodes loaded.")
+        return
+
+    # Build graph from nodes.
+    G = build_graph_from_nodes(nodes)
+
+    # Compute a tree layout. The Reingold-Tilford layout is appropriate for trees.
+    layout = G.layout("rt")
+    positions = {idx: layout[idx] for idx in range(len(G.vs))}
+    # Use the y-coordinate to get a maximum for reversing y (so that the root is on top).
+    Y = [layout[idx][1] for idx in range(len(G.vs))]
+    M = max(Y)
+
+    # Build lists for node and edge coordinates.
+    Xn = [positions[idx][0] for idx in positions]
+    Yn = [2 * M - positions[idx][1] for idx in positions]
+
+    # Build edge coordinates.
+    Xe = []
+    Ye = []
+    for edge in G.es:
+        start, end = edge.tuple
+        Xe += [positions[start][0], positions[end][0], None]
+        Ye += [2 * M - positions[start][1], 2 * M - positions[end][1], None]
+
+    # Create annotations: label each node with its tag.
+    annotations = []
+    for idx in positions:
+        annotations.append(dict(
+            text=G.vs[idx]["label"],
+            x=positions[idx][0],
+            y=2 * M - positions[idx][1],
+            xref='x', yref='y',
+            font=dict(color='rgb(250,250,250)', size=10),
+            showarrow=False
+        ))
+
+    # Create Plotly figure.
+    fig = go.Figure()
+    # Add edge traces.
+    fig.add_trace(go.Scatter(x=Xe,
+                             y=Ye,
+                             mode='lines',
+                             line=dict(color='rgb(210,210,210)', width=1),
+                             hoverinfo='none'))
+    # Add node traces.
+    fig.add_trace(go.Scatter(x=Xn,
+                             y=Yn,
+                             mode='markers',
+                             marker=dict(symbol='circle-dot',
+                                         size=18,
+                                         color='#6175c1',
+                                         line=dict(color='rgb(50,50,50)', width=1)
+                                         ),
+                             text=G.vs["label"],
+                             hoverinfo='text',
+                             opacity=0.8))
+    # Layout settings.
+    axis = dict(showline=False, zeroline=False, showgrid=False, showticklabels=False)
+    fig.update_layout(title='Tree Visualization',
+                      annotations=annotations,
+                      font_size=12,
+                      showlegend=False,
+                      xaxis=axis,
+                      yaxis=axis,
+                      margin=dict(l=40, r=40, b=85, t=100),
+                      hovermode='closest',
+                      plot_bgcolor='rgb(248,248,248)')
+    fig.show()
+
+
+if __name__ == "__main__":
+    visualize_tree(input("Enter the path to the json file: "))
