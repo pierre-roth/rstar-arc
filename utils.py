@@ -110,11 +110,36 @@ def make_serializable(obj):
         return str(obj)
 
 
+def make_serializable(obj):
+    """
+    Recursively convert an object into something JSON serializable.
+    - For basic types (str, int, float, bool, None) returns the object as is.
+    - For lists/tuples, converts each element.
+    - For dicts, converts keys and values.
+    - For objects with __dict__, returns a dict of its public attributes.
+    - Otherwise, returns the string representation.
+    """
+    if isinstance(obj, (str, int, float, bool)) or obj is None:
+        return obj
+    elif isinstance(obj, list):
+        return [make_serializable(item) for item in obj]
+    elif isinstance(obj, tuple):
+        # JSON doesn't support tuples directly, but they'll be converted to lists
+        return [make_serializable(item) for item in obj]
+    elif isinstance(obj, dict):
+        return {make_serializable(key): make_serializable(value) for key, value in obj.items()}
+    elif hasattr(obj, '__dict__'):
+        return {key: make_serializable(val) for key, val in obj.__dict__.items() if not key.startswith("_")}
+    else:
+        return str(obj)
+
+
 def serialize_nodes(nodes):
     """
     Convert a list of nodes to a dictionary keyed by node tag.
     For each node, we save all public attributes. For the 'parent' attribute,
-    we save parent's tag (or None); for 'children', we save a list of child tags.
+    we save parent's tag (or None); for 'children', we save a list of child tags;
+    for 'task', we save the task name (if available).
     """
     data = {}
     for node in nodes:
@@ -126,8 +151,10 @@ def serialize_nodes(nodes):
                 node_data[key] = [child.tag for child in value]
             elif key == "task":
                 node_data[key] = value.name if value is not None else None
+            elif key == "config":
+                node_data[key] = value.config_file if value is not None else None
             else:
-                node_data[key] = make_serializable(value)  # assume it's JSON serializable
+                node_data[key] = make_serializable(value)
         data[node.tag] = node_data
     return data
 
@@ -135,8 +162,9 @@ def serialize_nodes(nodes):
 def save_nodes(config, nodes):
     """
     Save a list of nodes to a JSON file.
+    The file name is built using the task name from the first node.
     """
-    task_name = nodes[0].task.name
+    task_name = nodes[0].task.name  # assumes that nodes list is non-empty
     filename = os.path.join(config.temporary_path, f"{task_name}.json")
     data = serialize_nodes(nodes)
     with open(filename, 'w') as f:
@@ -165,13 +193,10 @@ def load_nodes(filename):
 
     # Second pass: fix up parent and children references.
     for node in nodes_by_tag.values():
-        # Update parent pointer
         if node.__dict__.get("parent") is not None:
             parent_tag = node.__dict__["parent"]
             node.__dict__["parent"] = nodes_by_tag.get(parent_tag)
-        # Update children list
         if "children" in node.__dict__:
             node.__dict__["children"] = [nodes_by_tag.get(child_tag) for child_tag in node.__dict__["children"]]
 
-    # Return the list of nodes
     return list(nodes_by_tag.values())
