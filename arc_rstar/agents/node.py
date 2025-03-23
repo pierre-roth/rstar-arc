@@ -141,8 +141,13 @@ class Node:
 
             # Just check if execution works without errors
             # The function returns (bool, list) but we only check if it returns not None
-            result = self.task.run_training_examples(code)
-            self.valid = result is not None
+            error, passed, output = self.task.run_training_examples(code)
+
+            if error:
+                self.valid = False
+            else:
+                self.valid = True
+                self.passes_training = passed
 
             if not self.valid:
                 logger.debug("Error detected while running training examples - node is invalid")

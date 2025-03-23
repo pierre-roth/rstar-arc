@@ -1,5 +1,5 @@
 import json
-from typing import Optional, Tuple, List
+from typing import Optional, Tuple, List, Any
 import os
 
 from arc_rstar.tools.python_tool import execute_code_with_grid
@@ -138,7 +138,8 @@ class ARCTask:
 
         return "\n".join(prompt)
 
-    def run_training_examples(self, code: str) -> Tuple[bool, List[List[List[int]]]]:
+    def run_training_examples(self, code: str) -> tuple[bool, bool, list[list[int]]]:
+        error = False
         passed = True
         outputs = []
 
@@ -148,36 +149,53 @@ class ARCTask:
 
             actual_output = execute_code_with_grid(code, test_input, self.config.temporary_path)
 
+            if actual_output is None:
+                error = True
+                passed = False
+                break
+
             if actual_output != expected_output:
                 passed = False
+
             outputs.append(actual_output)
 
-        return passed, outputs
+        return error, passed, outputs
 
-    def run_test_examples(self, code: str) -> Tuple[bool, List[List[List[int]]]]:
+    def run_test_examples(self, code: str) -> tuple[bool, bool, list[list[int]]]:
+        error = False
         passed = True
         outputs = []
 
         for i, example in enumerate(self.test_examples):
             test_input = example.input_grid.grid
+            expected_output = example.output_grid.grid
+
             actual_output = execute_code_with_grid(code, test_input, self.config.temporary_path)
+
+            if actual_output is None:
+                error = True
+                passed = False
+                break
+
+            if actual_output != expected_output:
+                passed = False
+
             outputs.append(actual_output)
 
-            # Only check against expected output if it exists
-            if example.output_grid is not None:
-                expected_output = example.output_grid.grid
-                if actual_output != expected_output:
-                    passed = False
+        return error, passed, outputs
 
-        return passed, outputs
-
-    def predict_test_examples(self, code: str) -> List[List[List[int]]]:
+    def predict_test_examples(self, code: str) -> tuple[bool, list[list[int]]]:
         """Generate predictions for test examples without validation."""
+        err = False
         predictions = []
 
-        for example in self.test_examples:
+        for i, example in enumerate(self.test_examples):
             test_input = example.input_grid.grid
-            prediction = execute_code_with_grid(code, test_input, self.config.temporary_path)
-            predictions.append(prediction)
+            output = execute_code_with_grid(code, test_input, self.config.temporary_path)
+            if output is None:
+                err = True
+                break
+            else:
+                predictions.append(output)
 
-        return predictions
+        return err, predictions
