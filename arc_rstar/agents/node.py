@@ -32,9 +32,10 @@ class Node:
 
         self.prior_probability: float = 1.0  # Prior probability from policy model (used for PUCT)
 
+        self.terminal: bool | None = None  # Will be set to True/False when terminal
         self.terminal_reason: str | None = None  # Reason for terminal node (will be set when terminal)
         self.valid: bool | None = None  # Will be set to True/False when validated
-        self.passes_training: bool = False  # Whether the node passes training examples
+        self.passes_training: bool | None = None  # Whether the node passes training examples
 
         self.task: ARCTask | None = None  # Reference to the task used for validation
 
@@ -45,25 +46,25 @@ class Node:
     def is_terminal(self) -> bool:
         """Check if this is a terminal node."""
 
-        # If terminal reason is already set, return True
-        if self.terminal_reason is not None:
-            return True
+        if self.terminal is not None:
+            return self.terminal
 
         # Check if ended with code end marker
         if self.state["text"].strip().endswith(CODE_END):
             self.terminal_reason = TERMINAL_CODE_END
-            return True
+            self.terminal = True
 
         # Check if maximum depth reached
         if self.depth >= self.config.max_depth:
             self.terminal_reason = TERMINAL_MAX_DEPTH
-            return True
+            self.terminal = True
 
         if not self.valid:
             self.terminal_reason = TERMINAL_INVALID
-            return True
+            self.terminal = True
 
-        return False
+        self.terminal = False
+        return self.terminal
 
     def add_child(self, text: str) -> "Node":
         """
@@ -83,7 +84,7 @@ class Node:
         # Validate the child node upon creation
         child.is_valid()
 
-        logger.debug(f"Added child node {child.tag} (valid: {child.is_valid()}) with text: {text}")
+        logger.debug(f"Added child node {child.tag} to tree.")
 
         return child
 
@@ -131,7 +132,7 @@ class Node:
         if self.valid is not None:
             return self.valid
 
-        logger.debug(f"Validating node at depth {self.depth} (terminal: {self.is_terminal()})")
+        logger.debug(f"Validating node at depth {self.depth}.")
 
         try:
             # Try to extract the code - for non-terminal nodes this might fail
@@ -152,14 +153,14 @@ class Node:
                 self.valid = True
                 self.passes_training = passed
 
-            if not self.valid:
-                logger.debug("Error detected while running training examples - node is invalid")
-            else:
-                logger.debug("No errors detected while running training examples - node is valid")
-
         except Exception as e:
             logger.exception(f"Node validation failed: {str(e)}")
             self.valid = False
+
+        # running is_terminal() to set terminal_reason
+        self.is_terminal()
+
+        logger.debug(f"Node {self.tag} validation successful: valid: {self.valid}, terminal: {self.terminal}")
 
         return self.valid
 

@@ -61,8 +61,8 @@ class MCTS:
         if not self.current_nodes:
             return False
 
-        # Check if all current nodes have children
-        return all(node.has_children() for node in self.current_nodes)
+        # Check if the first current node has children (either all or none have children)
+        return self.current_nodes[0].has_children()
 
     def get_rewards(self):
         rewards = []
@@ -106,7 +106,7 @@ class MCTS:
         best_child = self.select_child(current)
         if best_child is None:
             # if the node has no non-terminal children, return the node itself
-            return
+            return current
 
         # Recursively select from best child
         return best_child

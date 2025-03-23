@@ -60,7 +60,7 @@ class BS:
         if not self.current_nodes:
             return False
 
-        # Check if all current nodes have children
+        # Check if the first current node has children (either all or none have children)
         return self.current_nodes[0].has_children()
 
     def get_rewards(self):
