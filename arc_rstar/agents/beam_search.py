@@ -61,7 +61,7 @@ class BS:
             return False
 
         # Check if all current nodes have children
-        return all(node.has_children() for node in self.current_nodes)
+        return self.current_nodes[0].has_children()
 
     def get_rewards(self):
         rewards = []
@@ -83,12 +83,6 @@ class BS:
 
         return prompts
 
-    @staticmethod
-    def is_valid_final_answer_node(node: Node) -> bool:
-        if node.is_terminal() and node.is_valid() and node.passes_training:
-            return True
-        return False
-
     def select_next_step(self, scores: list[float] | None = None, from_root=False) -> None:
         """
         Select the next nodes to expand in the beam search.
@@ -109,7 +103,7 @@ class BS:
 
         # Process terminal nodes: collect successful solutions
         for node in self.candidate_nodes:
-            if self.is_valid_final_answer_node(node):
+            if node.is_valid_final_answer_node():
                 self.final_answer_nodes.append(node)
 
         # Keep only non-terminal nodes for expansion

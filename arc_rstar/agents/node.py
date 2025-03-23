@@ -59,7 +59,7 @@ class Node:
             self.terminal_reason = TERMINAL_MAX_DEPTH
             return True
 
-        if not self.is_valid():
+        if not self.valid:
             self.terminal_reason = TERMINAL_INVALID
             return True
 
@@ -171,3 +171,8 @@ class Node:
             trajectory.append(node.state['text'])
             node = node.parent
         return "".join(reversed(trajectory))
+
+    def is_valid_final_answer_node(self) -> bool:
+        if self.is_terminal() and self.is_valid():  # and self.passes_training:
+            return True
+        return False

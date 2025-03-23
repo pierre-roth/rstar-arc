@@ -84,12 +84,6 @@ class MCTS:
 
         return prompts
 
-    @staticmethod
-    def is_valid_final_answer_node(node: Node) -> bool:
-        if node.is_terminal() and node.is_valid() and node.passes_training:
-            return True
-        return False
-
     def selection(self, from_root=False) -> Node | None:
         """Select a node for expansion following MCTS tree policy."""
         # Determine starting point for selection
@@ -156,7 +150,7 @@ class MCTS:
                     candidate_node.update(score)
 
                 # Store valid solutions
-                if self.is_valid_final_answer_node(candidate_node):
+                if candidate_node.is_valid_final_answer_node():
                     self.final_answer_nodes.append(candidate_node)
 
         # Clear current nodes for new selection
