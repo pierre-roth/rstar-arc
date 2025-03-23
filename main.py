@@ -38,7 +38,7 @@ if __name__ == '__main__':
 
         for output in outputs:
             logger.info(
-                f"Task {output[0].task.name} passed: {any(node.is_terminal() and node.valid() and node.passes_training for node in output)}")
+                f"Task {output[0].task.name} passed: {any(node.is_terminal() and node.is_valid() and node.passes_training for node in output)}")
 
         logging.debug(outputs)
 
