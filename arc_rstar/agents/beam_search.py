@@ -1,6 +1,7 @@
 import logging
 
 from vllm.outputs import RequestOutput
+from random import shuffle
 
 from arc_rstar.agents.node import Node
 from arc_rstar.arc_task.task import ARCTask
@@ -98,6 +99,8 @@ class BS:
             for candidate_node, score in zip(self.candidate_nodes, scores):
                 candidate_node.value = score
 
+        # shuffle candidate nodes to break ties randomly (sorting is stable)
+        shuffle(self.current_nodes)
         # Sort all candidates by their value (highest first)
         self.candidate_nodes = sorted(self.candidate_nodes, key=lambda x: x.value, reverse=True)
 
@@ -113,8 +116,20 @@ class BS:
         self.current_nodes = non_terminal_nodes[:self.config.beam_width]
 
     def generate_next_step(self, outputs: list[RequestOutput]) -> None:
+        """Generate and add child nodes from model outputs."""
         self.candidate_nodes = []
+
+        # For each current node, expand with corresponding outputs
         for current_node, request_output in zip(self.current_nodes, outputs):
-            for i, output in enumerate(request_output.outputs):
-                current_node.add_child(output.text)
-            self.candidate_nodes.extend(current_node.children)
+            logger.debug(f"Expanding node at depth {current_node.depth} with {len(request_output.outputs)} children")
+
+            # Create children from outputs
+            new_children = []
+            for output in request_output.outputs:
+                child = current_node.add_child(output.text)
+                new_children.append(child)
+
+            # Add all new children to candidate nodes for evaluation
+            self.candidate_nodes.extend(new_children)
+
+        logger.debug(f"Added {len(self.candidate_nodes)} candidate nodes (i.e. children)")
