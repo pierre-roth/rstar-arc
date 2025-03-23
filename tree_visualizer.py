@@ -145,7 +145,7 @@ def visualize_tree(json_filename):
 
     # Save the HTML in the same directory as the JSON file.
     json_dir = os.path.dirname(os.path.abspath(json_filename))
-    output_html = os.path.join(json_dir, "tree_visualization.html")
+    output_html = os.path.join(json_dir, f"tree_{nodes[0].task}_visualization.html")
     fig.write_html(output_html)
     webbrowser.open('file://' + os.path.realpath(output_html))
 
