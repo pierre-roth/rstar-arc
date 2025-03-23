@@ -89,6 +89,27 @@ def setup_logging(config: Config):
     logging.info(f"Search mode: {config.search_mode}")
 
 
+def make_serializable(obj):
+    """
+    Recursively convert an object into something JSON serializable.
+    - For basic types (str, int, float, bool, None) returns the object as is.
+    - For lists/tuples, converts each element.
+    - For dicts, converts keys and values.
+    - For objects with __dict__, returns a dict of its public attributes.
+    - Otherwise, returns the string representation.
+    """
+    if isinstance(obj, (str, int, float, bool)) or obj is None:
+        return obj
+    elif isinstance(obj, list):
+        return [make_serializable(item) for item in obj]
+    elif isinstance(obj, tuple):
+        return tuple(make_serializable(item) for item in obj)
+    elif isinstance(obj, dict):
+        return {make_serializable(key): make_serializable(value) for key, value in obj.items()}
+    else:
+        return str(obj)
+
+
 def serialize_nodes(nodes):
     """
     Convert a list of nodes to a dictionary keyed by node tag.
@@ -103,8 +124,10 @@ def serialize_nodes(nodes):
                 node_data[key] = value.tag if value is not None else None
             elif key == "children":
                 node_data[key] = [child.tag for child in value]
+            elif key == "task":
+                node_data[key] = value.name if value is not None else None
             else:
-                node_data[key] = value  # assume it's JSON serializable
+                node_data[key] = make_serializable(value)  # assume it's JSON serializable
         data[node.tag] = node_data
     return data
 
