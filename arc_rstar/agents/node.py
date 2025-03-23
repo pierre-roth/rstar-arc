@@ -59,6 +59,10 @@ class Node:
             self.terminal_reason = TERMINAL_MAX_DEPTH
             return True
 
+        if not self.is_valid():
+            self.terminal_reason = TERMINAL_INVALID
+            return True
+
         return False
 
     def add_child(self, text: str) -> "Node":
@@ -156,9 +160,6 @@ class Node:
         except Exception as e:
             logger.exception(f"Node validation failed: {str(e)}")
             self.valid = False
-
-        if not self.valid:
-            self.terminal_reason = TERMINAL_INVALID
 
         return self.valid
 

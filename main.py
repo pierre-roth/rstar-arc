@@ -31,7 +31,7 @@ if __name__ == '__main__':
 
     # process tasks in batches
     for i, task_batch in enumerate(batch(tasks, config.batch_size)):
-        logging.info(f"Solving batch {i} of {len(task_batch)} tasks")
+        logging.info(f"Solving batch number {i} consisting of {len(task_batch)} tasks")
         agents = [agent(config, task) for task in task_batch]
 
         outputs = solver.solve(agents)

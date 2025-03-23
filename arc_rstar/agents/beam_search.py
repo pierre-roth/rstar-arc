@@ -44,18 +44,24 @@ class BS:
         return nodes
 
     def should_generate_next(self) -> bool:
-        need_generate = False
-        for step_node in self.current_nodes:
-            if not step_node.is_terminal():
-                need_generate = True
-                break
+        """Check if we need to generate for current nodes."""
+        if not self.current_nodes:
+            logger.debug("No current nodes to generate from")
+            return False
+
+        # Check if any current node is non-terminal
+        need_generate = any(not node.is_terminal() for node in self.current_nodes)
+        logger.debug(f"Need generation: {need_generate} "
+                     f"(nodes: {len(self.current_nodes)})")
         return need_generate
 
     def has_expanded(self) -> bool:
+        """Check if current nodes have already been expanded."""
         if not self.current_nodes:
             return False
-        step_node = self.current_nodes[0]
-        return step_node.has_children()
+
+        # Check if all current nodes have children
+        return all(node.has_children() for node in self.current_nodes)
 
     def get_rewards(self):
         rewards = []

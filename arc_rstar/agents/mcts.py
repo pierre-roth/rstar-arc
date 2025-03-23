@@ -111,12 +111,11 @@ class MCTS:
         # Otherwise, select child according to tree policy
         best_child = self.select_child(current)
         if best_child is None:
-            # If no valid children, mark node as terminal
-            current.terminal_reason = TERMINAL_INVALID
-            return None
+            # if the node has no non-terminal children, return the node itself
+            return
 
         # Recursively select from best child
-        return best_child if not best_child.is_terminal() else None
+        return best_child
 
     @staticmethod
     def select_child(node: Node) -> Node | None:
@@ -125,11 +124,11 @@ class MCTS:
         best_children = []
 
         # Only consider non-terminal children
-        valid_children = [child for child in node.children if not child.is_terminal()]
-        if not valid_children:
+        non_terminal_children = [child for child in node.children if not child.is_terminal()]
+        if not non_terminal_children:
             return None
 
-        for child in valid_children:
+        for child in non_terminal_children:
             puct_value = child.puct()
             if puct_value > best_value:
                 best_value = puct_value
