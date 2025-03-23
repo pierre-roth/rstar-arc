@@ -27,7 +27,7 @@ if __name__ == '__main__':
     solver = Solver(config)
 
     # select the search agent
-    agent = BS if config.search_mode == "bs" else MCTS
+    agent = BS if config.search_mode.lower() == "bs" else MCTS
 
     # process tasks in batches
     for i, task_batch in enumerate(batch(tasks, config.batch_size)):

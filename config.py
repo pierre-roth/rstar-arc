@@ -101,7 +101,8 @@ class Config:
     ###########################################
     search_mode: str = "bs"  # Search algorithm - "bs" for beam search, "mcts" for Monte Carlo Tree Search
     value_func: bool = False  # Whether to use terminal-guided search
-    is_sampling: bool = True  # whether to sample probabilistically to find multiple solutions
+    # TODO: handle test time solving, where the only goal is to find a solution (not fixed number of simulations)
+    test_time: bool = False  # whether to sample probabilistically to find multiple solutions
 
     max_depth: int = 10  # Maximum number of reasoning steps
     batch_size: int = -1  # Batch size for parallel inference (-1 means all at once, otherwise batch size)

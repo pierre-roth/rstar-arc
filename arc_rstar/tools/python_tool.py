@@ -10,6 +10,9 @@ from config import TIMEOUT_SECONDS, CODE, CODE_END, STEP_END, MEMORY_LIMIT_BYTES
 logger = logging.getLogger(__name__)
 
 
+# TODO make sure the temporary scripts for code execution are always deleted!
+
+
 def extract_python_code(text):
     """Extract Python code from text after the last CODE marker, removing any CODE_END or STEP_END markers."""
 

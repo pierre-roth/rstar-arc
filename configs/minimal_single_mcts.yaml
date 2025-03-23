@@ -1,0 +1,6 @@
+search-mode: "mcts"
+log-level: "DEBUG"
+
+policy-model: "Qwen/Qwen2.5-Coder-0.5B-Instruct"
+dtype: "float32"
+

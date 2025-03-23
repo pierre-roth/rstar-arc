@@ -33,6 +33,9 @@ class MCTS:
         self.root = Node(self.config)
         self.root.state["text"] = prompt
         self.root.task = task
+        self.root.valid = True
+
+        self.candidate_nodes.append(self.root)
 
     def get_nodes(self) -> list[Node]:
         nodes = []
@@ -44,13 +47,10 @@ class MCTS:
                 candidates.extend(node.children)
         return nodes
 
-    def is_ignored_node(self, node: Node) -> bool:
-        return node.is_terminal or node.depth > self.config.max_depth
-
     def should_generate_next(self) -> bool:
         need_generate = False
         for step_node in self.current_nodes:
-            if not self.is_ignored_node(step_node):
+            if not step_node.is_terminal():
                 need_generate = True
                 break
         return need_generate
@@ -76,7 +76,7 @@ class MCTS:
         prompts = []
         current_nodes = self.candidate_nodes if is_value_only else self.current_nodes
         for current_node in current_nodes:
-            if not is_value_only and self.is_ignored_node(current_node):
+            if not is_value_only and current_node.is_terminal():
                 continue
             prompt = current_node.collect_partial_solution()
             prompts.append(prompt)
@@ -85,32 +85,9 @@ class MCTS:
 
     @staticmethod
     def is_valid_final_answer_node(node: Node) -> bool:
-        return node.is_terminal() and node.is_valid() and node.passes_training
-
-    def select_next_step(self, scores: list[float] | None, from_root=False) -> None:
-        self.current_nodes = []
-        if scores is not None:
-            for candidate_node, score in zip(self.candidate_nodes, scores):
-                candidate_node.value = score
-
-        self.candidate_nodes = sorted(self.candidate_nodes, key=lambda x: x.value, reverse=True)
-        self.current_nodes = self.candidate_nodes[:]
-
-        for current_node in self.current_nodes[:]:
-            if self.is_valid_final_answer_node(current_node):
-                self.final_answer_nodes.append(current_node)
-                self.current_nodes.remove(current_node)
-            elif current_node.is_terminal():
-                self.current_nodes.remove(current_node)
-
-        self.current_nodes = self.candidate_nodes[:self.config.beam_width]
-
-    def generate_next_step(self, outputs: list[RequestOutput]) -> None:
-        self.candidate_nodes = []
-        for current_node, request_output in zip(self.current_nodes, outputs):
-            for i, output in enumerate(request_output.outputs):
-                current_node.add_child(output.text)
-            self.candidate_nodes.extend(current_node.children)
+        if node.is_terminal() and node.is_valid() and node.passes_training:
+            return True
+        return False
 
     def selection(self, from_root=False) -> Node | None:
         if from_root:
@@ -129,85 +106,48 @@ class MCTS:
 
     def select_child(self, node: Node) -> Node | None:
         best_value = -float("inf")
-        best_childs = []
+        best_children = []
 
         for child in node.children:
             if child.is_terminal:
                 continue
             puct_value = child.puct()
             if puct_value == best_value:
-                best_childs.append(child)
+                best_children.append(child)
             elif puct_value > best_value:
                 best_value = puct_value
-                best_childs = [child]
+                best_children = [child]
 
-        # return random.choice(best_childs) if best_childs else None
-        return best_childs[0] if best_childs else None
+        # return random.choice(best_children) if best_children else None
+        return best_children[0] if best_children else None
 
     def expand_node(self, outputs: list[CompletionOutput], node: Node) -> None:
         for idx, output in enumerate(outputs):
-            if not output.stop_reason: output.stop_reason = ""
             node.add_child(output.text)
 
-    def select_next_step(self, outputs=None, from_root=False) -> None:
-        self.search_node = self.current_nodes[0] if self.current_nodes else None
+    def select_next_step(self, scores: list[float] | None = None, from_root=False) -> None:
         self.current_nodes = []
-        if outputs:
-            for candidate_node, output in zip(self.candidate_nodes, outputs):
-                if candidate_node.is_terminal and self.config.is_sampling:
-                    continue
-                value_estimate = output.value_estimate if output.value_estimate is not None else self.config.negative_reward
-                if output.value_estimate is None:
-                    candidate_node.is_terminal = True
-
+        if scores:
+            for candidate_node, score in zip(self.candidate_nodes, scores):
                 # backup
-                if candidate_node.is_terminal and candidate_node.state["final_answer"]:
+                if candidate_node.is_terminal():
                     # for terminal node: update_recursive
-                    if candidate_node.state["final_answer"] in []:
+                    if not candidate_node.is_valid() or not candidate_node.passes_training:
                         candidate_node.update(self.config.negative_reward)
                     else:
-                        # save intermediate metric
-                        self.record_intermediate_metric(answer=candidate_node.state["final_answer"],
-                                                        value_estimate=value_estimate)
-
-                        candidate_node.update_recursive(value_estimate)
+                        candidate_node.update(self.config.positive_reward)
                 else:
-                    # for intermediate node: just update the value
-                    if self.config.terminal_sample:
-                        pass
-                    else:
-                        candidate_node.update(value_estimate)
+                    candidate_node.update(score)
 
-                if self.__class__.is_valid_final_answer_node(candidate_node):
+                if self.is_valid_final_answer_node(candidate_node):
                     self.final_answer_nodes.append(candidate_node)
+
         selection_node = self.selection(from_root=from_root)
         if selection_node is not None:
             self.current_nodes.append(selection_node)
 
     def generate_next_step(self, outputs: list[RequestOutput]) -> None:
         self.candidate_nodes = []
-        for current_node, output in zip(self.current_nodes, outputs):
-            value_estimate = output.value_estimate
-            if value_estimate is not None:
-                self.expand_node(output.outputs, current_node)
-            else:
-                value_estimate = self.config.negative_reward
-                current_node.is_terminal = True
-
-            if self.config.update_leaf_value:
-                # if need update leaf node value, just append the node to candidate_nodes, will update the value in select_next_step()
-                for value_node in current_node.children:
-                    if value_node not in self.candidate_nodes and value_node.visit_count() < 1:
-                        self.candidate_nodes.append(value_node)
-
-    def return_states(self) -> dict[str, Any | dict[str, str]]:
-        candidates = [self.root]
-        states = {}
-        while candidates:
-            node = candidates.pop(0)
-            states[node.tag] = node.state
-            states[node.tag]["value"] = node.value
-            if node.has_children():
-                candidates.extend(node.children)
-        states["solutions"] = self.get_steps()
-        return states
+        for current_node, request_output in zip(self.current_nodes, outputs):
+            self.expand_node(request_output.outputs, current_node)
+            self.candidate_nodes.extend(current_node.children)

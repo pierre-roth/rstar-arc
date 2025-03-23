@@ -4,6 +4,7 @@ import webbrowser
 import plotly.graph_objects as go
 from utils import load_nodes
 from arc_rstar.tools.python_tool import extract_python_code
+from config import STEP_END, CODE_END
 
 
 def build_graph_from_nodes(nodes):
@@ -18,10 +19,12 @@ def build_graph_from_nodes(nodes):
     # Create a list of hover texts from nodes using node.state["text"]
     hover_texts = []
     for node in nodes:
+        # Extract raw Python code (with proper newlines)
         code = extract_python_code(node.collect_partial_solution())
-        # Replace newlines with Plotly's <br> tag for line breaks
-        formatted_code = code.replace('\n', '<br>')
-        hover_texts.append(formatted_code)
+        # Highlight the code using Pygments (do not pre-replace newlines)
+        # Replace newlines with Plotly’s <br> tags so that the code appears multi‑line in the hover
+        code = code.replace('\n', '<br>').replace(STEP_END, f"# {STEP_END}<br>").replace(CODE_END, "")
+        hover_texts.append(code)
 
     # Create node colors based on some attribute (example)
     node_colors = []
@@ -87,18 +90,6 @@ def visualize_tree(json_filename):
         Xe += [positions[start][0], positions[end][0], None]
         Ye += [2 * M - positions[start][1], 2 * M - positions[end][1], None]
 
-    # Create annotations: label each node with its tag.
-    annotations = []
-    for idx in positions:
-        annotations.append(dict(
-            text=G.vs[idx]["label"],
-            x=positions[idx][0],
-            y=2 * M - positions[idx][1],
-            xref='x', yref='y',
-            font=dict(color='rgb(250,250,250)', size=10),
-            showarrow=False
-        ))
-
     # Create Plotly figure.
     fig = go.Figure()
     # Add edge traces.
@@ -125,7 +116,6 @@ def visualize_tree(json_filename):
     axis = dict(showline=False, zeroline=False, showgrid=False, showticklabels=False)
     # Add more comprehensive hoverlabel settings with black background and white text
     fig.update_layout(title='Tree Visualization',
-                      annotations=annotations,
                       font_size=12,
                       showlegend=False,
                       xaxis=axis,

@@ -20,3 +20,4 @@ timeout-decorator
 pyyaml
 plotly
 igraph
+Pygments

@@ -59,9 +59,7 @@ class BS:
         if not self.current_nodes:
             return False
         step_node = self.current_nodes[0]
-        if step_node.has_children():
-            return True
-        return False
+        return step_node.has_children()
 
     def get_rewards(self):
         rewards = []
@@ -113,8 +111,7 @@ class BS:
                 self.final_answer_nodes.append(node)
 
         # Keep only non-terminal nodes for expansion
-        non_terminal_nodes = [node for node in self.candidate_nodes
-                              if not node.is_terminal()]
+        non_terminal_nodes = [node for node in self.candidate_nodes if not node.is_terminal()]
 
         # Select top-k non-terminal nodes as the beam for next expansion
         self.current_nodes = non_terminal_nodes[:self.config.beam_width]
