@@ -2,11 +2,11 @@
 #SBATCH --mail-type=NONE # mail configuration: NONE, BEGIN, END, FAIL, REQUEUE, ALL
 #SBATCH --output=/itet-stor/piroth/net_scratch/outputs/jobs/%j.out # Keep minimal SLURM logging
 #SBATCH --error=/itet-stor/piroth/net_scratch/outputs/jobs/%j.err # Keep minimal SLURM logging
-#SBATCH --mem=32G
+#SBATCH --mem=60G
 #SBATCH --nodes=1
-#SBATCH --cpus-per-task=4
+#SBATCH --cpus-per-task=16
 #SBATCH --gres=gpu:1
-##SBATCH --constraint='geforce_rtx_3090'
+#SBATCH --constraint='geforce_rtx_3090'
 ##SBATCH --exclude=tikgpu10,tikgpu[06-09]
 ##SBATCH --nodelist=tikgpu01
 ##SBATCH --partition=gpu
