@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import logging
 import os
-import sys
 from dataclasses import dataclass
 from typing import Optional
 
@@ -25,18 +24,6 @@ DEFAULT_EVALUATION_DATA_PATH = f"{DEFAULT_DATA_FOLDER}/evaluation"  # Evaluation
 DEFAULT_DATA_PATH = f"{DEFAULT_DATA_FOLDER}/default"
 DEFAULT_EXAMPLE_DATA_PATH = f"{DEFAULT_DATA_FOLDER}/examples"  # path to prompt examples
 
-DEFAULT_POLICY_LLM = "Qwen/Qwen2.5-Coder-7B-Instruct"  # Policy model
-DEFAULT_REWARD_LLM = "Qwen/Qwen2.5-Coder-7B-Instruct"  # Reward Model
-
-# Default hyperparameters
-DEFAULT_MAX_TOKENS = 1024  # Maximum tokens for model generation
-DEFAULT_MAX_DEPTH = 10  # Maximum depth of search tree (max steps)
-DEFAULT_BEAM_WIDTH = 3  # Width of beam in beam search (solutions to track)
-DEFAULT_BRANCHING_FACTOR = 3  # Number of child nodes to expand per parent
-DEFAULT_POLICY_TEMPERATURE = 0.7  # Sampling temperature for policy model
-DEFAULT_SEED = 42  # Random seed for reproducibility
-DEFAULT_C_PUCT = 2.0  # PUCT exploration constant for MCTS
-
 ###########################################
 # EXECUTION SETTINGS
 ###########################################
@@ -47,8 +34,6 @@ MEMORY_LIMIT_MB = 128  # Maximum memory allowed for each code execution process
 MEMORY_LIMIT_BYTES = MEMORY_LIMIT_MB * 1024 * 1024
 
 # Terminal node constants
-TERMINAL_SUCCESS = "Successful solution"
-TERMINAL_FAILURE = "Failed solution"
 TERMINAL_INVALID = "Invalid code"
 TERMINAL_MAX_DEPTH = "Maximum depth reached"
 TERMINAL_CODE_END = "Code end marker"
@@ -85,20 +70,20 @@ class Config:
     # MODEL CONFIGURATION
     ###########################################
     # Language model selection
-    policy_model: str = DEFAULT_POLICY_LLM  # Model that generates reasoning steps
-    reward_model: str = DEFAULT_REWARD_LLM  # Reward Model for evaluating steps
+    policy_model: str = "Qwen/Qwen2.5-Coder-7B-Instruct"  # Model that generates reasoning steps
+    reward_model: str = "Qwen/Qwen2.5-Coder-7B-Instruct"  # Reward Model for evaluating steps
 
     # general model configuration
     model_base_path: str = os.path.join(LOCAL_SCRATCH_PATH, "models")  # Base path where models are stored
 
     # Policy model configuration
-    max_tokens: int = DEFAULT_MAX_TOKENS  # Maximum tokens for generation
+    max_tokens: int = 1024  # Maximum tokens for generation
     dtype: str = "bfloat16"  # Data type for model (affects precision/speed)
     max_model_len: int = 16384  # Affects the context window size
     top_p: float = 0.95  # Top-p sampling parameter (cumulative probability cutoff)
     top_k: int = -1  # Top-k sampling parameter (number of candidates to consider)
-    policy_temperature: float = DEFAULT_POLICY_TEMPERATURE  # Sampling temperature for LLM generation
-    seed: int = DEFAULT_SEED  # Random seed for reproducibility
+    policy_temperature: float = 0.7  # Sampling temperature for LLM generation
+    seed: int = 42  # Random seed for reproducibility
     deterministic: bool = False  # Whether to enforce deterministic behavior
 
     # Reward model configuration
@@ -118,15 +103,15 @@ class Config:
     value_func: bool = False  # Whether to use terminal-guided search
     is_sampling: bool = True  # whether to sample probabilistically to find multiple solutions
 
-    max_depth: int = DEFAULT_MAX_DEPTH  # Maximum number of reasoning steps
+    max_depth: int = 10  # Maximum number of reasoning steps
     batch_size: int = -1  # Batch size for parallel inference (-1 means all at once, otherwise batch size)
 
     # BEAM search specific parameters
-    beam_width: int = DEFAULT_BEAM_WIDTH  # Number of top-scoring beams to track
-    branching_factor: int = DEFAULT_BRANCHING_FACTOR  # Number of children to generate per step
+    beam_width: int = 3  # Number of top-scoring beams to track
+    branching_factor: int = 3  # Number of children to generate per step
 
     # MCTS search specific parameters
-    c_puct: float = DEFAULT_C_PUCT  # PUCT exploration constant
+    c_puct: float = 2.0  # PUCT exploration constant
     num_simulations: int = 8  # Number of simulations to run for MCTS
     negative_reward: float = -1.0  # Negative reward for invalid/incorrect code
     positive_reward: float = 1.0  # Positive reward for correct code
