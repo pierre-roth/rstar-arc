@@ -95,7 +95,8 @@ class Solver:
                 self.selector(agent, score)
         return valid_agents
 
-    def output(self, agents: list[Agent]):
+    @staticmethod
+    def output_nodes(agents: list[Agent]):
         return [agent.get_nodes() for agent in agents]
 
     def solve(self, agents: list[Agent]):
@@ -142,4 +143,4 @@ class Solver:
                 # keep all agents
                 agents = valid_agents + invalid_agents + expanded_agents
 
-        return self.output(agents)
+        return self.output_nodes(agents)

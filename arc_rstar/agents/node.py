@@ -49,6 +49,8 @@ class Node:
         if self.terminal is not None:
             return self.terminal
 
+        self.terminal = False
+
         # Check if ended with code end marker
         if self.state["text"].strip().endswith(CODE_END):
             self.terminal_reason = TERMINAL_CODE_END
@@ -63,7 +65,6 @@ class Node:
             self.terminal_reason = TERMINAL_INVALID
             self.terminal = True
 
-        self.terminal = False
         return self.terminal
 
     def add_child(self, text: str) -> "Node":
@@ -174,6 +175,6 @@ class Node:
         return "".join(reversed(trajectory))
 
     def is_valid_final_answer_node(self) -> bool:
-        if self.is_terminal() and self.is_valid():  # and self.passes_training:
+        if self.is_terminal() and self.passes_training:
             return True
         return False
