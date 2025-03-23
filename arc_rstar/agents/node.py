@@ -80,6 +80,8 @@ class Node:
         # Validate the child node upon creation
         child.is_valid()
 
+        logger.debug(f"Added child node {child.tag} (valid: {child.is_valid()}) with text: {text}")
+
         return child
 
     def q_value(self) -> float:
