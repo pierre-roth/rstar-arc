@@ -34,6 +34,8 @@ class BS:
         self.root.state["text"] = prompt
         self.root.task = task
 
+        self.current_nodes.append(self.root)
+
     def get_nodes(self) -> list[Node]:
         nodes = []
         candidates = [self.root]
