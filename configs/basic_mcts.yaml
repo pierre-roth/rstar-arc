@@ -1,3 +1,6 @@
 search-mode: "mcts"
 log-level: "DEBUG"
 
+num-simulations: 16
+branching-factor: 5
+

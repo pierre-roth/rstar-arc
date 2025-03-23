@@ -1,3 +1,5 @@
 search-mode: "bs"
 log-level: "DEBUG"
 
+beam-width: 5
+branching-factor: 5
