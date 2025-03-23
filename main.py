@@ -41,7 +41,8 @@ if __name__ == '__main__':
                 f"Task {output[0].task.name} passed: {any(node.is_terminal() and node.is_valid() and node.passes_training for node in output)}")
 
         # save the nodes to separate files for later analysis
-        map(lambda nodelist: save_nodes(config, nodelist), outputs)
+        for nodelist in outputs:
+            save_nodes(config, nodelist)
 
     end_time: datetime = datetime.now()
 
