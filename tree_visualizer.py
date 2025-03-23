@@ -1,4 +1,6 @@
+import os
 import igraph
+import webbrowser
 import plotly.graph_objects as go
 from utils import load_nodes
 
@@ -12,13 +14,17 @@ def build_graph_from_nodes(nodes):
     """
     # Create a list of tags for vertices.
     tags = [node.tag for node in nodes]
+    # Create a list of hover texts from nodes using node.state["text"]
+    hover_texts = [
+        node.state["text"] if hasattr(node, "state") and node.state and "text" in node.state else ""
+        for node in nodes
+    ]
     tag_to_index = {tag: idx for idx, tag in enumerate(tags)}
 
     # Build edge list: add an edge from parent to node for each node with a parent.
     edges = []
     for node in nodes:
         if node.parent is not None:
-            # Use the parent's tag and this node's tag to get indices.
             parent_idx = tag_to_index[node.parent.tag]
             child_idx = tag_to_index[node.tag]
             edges.append((parent_idx, child_idx))
@@ -27,6 +33,7 @@ def build_graph_from_nodes(nodes):
     G = igraph.Graph(directed=True)
     G.add_vertices(len(tags))
     G.vs["label"] = tags
+    G.vs["hovertext"] = hover_texts
     if edges:
         G.add_edges(edges)
     return G
@@ -90,7 +97,8 @@ def visualize_tree(json_filename):
                                          color='#6175c1',
                                          line=dict(color='rgb(50,50,50)', width=1)
                                          ),
-                             text=G.vs["label"],
+                             # Use the state text as hover text.
+                             text=G.vs["hovertext"],
                              hoverinfo='text',
                              opacity=0.8))
     # Layout settings.
@@ -104,8 +112,13 @@ def visualize_tree(json_filename):
                       margin=dict(l=40, r=40, b=85, t=100),
                       hovermode='closest',
                       plot_bgcolor='rgb(248,248,248)')
-    fig.show()
+
+    # Save the HTML in the same directory as the JSON file.
+    json_dir = os.path.dirname(os.path.abspath(json_filename))
+    output_html = os.path.join(json_dir, "tree_visualization.html")
+    fig.write_html(output_html)
+    webbrowser.open('file://' + os.path.realpath(output_html))
 
 
 if __name__ == "__main__":
-    visualize_tree(input("Enter the path to the json file: "))
+    visualize_tree(input("Enter the path to the JSON file: "))
