@@ -34,6 +34,8 @@ class BS:
         self.root.state["text"] = prompt
         self.root.task = task
 
+        self.candidate_nodes.append(self.root)
+
     def get_nodes(self) -> list[Node]:
         nodes = []
         candidates = [self.root]
@@ -94,11 +96,6 @@ class BS:
             scores: Optional scores for candidate nodes
             from_root: If True, restart search from the root node
         """
-        # Special case: reset search to start from root
-        if from_root:
-            self.current_nodes = [self.root]
-            self.candidate_nodes = [self.root]
-            return
 
         # Regular case: process candidate nodes from previous expansion
         if scores is not None:
