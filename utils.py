@@ -200,3 +200,8 @@ def load_nodes(filename):
             node.__dict__["children"] = [nodes_by_tag.get(child_tag) for child_tag in node.__dict__["children"]]
 
     return list(nodes_by_tag.values())
+
+
+def save_summary(node_lists: list[list[Node]]):
+    # TODO implement this method
+    pass

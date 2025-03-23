@@ -3,7 +3,7 @@ import logging
 from pebble import ProcessPool
 from vllm.outputs import RequestOutput
 
-from arc_rstar.agents import BS, MCTS
+from arc_rstar.agents import BS, MCTS, Node
 from arc_rstar.llms import PolicyModel, RewardModel
 from config import Config, TIMEOUT_SECONDS
 
@@ -96,7 +96,7 @@ class Solver:
         return valid_agents
 
     @staticmethod
-    def output_nodes(agents: list[Agent]):
+    def output_nodes(agents: list[Agent]) -> list[list[Node]]:
         return [agent.get_nodes() for agent in agents]
 
     def solve(self, agents: list[Agent]):

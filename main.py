@@ -4,7 +4,7 @@ from datetime import datetime
 from arc_rstar import Solver
 from arc_rstar.agents import BS, MCTS
 from config import Config
-from utils import setup_logging, load_tasks, batch, save_nodes
+from utils import setup_logging, load_tasks, batch, save_nodes, save_summary
 
 logger = logging.getLogger(__name__)
 
@@ -38,11 +38,14 @@ if __name__ == '__main__':
 
         for output in outputs:
             logger.info(
-                f"Task {output[0].task.name} passed: {any(node.is_terminal() and node.is_valid() and node.passes_training for node in output)}")
+                f"Task {output[0].task.name} training examples passed: {any(node.is_valid_final_answer_node() for node in output)}")
 
         # save the nodes to separate files for later analysis
         for nodelist in outputs:
             save_nodes(config, nodelist)
+
+        # save summary of the batch
+        save_summary(outputs)
 
     end_time: datetime = datetime.now()
 
