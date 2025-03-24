@@ -84,14 +84,61 @@
   - Switched the whole project from printing to hierarchical logging
   - Updated to the newest version of vllm to enable usage of the newest thinking models (updated all other libraries
     too)
+
   - Decided on trying to fine tune the initial policy LLM with data generated from a thinking model (QwQ-32B)
   - Started writing code to generate bootstrapping data for the policy LLM
-  - Started with the major code refactoring: (days of planning and work)
+
+  - Finished with the major code refactoring: (days of planning and work)
     - Complete ground up code rewrite inspired by rStar-Math codebase
     - cleaner code
     - batching requests to the LLM
-    - using multiprocessing for node verification
-    -
+    - using subprocess without disk IO for code execution
+
+  - added progressive widening MCTS agent (PWMCTS) as a new agent
+    - more resilient against initial bad generations
+    - essentially widens the search space as it goes along
+    - have to think about how to correctly(!) integrate into the puct child selection process
+
+  - Came up with new ideas for initial bootstrapping
+    - bootstrapping using self generated solutions:
+      - create "multi-rooted tree" where each root has a different example in the prompt
+      - create dummy root node connecting all the roots
+      - run MCTS on this augmented tree
+
+  - Fine tuning data filtering
+    - the LLM tends to either find no solution or a lot of solutions
+    - filtering out solutions that are too long compared to the shortest one (consider code only and not comments)
+    - get rid of steps that don't contribute to the final solution (get rid of steps that don't change the output)
+
+  - Fine tuning data augmentation
+    - use reARC to generate a lot more tasks for solved tasks
+
 
 - **Issues and Questions**:
-  - (To be updated soon)
+  - How do I effectively work with the output of QwQ or other thinking models? (parsing, filtering, etc.)
+
+### Week 3 (24.03.2025)
+
+- **Work planned**:
+  - Work on prompt format fine-tuning
+  - test capabilities of the current system on more ARC tasks
+  - test effectiveness of using larger models ("Qwen/Qwen2.5-Coder-32B-Instruct")
+  - test a variety of different hyperparameters for the MCTS agent
+  -
+  - Write the data saving code for the fine-tuning data
+  - Write the data filtering and augmentation code for the fine-tuning data
+
+  - potentially continue working on QwQ-32B bootstrapping code (unlikely)
+
+  -
+
+
+- **Work done**:
+  - None
+
+
+- **Issues and Questions**:
+  - None
+
+
+
