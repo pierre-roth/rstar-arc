@@ -1,20 +1,17 @@
 import logging
 from random import choice
 
-from arc_rstar.agents.beam_search import BS  # Import the BS class
+from arc_rstar.agents.beam_search import Agent
 from arc_rstar.agents.node import Node
 
 logger = logging.getLogger(__name__)
 
 
-class MCTS(BS):
+class MCTS(Agent):
     """
     Monte Carlo Tree Search agent that inherits from the Beam Search (BS) agent.
     This leverages shared functionality while maintaining MCTS-specific selection logic.
     """
-
-    # We don't need to redefine __init__, create_root, get_nodes, should_generate_next,
-    # has_expanded, get_rewards, or create_prompts as they're identical to BS
 
     @staticmethod
     def select_child(node: Node) -> Node | None:

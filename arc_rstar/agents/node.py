@@ -3,7 +3,7 @@ import logging
 import numpy as np
 
 from arc_rstar.arc_task.task import ARCTask
-from arc_rstar.tools.python_tool import extract_python_code
+from arc_rstar.tools.python_tool import extract_python_code, run_training_examples
 from config import Config, CODE_END, TERMINAL_CODE_END, TERMINAL_MAX_DEPTH, TERMINAL_INVALID
 
 logger = logging.getLogger(__name__)
@@ -145,7 +145,7 @@ class Node:
             logger.debug(f"Successfully extracted code ({len(code.splitlines())} lines)")
             logger.debug("Validation: testing for errors while running training examples")
 
-            error, passed, output = self.task.run_training_examples(code)
+            error, passed, _ = run_training_examples(self.task, code)
 
             if error:
                 self.valid = False

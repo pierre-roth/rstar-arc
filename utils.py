@@ -5,7 +5,7 @@ import sys
 
 from arc_rstar.agents import Node
 from arc_rstar.arc_task.task import ARCTask
-from arc_rstar.tools.python_tool import extract_python_code
+from arc_rstar.tools.python_tool import extract_python_code, run_test_examples
 from config import Config, STEP_END, CODE_END
 
 logger = logging.getLogger(__name__)
@@ -193,7 +193,7 @@ def save_summary(config, node_lists: list[list[Node]], batch_number: int):
         correct_answer_nodes = []
         for node in valid_final_answer_nodes:
             code = extract_python_code(node.collect_partial_solution())
-            error, passed, outputs = node.task.run_test_examples(code)
+            error, passed, _ = run_test_examples(node.task, code)
             if passed:
                 correct_answer_nodes.append(node)
 

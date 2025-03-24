@@ -108,7 +108,7 @@ def visualize_tree(json_filename, open=True):
                              y=Yn,
                              mode='markers',
                              marker=dict(symbol='circle-dot',
-                                         size=18,
+                                         size=18 if len(nodes) < 64 else (12 if len(nodes) < 256 else 6),
                                          color=[G.vs[idx]["color"] for idx in range(len(G.vs))],
                                          line=dict(color='rgb(50,50,50)', width=1)
                                          ),

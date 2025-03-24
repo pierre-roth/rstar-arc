@@ -3,13 +3,11 @@ import logging
 from pebble import ProcessPool
 from vllm.outputs import RequestOutput
 
-from arc_rstar.agents import BS, MCTS, Node
+from arc_rstar.agents import Agent, Node
 from arc_rstar.llms import PolicyModel, RewardModel
 from config import Config
 
 logger = logging.getLogger(__name__)
-
-Agent = BS | MCTS
 
 
 class Solver:
@@ -58,7 +56,9 @@ class Solver:
     def generate_postprocess(self, outputs: list[list[RequestOutput]], valid_agents: list[Agent]) -> list[Agent]:
         post_agents = []
 
-        with ProcessPool(max_workers=min(len(valid_agents), max(1, self.config.cpus - 1))) as pool:
+        num_workers = min(len(valid_agents), max(1, self.config.cpus - 1))
+
+        with ProcessPool(max_workers=num_workers) as pool:
             future = pool.map(self.__class__.processor, valid_agents, outputs)
             iterator = future.result()
 

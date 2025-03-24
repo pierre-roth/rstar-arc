@@ -1,9 +1,6 @@
-import json
 import logging
-import os
-import subprocess
-import sys
-import tempfile
+import multiprocessing as mp
+import traceback
 
 from config import TIMEOUT_SECONDS, CODE, CODE_END, STEP_END, MEMORY_LIMIT_BYTES
 
@@ -34,229 +31,179 @@ def extract_python_code(text):
     return code
 
 
-def prepare_code(code):
+def prepare_code_for_execution(code):
     """Prepare code by removing STEP_END and CODE_END markers and ensuring it returns a value."""
     # Remove both types of markers
     clean_code = code.replace(f"{STEP_END}", "").replace(f"{CODE_END}", "")
 
-    # If the code doesn't contain a complete solve function (no 'return' statement)
-    if 'def solve(I):' in clean_code and 'return' not in clean_code:
+    # If the code doesn't contain a return statement
+    if 'return ' not in "\n".join(filter(lambda x: '#' not in x, clean_code.split())):
         clean_code += "\n    return []"
 
     return clean_code
 
 
-def create_subprocess_script(code, temp_dir=None):
-    """Create a temporary script file with the user's code and I/O handling.
+def _execute_code_worker(code: str, input_grids: list[list[list[int]]],
+                         expected_outputs: list[list[list[int]]], result_queue: mp.Queue):
+    """Worker function to run in a separate process."""
+    import numpy as np
+    import sys
+    from io import StringIO
 
-    Args:
-        code (str): The Python code to execute
-        temp_dir (str, optional): Directory where the temporary script will be created.
-                                 If None, system default temp directory is used.
+    # Set memory limits
+    try:
+        import resource
+        resource.setrlimit(resource.RLIMIT_AS, (MEMORY_LIMIT_BYTES, MEMORY_LIMIT_BYTES * 2))
+    except (ImportError, AttributeError):
+        logger.warning("Could not set memory limits! ")
 
-    Returns:
-        str: Path to the created script file
-    """
-    # Create a temporary file
-    fd, path = tempfile.mkstemp(suffix='.py', prefix='execute_', dir=temp_dir)
-
-    # Prepare the wrapper script that:
-    # 1. Sets up memory limits
-    # 2. Loads the input grid
-    # 3. Executes the user's code
-    # 4. Captures stdout/stderr
-    # 5. Returns the result as JSON
-    wrapper_script = f"""
-import sys
-import json
-import traceback
-import numpy as np
-
-# Set memory limit
-try:
-    import resource
-    # Set the memory limit to {MEMORY_LIMIT_BYTES} bytes (soft limit)
-    resource.setrlimit(resource.RLIMIT_AS, ({MEMORY_LIMIT_BYTES}, {MEMORY_LIMIT_BYTES * 2}))
-except ImportError:
-    # resource module not available (e.g., Windows)
-    pass
-
-# Load input data
-try:
-    input_data = json.loads(sys.stdin.read())
-    input_grid = input_data.get('grid')
-except Exception as e:
-    print(f"Error loading input data: {{e}}", file=sys.stderr)
-    sys.exit(1)
-
-# Store original stdout and stderr
-import io
-original_stdout = sys.stdout
-original_stderr = sys.stderr
-stdout_capture = io.StringIO()
-stderr_capture = io.StringIO()
-sys.stdout = stdout_capture
-sys.stderr = stderr_capture
-
-# Execute user code
-result = None
-error = None
-try:
-{indent_code(code)}
-
-    # Call the solve function with the input grid
-    result = solve(input_grid)
-
-    # Convert numpy arrays to lists
-    if isinstance(result, np.ndarray):
-        result = result.tolist()
-
-except Exception as e:
-    error = {{"type": str(type(e).__name__), "message": str(e), "traceback": traceback.format_exc()}}
-
-# Restore stdout and stderr
-sys.stdout = original_stdout
-sys.stderr = original_stderr
-
-# Prepare output
-output = {{
-    "result": result,
-    "stdout": stdout_capture.getvalue(),
-    "stderr": stderr_capture.getvalue(),
-    "error": error
-}}
-
-# Print output as JSON
-print(json.dumps(output, default=lambda x: None))
-"""
+    # Capture stdout/stderr
+    stdout_capture = StringIO()
+    stderr_capture = StringIO()
+    sys.stdout = stdout_capture
+    sys.stderr = stderr_capture
 
     try:
-        with os.fdopen(fd, 'w') as f:
-            f.write(wrapper_script)
-        return path
+        # Execute the code to define the solve function
+        namespace = {'__builtins__': __builtins__, 'np': np, 'numpy': np}
+        exec(code, namespace)
+
+        if 'solve' not in namespace:
+            raise NameError("Function 'solve' not defined in the code")
+
+        # Process each grid
+        results = []
+        passed = True
+
+        for i, grid in enumerate(input_grids):
+            # Call the solve function
+            result = namespace['solve'](grid)
+
+            # Convert numpy arrays to lists if needed
+            if isinstance(result, np.ndarray):
+                result = result.tolist()
+
+            results.append(result)
+
+            # Check if results match expected outputs
+            if expected_outputs and result != expected_outputs[i]:
+                passed = False
+
+        # Send success result
+        result_queue.put({
+            'success': True,
+            'results': results,
+            'passed': passed,
+            'stdout': stdout_capture.getvalue(),
+            'stderr': stderr_capture.getvalue(),
+        })
+
     except Exception as e:
-        if os.path.exists(path):
-            os.unlink(path)
-        raise e
+        # Send error information
+        result_queue.put({
+            'success': False,
+            'error': str(e),
+            'traceback': traceback.format_exc(),
+            'stdout': stdout_capture.getvalue(),
+            'stderr': stderr_capture.getvalue(),
+        })
+    finally:
+        # Reset stdout/stderr
+        sys.stdout = sys.__stdout__
+        sys.stderr = sys.__stderr__
 
 
-def indent_code(code, spaces=4):
-    """Properly indent code for inclusion in the wrapper script.
-
-    Args:
-        code (str): The Python code to indent
-        spaces (int): Number of spaces for indentation
-
-    Returns:
-        str: Properly indented code
+def execute_code_with_task(code: str, input_grids: list[list[list[int]]],
+                           expected_outputs: list[list[list[int]]]) -> (bool, bool, list[list[list[int]]]):
     """
-    # Split code into lines
-    lines = code.rstrip().split('\n')
-    # Indent each line
-    indented_lines = [' ' * spaces + line for line in lines]
-    # Join back into a string
-    return '\n'.join(indented_lines)
-
-
-def execute_code_with_grid(code, input_grid, temp_dir=None):
-    """Execute Python code with the provided input grid using a subprocess for isolation.
+    Execute code against multiple input grids in a single in-memory subprocess.
 
     Args:
-        code (str): The Python code to execute
-        input_grid (list): The input grid to pass to the solve function
-        temp_dir (str, optional): Directory where temporary files will be created.
-                                 If None, system default temp directory is used.
+        code: Python code to execute (must define a 'solve' function)
+        input_grids: list of input grids to test
+        expected_outputs: Optional list of expected output grids for validation
 
     Returns:
-        list or None: The result grid if execution was successful, None otherwise
+        Tuple of (error, passed, outputs):
+            - error: True if execution failed
+            - passed: True if all outputs match expected_outputs (when provided)
+            - outputs: list of output grids produced by the code
     """
     if not code.strip():
         logger.warning("Cannot execute empty code")
-        return None
+        return True, False, []
 
-    # Prepare code
-    code = prepare_code(code)
+    # Prepare the code
+    code = prepare_code_for_execution(code)
 
-    logger.debug(f"Executing code with grid of shape {len(input_grid)}x{len(input_grid[0]) if input_grid else 0}")
+    # Use spawn context for better isolation
+    ctx = mp.get_context('spawn')
+    result_queue = ctx.Queue()
+    process = ctx.Process(
+        target=_execute_code_worker,
+        args=(code, input_grids, expected_outputs, result_queue)
+    )
 
-    script_path = None
     try:
-        # Create the script file
-        script_path = create_subprocess_script(code, temp_dir)
+        # Start and wait with timeout
+        process.start()
+        process.join(TIMEOUT_SECONDS)
 
-        logger.debug(f"Created temporary script at {script_path}")
+        # Handle timeout
+        if process.is_alive():
+            logger.warning(f"Code execution timed out after {TIMEOUT_SECONDS} seconds")
+            process.terminate()
+            process.join(0.5)
+            if process.is_alive():
+                process.kill()
+            return True, False, []
 
-        # Prepare input data as JSON
-        input_data = {"grid": input_grid}
-        input_json = json.dumps(input_data)
+        # Process finished - get result
+        if result_queue.empty():
+            logger.error("Process ended but no result was returned")
+            return True, False, []
 
-        # Run the subprocess with timeout
-        process = subprocess.Popen(
-            [sys.executable, script_path],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            bufsize=-1
-        )
+        result = result_queue.get()
 
-        # Send input data
-        stdout, stderr = process.communicate(input=input_json, timeout=TIMEOUT_SECONDS)
-
-        if stderr:
-            logger.debug(f"Subprocess stderr: {stderr}")
-
-        # Process returned successfully
-        if process.returncode == 0:
-            try:
-                # Parse the JSON output
-                output = json.loads(stdout)
-
-                if output.get("stdout"):
-                    logger.debug(f"Code stdout output:\n{output['stdout']}")
-                if output.get("stderr"):
-                    logger.debug(f"Code stderr output:\n{output['stderr']}")
-
-                # Check if there was an error
-                if output.get("error"):
-                    logger.error(f"Error in executed code: {output['error']['message']}")
-                    logger.debug(f"Traceback: {output['error']['traceback']}")
-                    return None
-
-                # Get the result
-                result = output.get("result")
-
-                # Validate result is a 2D grid
-                if not (isinstance(result, list) and
-                        (not result or all(isinstance(row, list) for row in result))):
-                    logger.warning(f"Invalid result type: {type(result)}")
-                    if isinstance(result, list):
-                        logger.warning(f"Result is list but contains non-list elements or is empty")
-                    return None
-
-                logger.debug(
-                    f"Code execution successful, result grid shape: {len(result)}x{len(result[0]) if result and result[0] else 0}")
-
-                return result
-            except json.JSONDecodeError:
-                logger.error(f"Failed to decode subprocess output as JSON: {stdout}")
-                return None
+        # Process the result
+        if result['success']:
+            if result['stdout']:
+                logger.debug(f"Code stdout: {result['stdout']}")
+            if result['stderr']:
+                logger.debug(f"Code stderr: {result['stderr']}")
+            return False, result['passed'], result['results']
         else:
-            logger.warning(f"Subprocess exited with code {process.returncode}")
-            return None
+            logger.error(f"Error in executed code: {result['error']}")
+            logger.debug(f"Traceback: {result['traceback']}")
+            return True, False, []
 
-    except subprocess.TimeoutExpired:
-        logger.warning(f"Code execution timed out after {TIMEOUT_SECONDS} seconds")
-        return None
     except Exception as e:
         logger.error(f"Exception during code execution: {str(e)}")
-        import traceback
-        logger.error(traceback.format_exc())
-        return None
+        return True, False, []
     finally:
-        # Clean up temporary files
-        if script_path and os.path.exists(script_path):
+        # Ensure process is terminated
+        if process.is_alive():
+            process.terminate()
             try:
-                os.unlink(script_path)
-            except:
-                pass
+                process.join(0.5)
+                if process.is_alive():
+                    process.kill()
+            except Exception as e:
+                logger.error(f"Exception during code execution: {str(e)}")
+
+
+def run_training_examples(self, code: str) -> (bool, bool, list[list[list[int]]]):
+    """Run code against all training examples in a single process."""
+    input_grids = [example.input_grid.grid for example in self.training_examples]
+    expected_outputs = [example.output_grid.grid for example in self.training_examples]
+
+    return execute_code_with_task(code, input_grids, expected_outputs)
+
+
+def run_test_examples(self, code: str) -> (bool, bool, list[list[list[int]]]):
+    """Run code against all test examples in a single process."""
+    input_grids = [example.input_grid.grid for example in self.test_examples]
+    expected_outputs = [example.output_grid.grid for example in self.test_examples
+                        if example.output_grid is not None]
+
+    return execute_code_with_task(code, input_grids, expected_outputs)
