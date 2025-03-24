@@ -1,7 +1,7 @@
 import logging
+from random import shuffle
 
 from vllm.outputs import RequestOutput
-from random import shuffle
 
 from arc_rstar.agents.node import Node
 from arc_rstar.arc_task.task import ARCTask

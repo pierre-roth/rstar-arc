@@ -33,11 +33,11 @@ def build_graph_from_nodes(nodes):
     for node in nodes:
         # Example condition - replace with your own attribute check
         # For example: node.state.get("success", False)
-        if node.valid and node.terminal_reason is not None and node.passes_training:
+        if node.is_valid_final_answer_node():
             node_colors.append('#00cc00')  # Green for successful nodes
         elif not node.valid:
             node_colors.append('#ff0000')  # Red for invalid nodes
-        elif node.terminal_reason is not None:
+        elif node.terminal:
             node_colors.append('#ffcc00')  # Yellow for terminal nodes
         else:
             node_colors.append('#6175c1')  # Default blue for other nodes

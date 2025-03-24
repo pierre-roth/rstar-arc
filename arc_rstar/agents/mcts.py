@@ -1,12 +1,8 @@
 import logging
 from random import choice
 
-from vllm.outputs import RequestOutput
-
-from arc_rstar.agents.node import Node
 from arc_rstar.agents.beam_search import BS  # Import the BS class
-from arc_rstar.arc_task.task import ARCTask
-from config import Config
+from arc_rstar.agents.node import Node
 
 logger = logging.getLogger(__name__)
 

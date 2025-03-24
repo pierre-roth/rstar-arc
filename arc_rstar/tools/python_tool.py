@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 # TODO make sure the temporary scripts for code execution are always deleted!
-
+# TODO fix timout handling and node error handling
 
 def extract_python_code(text):
     """Extract Python code from text after the last CODE marker, removing any CODE_END or STEP_END markers."""
