@@ -16,6 +16,7 @@ ETH_USERNAME = "piroth"
 
 NET_SCRATCH_PATH = f"/itet-stor/{ETH_USERNAME}/net_scratch"  # net-scratch directory
 LOCAL_SCRATCH_PATH = f"/scratch/{ETH_USERNAME}"  # local scratch directory
+SECOND_LOCAL_SCRATCH_PATH = f"/scratch-second/{ETH_USERNAME}"
 HOME_PATH = f"/home/{ETH_USERNAME}"  # home directory
 
 DEFAULT_DATA_FOLDER = f"{HOME_PATH}/rstar-arc/data_sample"  # path for sample data in git repo

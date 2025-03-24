@@ -184,6 +184,7 @@ def load_nodes(filename):
 
 def save_summary(config, node_lists: list[list[Node]], batch_number: int):
     result = []
+    num_solved = 0
     for nodelist in node_lists:
 
         task_result = []
@@ -201,6 +202,7 @@ def save_summary(config, node_lists: list[list[Node]], batch_number: int):
         correct_answer_nodes.sort(key=lambda node: len(node.collect_partial_solution().split()))
 
         if correct_answer_nodes:
+            num_solved += 1
             task_result.append(
                 f"### Found {len(correct_answer_nodes)} correct solutions for task {correct_answer_nodes[0].task.name} ###")
             for i, node in enumerate(correct_answer_nodes):
@@ -212,6 +214,8 @@ def save_summary(config, node_lists: list[list[Node]], batch_number: int):
             task_result.append(f"### No correct solutions found for task {nodelist[0].task.name} ###")
 
         result.append("\n".join(task_result))
+
+    logger.info(f"Batch {batch_number + 1} summary: {num_solved} tasks solved out of {len(node_lists)}")
 
     with open(os.path.join(config.temporary_path, f"summary_{batch_number + 1}.py"), "w") as f:
         f.write("\n\n\n\n".join(result))
