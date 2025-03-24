@@ -106,9 +106,8 @@ def execute_code_in_subprocess(code_str, input_grids, expected_outputs=None):
                     results.append(result)
 
                     # Check against expected output if provided
-                    if expected_outputs and i < len(expected_outputs):
-                        if result != expected_outputs[i]:
-                            passed = False
+                    if expected_outputs and result != expected_outputs[i]:
+                        passed = False
                 except Exception as e:
                     print(f"Error processing grid {{i}}: {{str(e)}}", file=sys.stderr)
                     results.append(None)
