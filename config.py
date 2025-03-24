@@ -56,10 +56,11 @@ class Config:
     loading configuration from a YAML file and providing default values.
     """
     ###########################################
-    # APPLICATION PARAMETERS
+    # LOGGING PARAMETERS
     ###########################################
     log_level: str = "DEBUG"  # Logging level: DEBUG, INFO, WARNING, ERROR, CRITICAL
     numeric_log_level: Optional[int] = None  # Numeric logging level (set automatically)
+    model_initialization_times = {"policy": None, "reward": None}  # Time taken to initialize models
 
     ###########################################
     # PROMPT PARAMETERS

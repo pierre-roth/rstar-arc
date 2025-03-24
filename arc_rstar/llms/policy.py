@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime
 
 from vllm import LLM, SamplingParams, RequestOutput
 
@@ -16,7 +17,7 @@ class PolicyModel:
     def init(self):
         """Initialize the language model."""
 
-        logger.info("Initializing policy model ...")
+        start = datetime.now()
 
         self.llm = LLM(
             model=self.config.policy_model,
@@ -35,7 +36,8 @@ class PolicyModel:
             include_stop_str_in_output=True
         )
 
-        logger.info("Policy model initialized.")
+        end = datetime.now()
+        self.config.model_initialization_times["policy"] = end - start
 
     def generate(self, prompts: list[str]) -> list[RequestOutput]:
         """

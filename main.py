@@ -49,4 +49,9 @@ if __name__ == '__main__':
 
     end_time: datetime = datetime.now()
 
-    logging.info(f"DONE! Total time taken: {end_time - start_time}")
+    total_time = end_time - start_time
+    policy_init_time = config.model_initialization_times['policy']
+    reward_init_time = config.model_initialization_times['reward']
+
+    logging.info(f"DONE! Total time taken: {total_time}")
+    logging.info(f"Time taken without model initializations: {total_time - policy_init_time - reward_init_time}")

@@ -1,7 +1,7 @@
 import logging
-from vllm import LLM, SamplingParams, RequestOutput
+from datetime import datetime
 
-from config import Config, STEP_END, CODE_END
+from config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -13,9 +13,10 @@ class RewardModel:
     def init(self):
         """Initialize the language model."""
 
-        logger.info("Initializing reward model ...")
+        start = datetime.now()
 
-        logger.info("Reward model initialized.")
+        end = datetime.now()
+        self.config.model_initialization_times["policy"] = end - start
 
     def score(self, prompts: list[str]) -> list[float]:
         """
