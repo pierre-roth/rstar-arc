@@ -1,0 +1,4 @@
+search-mode: "mcts"
+log-level: "DEBUG"
+
+data-folder: "/home/piroth/rstar-arc/data_sample/easy"
