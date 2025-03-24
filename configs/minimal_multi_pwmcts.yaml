@@ -2,3 +2,7 @@ search-mode: "pwmcts"
 log-level: "DEBUG"
 
 data-folder: "/home/piroth/rstar-arc/data_sample/very_easy"
+
+num-simulations: 8
+max-depth: 7
+
