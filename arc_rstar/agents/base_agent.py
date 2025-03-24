@@ -97,8 +97,8 @@ class Agent:
 
             # Create children from outputs
             new_children = []
-            for output in request_output.outputs:
-                child = current_node.add_child(output.text)
+            for text in set(map(lambda o: o.text, request_output.outputs)):
+                child = current_node.add_child(text)
                 new_children.append(child)
 
             # Add all new children to candidate nodes for evaluation
