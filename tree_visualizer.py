@@ -22,7 +22,10 @@ def build_graph_from_nodes(nodes):
     hover_texts = []
     for node in nodes:
         # Extract raw Python code (with proper newlines)
-        code = extract_python_code(node.collect_partial_solution())
+        try:
+            code = extract_python_code(node.collect_partial_solution())
+        except ValueError:
+            code = "NO VALID CODE FOUND!"
         # Highlight the code using Pygments (do not pre-replace newlines)
         # Replace newlines with Plotly’s <br> tags so that the code appears multi‑line in the hover
         code = code.replace('\n', '<br>').replace(STEP_END, f"# {STEP_END}<br>").replace(CODE_END, "")

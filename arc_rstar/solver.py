@@ -5,7 +5,7 @@ from vllm.outputs import RequestOutput
 
 from arc_rstar.agents import BS, MCTS, Node
 from arc_rstar.llms import PolicyModel, RewardModel
-from config import Config, TIMEOUT_SECONDS
+from config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +69,7 @@ class Solver:
             except StopIteration:
                 break
             except Exception as error:
-                logger.error(f"Exception while generating postprocess: {error}")
+                logger.error(f"Exception while generating postprocess (shouldn't happen): {error}")
                 post_agents.append(None)
 
         # update agents

@@ -1,12 +1,11 @@
 import logging
-import os.path
+from datetime import datetime
+
 from vllm import LLM, SamplingParams
 
-from datetime import datetime
-from config import Config, DEFAULT_DATA_FOLDER, LOCAL_SCRATCH_PATH
-from arc_rstar.arc_task.task import ARCTask
-from utils import setup_logging, load_tasks
+from config import Config
 from prompt import get_prompt
+from utils import setup_logging, load_tasks
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +28,7 @@ if __name__ == '__main__':
 
     llm = LLM(
         model="Qwen/QwQ-32B",
-        download_dir=os.path.join(LOCAL_SCRATCH_PATH, "models", "policy"),
+        download_dir=config.policy_model_dir,
         tensor_parallel_size=1,
         dtype="bfloat16",
         max_model_len=16384,
@@ -42,10 +41,7 @@ if __name__ == '__main__':
         n=1
     )
 
-    for file_name in os.listdir(config.data_folder):
-        task_path = os.path.join(config.data_folder, file_name)
-        task = ARCTask(config, task_path)
-
+    for task in tasks:
         prompt = get_prompt(config, task)
 
         request_outputs = llm.generate([prompt], sampling_params=sampling_params)
@@ -56,7 +52,7 @@ if __name__ == '__main__':
         outputs = [completion_output.text for completion_output in completion_outputs]
 
         for output in outputs:
-            logging.debug(output)
+            logging.debug("\n" + output)
 
     end_time: datetime = datetime.now()
 

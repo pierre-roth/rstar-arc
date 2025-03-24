@@ -17,8 +17,9 @@
 # Default application parameters
 ETH_USERNAME=piroth
 PROJECT_NAME=rstar-arc
-DIRECTORY=/home/${ETH_USERNAME}/${PROJECT_NAME}/bootstrap
+DIRECTORY=/home/${ETH_USERNAME}/${PROJECT_NAME}
 CONDA_ENVIRONMENT=arc-solver
+CONFIG_FILE="basic_bs.yaml"
 
 # Exit on errors
 set -o errexit
@@ -68,6 +69,11 @@ trap 'echo "Transferring logs and cleaning up...";
       echo "All files transferred to ${final_job_dir}";
       rm -rf "${local_job_dir}"' EXIT
 
+# Allow specifying a different config file as the only CLI argument
+# Usage: ./run.sh [config_file]
+if [ $# -eq 1 ]; then
+  CONFIG_FILE=$1
+fi
 
 # Send noteworthy information to both SLURM log and our detailed log
 {
@@ -75,11 +81,10 @@ trap 'echo "Transferring logs and cleaning up...";
   echo "In directory: $(pwd)"
   echo "Starting on: $(date)"
   echo "SLURM_JOB_ID: ${SLURM_JOB_ID}"
+  echo "Using config file: ${CONFIG_FILE}"
   echo "Detailed job data will be saved to: ${final_job_dir}"
 } | tee "${local_job_dir}/job_info.log"
 
-# Log GPU information
-nvidia-smi > "${local_job_dir}/gpu_info.log" 2>&1
 
 # Activate conda environment
 [[ -f /itet-stor/${ETH_USERNAME}/net_scratch/conda/bin/conda ]] && eval "$(/itet-stor/${ETH_USERNAME}/net_scratch/conda/bin/conda shell.bash hook)"
@@ -88,13 +93,13 @@ echo "Conda activated" | tee -a "${local_job_dir}/job_info.log"
 cd ${DIRECTORY}
 
 # Execute the Python application with output redirected to local scratch
-echo "Running: python bootstrap.py" | tee -a "${local_job_dir}/job_info.log"
+echo "Running: python bootstrap.py --config-file ${CONFIG_FILE}" | tee -a "${local_job_dir}/job_info.log"
 
 # Setting relevant environment variables
 export VLLM_LOGGING_LEVEL=DEBUG
 
 # Run the program with output going to local scratch
-python main.py > "${local_job_dir}/program_output.log" 2> "${local_job_dir}/program_error.log"
+python bootstrap.py --config-file ${CONFIG_FILE} > "${local_job_dir}/program_output.log" 2> "${local_job_dir}/program_error.log"
 EXIT_CODE=$?
 
 # Send completion information to both SLURM log and our detailed log
