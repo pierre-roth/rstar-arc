@@ -15,6 +15,7 @@ class BS:
 
     def __init__(self, config: Config, task: ARCTask):
         self.config: Config = config
+
         self.task = task
         self.root: Node | None = None
         self.current_nodes: list[Node] = []

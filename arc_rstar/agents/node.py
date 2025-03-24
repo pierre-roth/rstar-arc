@@ -17,6 +17,7 @@ class Node:
 
     def __init__(self, config: Config):
         self.config: Config = config
+
         self.state = {"text": "", "extra_info": ""}
         self.parent: Node | None = None
         self.children: list[Node] = []
@@ -51,14 +52,14 @@ class Node:
 
         self.terminal = False
 
-        # Check if ended with code end marker
-        if self.state["text"].strip().endswith(CODE_END):
-            self.terminal_reason = TERMINAL_CODE_END
-            self.terminal = True
-
         # Check if maximum depth reached
         if self.depth >= self.config.max_depth:
             self.terminal_reason = TERMINAL_MAX_DEPTH
+            self.terminal = True
+
+        # Check if ended with code end marker
+        if self.state["text"].strip().endswith(CODE_END):
+            self.terminal_reason = TERMINAL_CODE_END
             self.terminal = True
 
         if not self.valid:
@@ -144,8 +145,6 @@ class Node:
             logger.debug(f"Successfully extracted code ({len(code.splitlines())} lines)")
             logger.debug("Validation: testing for errors while running training examples")
 
-            # Just check if execution works without errors
-            # The function returns (bool, list) but we only check if it returns not None
             error, passed, output = self.task.run_training_examples(code)
 
             if error:

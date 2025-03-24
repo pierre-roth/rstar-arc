@@ -50,11 +50,14 @@ class Example:
 
 class ARCTask:
     def __init__(self, config: Config, path):
-        self.path = path
         self.config = config
+
+        self.path = path
         self.name = os.path.splitext(os.path.basename(path))[0]
+
         self.training_examples = []
         self.test_examples = []
+
         self._load_data()
 
     def _load_data(self):

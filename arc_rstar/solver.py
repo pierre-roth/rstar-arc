@@ -58,7 +58,7 @@ class Solver:
     def generate_postprocess(self, outputs: list[list[RequestOutput]], valid_agents: list[Agent]) -> list[Agent]:
         post_agents = []
 
-        with ProcessPool(max_workers=min(len(valid_agents), self.config.cpus - 1)) as pool:
+        with ProcessPool(max_workers=min(len(valid_agents), max(1, self.config.cpus - 1))) as pool:
             future = pool.map(self.__class__.processor, valid_agents, outputs, timeout=TIMEOUT_SECONDS)
             iterator = future.result()
 

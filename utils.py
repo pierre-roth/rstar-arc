@@ -86,29 +86,8 @@ def setup_logging(config: Config):
     _logger.addHandler(console_handler)
 
     # Log some basic information at startup
-    logging.info(f"rStar-ARC initialized with job ID: {config.job_id}")
-    logging.info(f"Search mode: {config.search_mode}")
-
-
-def make_serializable(obj):
-    """
-    Recursively convert an object into something JSON serializable.
-    - For basic types (str, int, float, bool, None) returns the object as is.
-    - For lists/tuples, converts each element.
-    - For dicts, converts keys and values.
-    - For objects with __dict__, returns a dict of its public attributes.
-    - Otherwise, returns the string representation.
-    """
-    if isinstance(obj, (str, int, float, bool)) or obj is None:
-        return obj
-    elif isinstance(obj, list):
-        return [make_serializable(item) for item in obj]
-    elif isinstance(obj, tuple):
-        return tuple(make_serializable(item) for item in obj)
-    elif isinstance(obj, dict):
-        return {make_serializable(key): make_serializable(value) for key, value in obj.items()}
-    else:
-        return str(obj)
+    logger.info(f"rStar-ARC initialized with job ID: {config.job_id}")
+    logger.info(f"Search mode: {config.search_mode}")
 
 
 def make_serializable(obj):
@@ -129,8 +108,8 @@ def make_serializable(obj):
         return [make_serializable(item) for item in obj]
     elif isinstance(obj, dict):
         return {make_serializable(key): make_serializable(value) for key, value in obj.items()}
-    elif hasattr(obj, '__dict__'):
-        return {key: make_serializable(val) for key, val in obj.__dict__.items() if not key.startswith("_")}
+    # elif hasattr(obj, '__dict__'):
+    # return {key: make_serializable(val) for key, val in obj.__dict__.items() if not key.startswith("_")}
     else:
         return str(obj)
 

@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 # TODO fix timout handling and node error handling
 
 def extract_python_code(text):
-    """Extract Python code from text after the last CODE marker, removing any CODE_END or STEP_END markers."""
+    """Extract Python code from text after the last CODE marker"""
 
     logger.debug(f"Extracting code from text (which has {len(text)} characters)")
 
