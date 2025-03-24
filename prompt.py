@@ -6,7 +6,7 @@ from config import Config, CODE, CODE_END, STEP_END, DEFAULT_EXAMPLE_DATA_PATH
 
 def get_prompt(config: Config, task: ARCTask) -> str:
     ### PROMPT PREFIX ###
-    prompt_prefix = f"""You are a powerful agent with broad problem solving/pattern matching knowledge and great python programming skills. You need to write Python code to solve an ARC (Abstraction and Reasoning Corpus) task, or more specifcally implement the transformation function that can transform the input grids into their corresponding output grids.
+    prompt_prefix = f"""You are a powerful agent with broad problem solving/pattern matching knowledge and great python programming skills. You need to write Python code to solve an ARC (Abstraction and Reasoning Corpus) task, or more specifically implement the transformation function that can transform the input grids into their corresponding output grids.
 
 ARC Task Description:
     - ARC tasks are composed of a set of training input-output examples and a set of test input grids.

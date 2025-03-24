@@ -99,7 +99,7 @@ echo "Running: python main.py --config-file ${CONFIG_FILE}" | tee -a "${local_jo
 export VLLM_LOGGING_LEVEL=DEBUG
 
 # Run the program with output going to local scratch
-python main.py --config-file ${CONFIG_FILE} > "${local_job_dir}/program_output.log" 2> "${local_job_dir}/program_error.log"
+python main.py --config-file "${CONFIG_FILE}" > "${local_job_dir}/program_output.log" 2> "${local_job_dir}/program_error.log"
 EXIT_CODE=$?
 
 # Send completion information to both SLURM log and our detailed log

@@ -7,16 +7,10 @@ from config import TIMEOUT_SECONDS, CODE, CODE_END, STEP_END, MEMORY_LIMIT_BYTES
 logger = logging.getLogger(__name__)
 
 
-# TODO make sure the temporary scripts for code execution are always deleted!
-# TODO fix timout handling and node error handling
-
-
 def extract_python_code(text):
     """Extract Python code from text after the last CODE marker"""
 
     logger.debug(f"Extracting code from text (which has {len(text)} characters)")
-
-    # TODO: Add more checks for invalid code
 
     if not text.strip().endswith(STEP_END) and not text.strip().endswith(CODE_END) and not text.strip().endswith(
             "def solve(I):"):
@@ -192,18 +186,18 @@ def execute_code_with_task(code: str, input_grids: list[list[list[int]]],
                 logger.error(f"Exception during code execution: {str(e)}")
 
 
-def run_training_examples(self, code: str) -> (bool, bool, list[list[list[int]]]):
+def run_training_examples(task, code: str) -> (bool, bool, list[list[list[int]]]):
     """Run code against all training examples in a single process."""
-    input_grids = [example.input_grid.grid for example in self.training_examples]
-    expected_outputs = [example.output_grid.grid for example in self.training_examples]
+    input_grids = [example.input_grid.grid for example in task.training_examples]
+    expected_outputs = [example.output_grid.grid for example in task.training_examples]
 
     return execute_code_with_task(code, input_grids, expected_outputs)
 
 
-def run_test_examples(self, code: str) -> (bool, bool, list[list[list[int]]]):
+def run_test_examples(task, code: str) -> (bool, bool, list[list[list[int]]]):
     """Run code against all test examples in a single process."""
-    input_grids = [example.input_grid.grid for example in self.test_examples]
-    expected_outputs = [example.output_grid.grid for example in self.test_examples
+    input_grids = [example.input_grid.grid for example in task.test_examples]
+    expected_outputs = [example.output_grid.grid for example in task.test_examples
                         if example.output_grid is not None]
 
     return execute_code_with_task(code, input_grids, expected_outputs)

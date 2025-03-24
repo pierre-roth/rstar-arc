@@ -29,7 +29,7 @@ if __name__ == '__main__':
     llm = LLM(
         model="Qwen/QwQ-32B",
         download_dir=config.policy_model_dir,
-        tensor_parallel_size=1,
+        tensor_parallel_size=config.gpus,
         dtype="bfloat16",
         max_model_len=16384,
     )

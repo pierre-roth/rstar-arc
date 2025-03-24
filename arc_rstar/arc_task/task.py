@@ -1,8 +1,11 @@
 import json
+import logging
 import os
 from typing import Optional
 
 from config import Config
+
+logger = logging.getLogger(__name__)
 
 
 class Grid:
@@ -85,7 +88,7 @@ class ARCTask:
                         ))
 
         except Exception as e:
-            print(f"Error loading task data: {e}")
+            logger.error(f"Error loading task data: {e}")
 
     def __eq__(self, other: "ARCTask"):
         """Check if two ARCTask objects are equal by comparing their train and test data"""

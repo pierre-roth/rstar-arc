@@ -4,10 +4,6 @@ from random import shuffle
 from vllm.outputs import RequestOutput
 
 from arc_rstar.agents.base_agent import Agent
-from arc_rstar.agents.node import Node
-from arc_rstar.arc_task.task import ARCTask
-from config import Config
-from prompt import get_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +26,7 @@ class BS(Agent):
                 candidate_node.value = score
 
         # shuffle candidate nodes to break ties randomly (sorting is stable)
-        shuffle(self.current_nodes)
+        shuffle(self.candidate_nodes)
         # Sort all candidates by their value (highest first)
         self.candidate_nodes = sorted(self.candidate_nodes, key=lambda x: x.value, reverse=True)
 

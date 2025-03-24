@@ -57,16 +57,16 @@ def build_graph_from_nodes(nodes):
 
     # Create a directed graph.
     G = igraph.Graph(directed=True)
-    G.add_vertices(len(tags))
+    G.add_vertices(n=len(tags))
     G.vs["label"] = tags
     G.vs["hovertext"] = hover_texts
     G.vs["color"] = node_colors
     if edges:
-        G.add_edges(edges)
+        G.add_edges(es=edges)
     return G
 
 
-def visualize_tree(json_filename, open=True):
+def visualize_tree(json_filename, open_website=True):
     # Load nodes from file.
     nodes = load_nodes(json_filename)
     if not nodes:
@@ -142,7 +142,7 @@ def visualize_tree(json_filename, open=True):
     json_dir = os.path.dirname(os.path.abspath(json_filename))
     output_html = os.path.join(json_dir, f"tree_{nodes[0].task}_visualization.html")
     fig.write_html(output_html)
-    if open:
+    if open_website:
         webbrowser.open('file://' + os.path.realpath(output_html))
 
 
@@ -156,4 +156,4 @@ if __name__ == "__main__":
         # visualize tree for every json file in the directory
         for filename in os.listdir(input_path):
             if filename.endswith(".json"):
-                visualize_tree(os.path.join(input_path, filename), open=open_all.strip().lower() == "y")
+                visualize_tree(os.path.join(input_path, filename), open_website=open_all.strip().lower() == "y")

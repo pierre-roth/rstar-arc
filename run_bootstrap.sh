@@ -99,7 +99,7 @@ echo "Running: python bootstrap.py --config-file ${CONFIG_FILE}" | tee -a "${loc
 export VLLM_LOGGING_LEVEL=DEBUG
 
 # Run the program with output going to local scratch
-python bootstrap.py --config-file ${CONFIG_FILE} > "${local_job_dir}/program_output.log" 2> "${local_job_dir}/program_error.log"
+python bootstrap.py --config-file "${CONFIG_FILE}" > "${local_job_dir}/program_output.log" 2> "${local_job_dir}/program_error.log"
 EXIT_CODE=$?
 
 # Send completion information to both SLURM log and our detailed log
