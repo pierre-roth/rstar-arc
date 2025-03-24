@@ -21,14 +21,9 @@ def extract_python_code(text):
 
     # TODO: Add more checks for invalid code
 
-    # Check if text contains the CODE marker
-    if CODE not in text:
-        logger.warning(f"CODE marker not found in text")
-        raise ValueError(f"CODE marker not found in text")
-
-    if not text.strip().endswith(STEP_END) and not text.strip().endswith(CODE_END):
+    if not text.strip().endswith(STEP_END) and not text.strip().endswith(CODE_END) and not text.strip().endswith(
+            "def solve(I):"):
         logger.warning(f"Text does not end with a valid marker (STEP_END or CODE_END)")
-        raise ValueError(f"Text does not end with a valid marker (STEP_END or CODE_END)")
 
     # Find the last CODE marker and get all content after it
     last_code_start = text.rindex(CODE) + len(CODE)
