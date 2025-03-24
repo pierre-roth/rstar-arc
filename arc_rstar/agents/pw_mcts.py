@@ -1,6 +1,8 @@
 import logging
 from random import choice
 
+from vllm.outputs import RequestOutput
+
 from arc_rstar.agents.beam_search import Agent
 from arc_rstar.agents.node import Node
 
@@ -71,3 +73,22 @@ class PWMCTS(Agent):
 
         # Log current selection state
         logger.debug(f"Selected {len(self.current_nodes)} nodes for next step")
+
+    def generate_next_step(self, outputs: list[RequestOutput]) -> None:
+        """Generate and add child nodes from model outputs."""
+        self.candidate_nodes = []
+
+        # For each current node, expand with corresponding outputs
+        for current_node, request_output in zip(self.current_nodes, outputs):
+            logger.debug(f"Expanding node at depth {current_node.depth} with {len(request_output.outputs)} children")
+
+            # Create children from outputs
+            new_children = []
+            for output in request_output.outputs:
+                child = current_node.add_child(output.text)
+                new_children.append(child)
+
+            # Add all new children to candidate nodes for evaluation
+            self.candidate_nodes.extend(new_children)
+
+        logger.debug(f"Added {len(self.candidate_nodes)} candidate nodes (i.e. children)")
