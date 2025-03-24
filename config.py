@@ -189,18 +189,25 @@ class Config:
         Load configuration settings from a YAML file
 
         This method:
-        1. Checks if the file exists (in current directory or configs/ subfolder)
+        1. Checks if the file exists (in configs/ or tmp_configs/ subfolder)
         2. Loads and parses the YAML content
         3. Updates the instance with values from the config file
         """
-
         try:
-            # Check if file exists at the specified path
-            if not os.path.isfile(os.path.join("configs", self.config_file)):
+            # Define possible config file locations
+            config_paths = [
+                os.path.join("configs", self.config_file),
+                os.path.join("tmp_configs", self.config_file)
+            ]
+
+            # Find the first existing config file
+            config_path = next((path for path in config_paths if os.path.isfile(path)), None)
+
+            if not config_path:
                 raise FileNotFoundError(f"Config file not found: {self.config_file}")
 
             # Read and parse the YAML file
-            with open(os.path.join("configs", self.config_file), 'r') as f:
+            with open(config_path, 'r') as f:
                 config_data = yaml.safe_load(f) or {}
 
             # Convert kebab-case keys to snake_case for Python compatibility
@@ -210,7 +217,7 @@ class Config:
             for key, value in config_data.items():
                 if hasattr(self, key):
                     setattr(self, key, value)
-                    logging.debug(f"Loaded from {self.config_file}: {key}={value}")
+                    logging.debug(f"Loaded from {config_path}: {key}={value}")
 
         except Exception as e:
             logging.error(f"Error loading config file: {e}")
