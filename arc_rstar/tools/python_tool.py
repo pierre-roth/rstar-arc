@@ -13,25 +13,28 @@ logger = logging.getLogger(__name__)
 # TODO make sure the temporary scripts for code execution are always deleted!
 # TODO fix timout handling and node error handling
 
+
 def extract_python_code(text):
     """Extract Python code from text after the last CODE marker"""
 
     logger.debug(f"Extracting code from text (which has {len(text)} characters)")
 
+    # TODO: Add more checks for invalid code
+
     # Check if text contains the CODE marker
     if CODE not in text:
         logger.warning(f"CODE marker not found in text")
-        raise ValueError(f"No CODE marker found in text")
+        raise ValueError(f"CODE marker not found in text")
+
+    if not text.strip().endswith(STEP_END) and not text.strip().endswith(CODE_END):
+        logger.warning(f"Text does not end with a valid marker (STEP_END or CODE_END)")
+        raise ValueError(f"Text does not end with a valid marker (STEP_END or CODE_END)")
 
     # Find the last CODE marker and get all content after it
     last_code_start = text.rindex(CODE) + len(CODE)
     code = text[last_code_start:].strip()
 
-    if not code:
-        raise ValueError(f"No code was extracted after the last CODE marker")
-
-    logger.debug(f"Extracted code block (with {len(code)} characters, {len(code.splitlines())} lines)")
-    logger.debug(f"Code block:\n{code}")
+    logger.debug(f"Extracted code block:\n{code}")
 
     return code
 

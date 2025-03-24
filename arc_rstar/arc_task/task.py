@@ -14,9 +14,6 @@ class Grid:
         self.rows: int = len(self.grid)
         self.columns: int = len(self.grid[0])
 
-        # enforce that all rows have the same number of columns
-        assert all(len(row) == self.columns for row in self.grid)
-
     def __eq__(self, other: "Grid"):
         return self.grid == other.grid
 
@@ -91,7 +88,7 @@ class ARCTask:
         except Exception as e:
             print(f"Error loading task data: {e}")
 
-    def __eq__(self, other: 'ARCTask'):
+    def __eq__(self, other: "ARCTask"):
         """Check if two ARCTask objects are equal by comparing their train and test data"""
         # Compare training data
         if len(self.training_examples) != len(other.training_examples):

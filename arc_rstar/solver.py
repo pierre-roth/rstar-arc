@@ -59,7 +59,7 @@ class Solver:
         post_agents = []
 
         with ProcessPool(max_workers=min(len(valid_agents), max(1, self.config.cpus - 1))) as pool:
-            future = pool.map(self.__class__.processor, valid_agents, outputs, timeout=TIMEOUT_SECONDS)
+            future = pool.map(self.__class__.processor, valid_agents, outputs)
             iterator = future.result()
 
         while True:
