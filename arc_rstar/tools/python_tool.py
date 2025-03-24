@@ -1,6 +1,8 @@
 import logging
-import multiprocessing as mp
-import traceback
+import subprocess
+import json
+import textwrap
+import signal
 
 from config import TIMEOUT_SECONDS, CODE, CODE_END, STEP_END, MEMORY_LIMIT_BYTES
 
@@ -37,80 +39,151 @@ def prepare_code_for_execution(code):
     return clean_code
 
 
-def _execute_code_worker(code: str, input_grids: list[list[list[int]]],
-                         expected_outputs: list[list[list[int]]], result_queue: mp.Queue):
-    """Worker function to run in a separate process."""
-    import numpy as np
-    import sys
-    from io import StringIO
+def execute_code_in_subprocess(code_str, input_grids, expected_outputs=None):
+    """
+    Spawns a new Python interpreter to execute code against multiple grids.
 
-    # Set memory limits
-    try:
+    Parameters:
+      - code_str: A string containing the code to test (defining a 'solve' function)
+      - input_grids: List of input grids to test
+      - expected_outputs: Optional list of expected output grids for validation
+
+    Returns a tuple (error, passed, outputs):
+      - error: True if execution failed
+      - passed: True if all outputs match expected_outputs (when provided)
+      - outputs: List of outputs from solve(grid) for each input grid
+    """
+    # Minimal wrapper code for the subprocess.
+    # It sets memory and CPU limits, imports numpy, reads the user code,
+    # loads the input data from a JSON argument, and executes solve() on each grid.
+    wrapper_code = textwrap.dedent(f"""
         import resource
-        resource.setrlimit(resource.RLIMIT_AS, (MEMORY_LIMIT_BYTES, MEMORY_LIMIT_BYTES * 2))
-    except (ImportError, AttributeError):
-        logger.warning("Could not set memory limits! ")
+        import sys
+        import json
+        import numpy as np
 
-    # Capture stdout/stderr
-    stdout_capture = StringIO()
-    stderr_capture = StringIO()
-    sys.stdout = stdout_capture
-    sys.stderr = stderr_capture
+        # Set memory limit
+        try:
+            resource.setrlimit(resource.RLIMIT_AS, ({MEMORY_LIMIT_BYTES}, {MEMORY_LIMIT_BYTES}))
+        except Exception as e:
+            print(f"Warning: Could not set memory limit: {{e}}", file=sys.stderr)
+
+        # Set CPU time limit
+        try:
+            resource.setrlimit(resource.RLIMIT_CPU, ({TIMEOUT_SECONDS}, {TIMEOUT_SECONDS}))
+        except Exception as e:
+            print(f"Warning: Could not set CPU time limit: {{e}}", file=sys.stderr)
+
+        # Read user code from stdin
+        user_code = sys.stdin.read()
+
+        try:
+            # Execute the user code to define solve()
+            exec(user_code, globals())
+
+            # Parse input data from command line arg
+            data = json.loads(sys.argv[1])
+            input_grids = data["input_grids"]
+            expected_outputs = data.get("expected_outputs", [])
+
+            # Test if solve is defined
+            if 'solve' not in globals():
+                print(json.dumps({{"error": True, "message": "Function 'solve' not defined"}}))
+                sys.exit(1)
+
+            # Run solve on each input grid
+            results = []
+            passed = True
+
+            for i, grid in enumerate(input_grids):
+                try:
+                    result = solve(grid)
+
+                    # Convert numpy arrays to lists
+                    if hasattr(result, 'tolist'):
+                        result = result.tolist()
+
+                    results.append(result)
+
+                    # Check against expected output if provided
+                    if expected_outputs and i < len(expected_outputs):
+                        if result != expected_outputs[i]:
+                            passed = False
+                except Exception as e:
+                    print(f"Error processing grid {{i}}: {{str(e)}}", file=sys.stderr)
+                    results.append(None)
+                    passed = False
+
+            # Return the results as JSON
+            print(json.dumps({{"error": False, "passed": passed, "results": results}}))
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc(file=sys.stderr)
+            print(json.dumps({{"error": True, "message": str(e)}}))
+            sys.exit(1)
+    """)
+
+    # Prepare input data
+    input_data = {
+        "input_grids": input_grids,
+        "expected_outputs": expected_outputs if expected_outputs else []
+    }
 
     try:
-        # Execute the code to define the solve function
-        namespace = {'__builtins__': __builtins__, 'np': np, 'numpy': np}
-        exec(code, namespace)
+        # Run the subprocess without a wall clock timeout (we rely solely on CPU time limit)
+        proc = subprocess.run(
+            ["python3", "-c", wrapper_code, json.dumps(input_data)],
+            input=code_str.encode("utf-8"),
+            capture_output=True
+        )
 
-        if 'solve' not in namespace:
-            raise NameError("Function 'solve' not defined in the code")
+        # Check if the subprocess was terminated by a signal
+        if proc.returncode < 0:
+            sig = -proc.returncode
+            if sig == signal.SIGXCPU:
+                logger.error("Process terminated due to CPU time limit exceeded.")
+                return True, False, []
+            else:
+                logger.error(f"Process terminated by signal: {sig}")
+                return True, False, []
 
-        # Process each grid
-        results = []
-        passed = True
+        # Handle subprocess output
+        stdout = proc.stdout.decode("utf-8").strip()
+        stderr = proc.stderr.decode("utf-8").strip()
 
-        for i, grid in enumerate(input_grids):
-            # Call the solve function
-            result = namespace['solve'](grid)
+        if stderr:
+            logger.debug(f"Subprocess stderr: {stderr}")
 
-            # Convert numpy arrays to lists if needed
-            if isinstance(result, np.ndarray):
-                result = result.tolist()
+        if proc.returncode != 0:
+            logger.error(f"Code execution failed with exit code {proc.returncode}: {stderr}")
+            return True, False, []
 
-            results.append(result)
+        try:
+            result_data = json.loads(stdout)
+            if result_data.get("error", False):
+                logger.error(f"Error in executed code: {result_data.get('message', 'Unknown error')}")
+                return True, False, []
 
-            # Check if results match expected outputs
-            if expected_outputs and result != expected_outputs[i]:
-                passed = False
+            return False, result_data.get("passed", False), result_data.get("results", [])
 
-        # Send success result
-        result_queue.put({
-            'success': True,
-            'results': results,
-            'passed': passed,
-            'stdout': stdout_capture.getvalue(),
-            'stderr': stderr_capture.getvalue(),
-        })
+        except json.JSONDecodeError:
+            logger.error(f"Failed to parse subprocess output: {stdout}")
+            return True, False, []
 
+    except subprocess.TimeoutExpired:
+        # This should not happen now that we removed wall-clock timeout
+        logger.error("Subprocess timed out unexpectedly. (This should be impossible)")
+        return True, False, []
     except Exception as e:
-        # Send error information
-        result_queue.put({
-            'success': False,
-            'error': str(e),
-            'traceback': traceback.format_exc(),
-            'stdout': stdout_capture.getvalue(),
-            'stderr': stderr_capture.getvalue(),
-        })
-    finally:
-        # Reset stdout/stderr
-        sys.stdout = sys.__stdout__
-        sys.stderr = sys.__stderr__
+        logger.error(f"Exception during code execution: {str(e)}")
+        return True, False, []
 
 
 def execute_code_with_task(code: str, input_grids: list[list[list[int]]],
                            expected_outputs: list[list[list[int]]]) -> (bool, bool, list[list[list[int]]]):
     """
-    Execute code against multiple input grids in a single in-memory subprocess.
+    Execute code against multiple input grids using a subprocess.
 
     Args:
         code: Python code to execute (must define a 'solve' function)
@@ -127,63 +200,11 @@ def execute_code_with_task(code: str, input_grids: list[list[list[int]]],
         logger.warning("Cannot execute empty code")
         return True, False, []
 
-    # Prepare the code
+    # Prepare the code if any pre-processing is needed
     code = prepare_code_for_execution(code)
 
-    # Use spawn context for better isolation
-    ctx = mp.get_context('spawn')
-    result_queue = ctx.Queue()
-    process = ctx.Process(
-        target=_execute_code_worker,
-        args=(code, input_grids, expected_outputs, result_queue)
-    )
-
-    try:
-        # Start and wait with timeout
-        process.start()
-        process.join(TIMEOUT_SECONDS)
-
-        # Handle timeout
-        if process.is_alive():
-            logger.warning(f"Code execution timed out after {TIMEOUT_SECONDS} seconds")
-            process.terminate()
-            process.join(0.5)
-            if process.is_alive():
-                process.kill()
-            return True, False, []
-
-        # Process finished - get result
-        if result_queue.empty():
-            logger.error("Process ended but no result was returned")
-            return True, False, []
-
-        result = result_queue.get()
-
-        # Process the result
-        if result['success']:
-            if result['stdout']:
-                logger.debug(f"Code stdout: {result['stdout']}")
-            if result['stderr']:
-                logger.debug(f"Code stderr: {result['stderr']}")
-            return False, result['passed'], result['results']
-        else:
-            logger.error(f"Error in executed code: {result['error']}")
-            logger.debug(f"Traceback: {result['traceback']}")
-            return True, False, []
-
-    except Exception as e:
-        logger.error(f"Exception during code execution: {str(e)}")
-        return True, False, []
-    finally:
-        # Ensure process is terminated
-        if process.is_alive():
-            process.terminate()
-            try:
-                process.join(0.5)
-                if process.is_alive():
-                    process.kill()
-            except Exception as e:
-                logger.error(f"Exception during code execution: {str(e)}")
+    # Execute in subprocess
+    return execute_code_in_subprocess(code, input_grids, expected_outputs)
 
 
 def run_training_examples(task, code: str) -> (bool, bool, list[list[list[int]]]):
