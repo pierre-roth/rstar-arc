@@ -97,6 +97,7 @@ echo "Running: python main.py --config-file ${CONFIG_FILE}" | tee -a "${local_jo
 
 # Setting relevant environment variables
 export VLLM_LOGGING_LEVEL=DEBUG
+export TOKENIZERS_PARALLELISM=true
 
 # Run the program with output going to local scratch
 python main.py --config-file "${CONFIG_FILE}" > "${local_job_dir}/program_output.log" 2> "${local_job_dir}/program_error.log"

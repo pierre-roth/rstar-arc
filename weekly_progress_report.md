@@ -130,7 +130,11 @@
 
   - potentially continue working on QwQ-32B bootstrapping code (unlikely)
 
-  -
+  - ARC-AGI-2 RELEASE !!!
+    - Read up on ARC-AGI-2, sign up for the competition, think what changes could be interesting to make to the system
+      to make it more competitive
+    - Do a submission of Kaggle to get a feel for the competition, the submission process, and the evaluation process
+    - Get a score)
 
 
 - **Work done**:

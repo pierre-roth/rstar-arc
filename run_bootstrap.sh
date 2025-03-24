@@ -97,6 +97,7 @@ echo "Running: python bootstrap.py --config-file ${CONFIG_FILE}" | tee -a "${loc
 
 # Setting relevant environment variables
 export VLLM_LOGGING_LEVEL=DEBUG
+export TOKENIZERS_PARALLELISM=true
 
 # Run the program with output going to local scratch
 python bootstrap.py --config-file "${CONFIG_FILE}" > "${local_job_dir}/program_output.log" 2> "${local_job_dir}/program_error.log"
