@@ -16,7 +16,7 @@ class RewardModel:
         start = datetime.now()
 
         end = datetime.now()
-        self.config.model_initialization_times["policy"] = end - start
+        self.config.model_initialization_times["reward"] = end - start
 
     def score(self, prompts: list[str]) -> list[float]:
         """
