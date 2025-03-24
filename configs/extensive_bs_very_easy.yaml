@@ -5,5 +5,5 @@ data-folder: "/home/piroth/rstar-arc/data_sample/very_easy"
 
 beam-width: 10
 branching-factor: 10
-max-depth: 10
+max-depth: 7
 
