@@ -1,8 +1,6 @@
 import logging
 from random import shuffle
 
-from vllm.outputs import RequestOutput
-
 from arc_rstar.agents.base_agent import Agent
 
 logger = logging.getLogger(__name__)
@@ -40,4 +38,3 @@ class BS(Agent):
 
         # Select top-k non-terminal nodes as the beam for next expansion
         self.current_nodes = non_terminal_nodes[:self.config.beam_width]
-

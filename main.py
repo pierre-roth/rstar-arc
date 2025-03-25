@@ -2,7 +2,7 @@ import logging
 from datetime import datetime
 
 from arc_rstar import Solver
-from arc_rstar.agents import BS, MCTS, PWMCTS
+from arc_rstar.agents import BS, MCTS, PWMCTS, SMCTS
 from config import Config
 from utils import setup_logging, load_tasks, batch, save_nodes, save_summary
 
@@ -27,7 +27,7 @@ if __name__ == '__main__':
     solver = Solver(config)
 
     # select the search agent
-    agent = {"bs": BS, "mcts": MCTS, "pwmcts": PWMCTS}.get(config.search_mode.lower(), BS)
+    agent = {"bs": BS, "mcts": MCTS, "pwmcts": PWMCTS, "smcts": SMCTS}.get(config.search_mode.lower(), BS)
 
     # process tasks in batches
     for i, task_batch in enumerate(batch(tasks, config.batch_size)):

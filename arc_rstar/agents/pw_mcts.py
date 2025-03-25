@@ -1,8 +1,6 @@
 import logging
 from random import choice
 
-from vllm.outputs import RequestOutput
-
 from arc_rstar.agents.beam_search import Agent
 from arc_rstar.agents.node import Node
 
@@ -73,4 +71,3 @@ class PWMCTS(Agent):
 
         # Log current selection state
         logger.debug(f"Selected {len(self.current_nodes)} nodes for next step")
-

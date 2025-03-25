@@ -22,19 +22,6 @@ class Grid:
     def __str__(self):
         return "\n".join(" ".join(str(cell) for cell in row) for row in self.grid)
 
-    def normalized_closeness(self, other: "Grid") -> float:
-        """Calculate the normalized closeness between two grids."""
-        if self.rows != other.rows or self.columns != other.columns:
-            return -1.0
-
-        closeness = 0
-        for i in range(self.rows):
-            for j in range(self.columns):
-                if self.grid[i][j] == other.grid[i][j]:
-                    closeness += 1
-
-        return closeness / (self.rows * self.columns)
-
 
 class Example:
     """Class representing an input-output pair in an ARC task"""
