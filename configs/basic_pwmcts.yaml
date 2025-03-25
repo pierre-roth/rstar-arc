@@ -1,4 +1,4 @@
-search-mode: "mcts"
+search-mode: "pwmcts"
 log-level: "DEBUG"
 
 num-simulations: 8
