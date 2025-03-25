@@ -1,7 +1,7 @@
 import json
 import logging
 import os
-from typing import Optional
+from typing import Optional, Any
 
 from config import Config
 
@@ -11,10 +11,40 @@ logger = logging.getLogger(__name__)
 class Grid:
     """Class representing a 2D grid of integers"""
 
-    def __init__(self, grid: list[list[int]]):
-        self.grid: list[list[int]] = grid
-        self.rows: int = len(self.grid)
-        self.columns: int = len(self.grid[0])
+    def __init__(self, grid: any):
+        if self._is_valid_grid(grid):
+            self.grid: list[list[int]] = grid
+            self.rows: int = len(grid)
+            # Safe to use grid[0] because _is_valid_grid ensures at least one row
+            self.columns: int = len(grid[0])
+        else:
+            self.grid = [[]]
+            self.rows = 0
+            self.columns = 0
+
+    @staticmethod
+    def _is_valid_grid(grid: any) -> bool:
+        # Must be a list and non-empty.
+        if not isinstance(grid, list) or not grid:
+            return False
+
+        # Check that each row is a list and that they are all of the same length.
+        # Also verify that every cell in each row is an integer.
+        expected_length = None
+        for row in grid:
+            if not isinstance(row, list):
+                return False
+            # Set the expected row length from the first row.
+            if expected_length is None:
+                expected_length = len(row)
+            # Each row must be the same length.
+            elif len(row) != expected_length:
+                return False
+            # Every cell must be an integer.
+            for cell in row:
+                if not isinstance(cell, int):
+                    return False
+        return True
 
     def __eq__(self, other: "Grid"):
         return self.grid == other.grid
