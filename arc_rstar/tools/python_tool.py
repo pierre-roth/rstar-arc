@@ -1,10 +1,11 @@
-import logging
-import subprocess
-import json
-import textwrap
-import signal
+from __future__ import annotations
 
-from arc_rstar.agents import Node
+import json
+import logging
+import signal
+import subprocess
+import textwrap
+
 from config import TIMEOUT_SECONDS, CODE, CODE_END, STEP_END, MEMORY_LIMIT_BYTES
 
 logger = logging.getLogger(__name__)
@@ -217,13 +218,13 @@ def run_examples(task, code: str) -> (bool, bool, list[list[list[int]]]):
     return execute_code_with_task(code, input_grids, expected_outputs)
 
 
-def training_correct(node: Node) -> (bool, bool, list[list[list[int]]]):
+def training_correct(node: "Node") -> (bool, bool, list[list[list[int]]]):
     if not node.valid:
         return True, False, []
     return False, node.passes_training, node.execution_outputs
 
 
-def test_correct(node: Node) -> (bool, bool, list[list[list[int]]]):
+def test_correct(node: "Node") -> (bool, bool, list[list[list[int]]]):
     if not node.valid:
         return True, False, []
 
