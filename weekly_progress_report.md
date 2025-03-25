@@ -120,6 +120,7 @@
 ### Week 3 (24.03.2025)
 
 - **Work planned**:
+  - look into adding variable temperature to progressive widening MCTS agent
   - Add percentage-correct based terminal rewarding to the MCTS agent
   - Implement new tree of trees agent
   - Work on prompt format fine-tuning
