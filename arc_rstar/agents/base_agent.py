@@ -20,7 +20,6 @@ class Agent:
         self.current_nodes: list[Node] = []
         self.candidate_nodes: list[Node] = []
         self.final_answer_nodes: list[Node] = []
-        self.max_depth: int = config.max_depth
         self.rollout_idx: int = 0
 
         self.create_root(get_prompt(config, task), task)
