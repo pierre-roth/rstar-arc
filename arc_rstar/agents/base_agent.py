@@ -62,12 +62,6 @@ class Agent:
         # Check if the first current node has children (either all or none have children)
         return self.current_nodes[0].has_children()
 
-    def get_rewards(self):
-        rewards = []
-        for node in self.current_nodes:
-            rewards.append(node.reward if node.reward is not None else 0)  # default reward is 0
-        return rewards
-
     def create_prompts(self, is_value_only: bool = False) -> list[str]:
         """
         if is_value_only, the prompt is used to produce value estimate.

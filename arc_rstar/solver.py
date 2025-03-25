@@ -33,7 +33,6 @@ class Solver:
     @staticmethod
     def generate_preprocess(agents):
         prompts = []
-        rewards = []
         prompts_span = [0]
         valid_agents = []
         invalid_agents = []
@@ -45,13 +44,13 @@ class Solver:
                     expanded_agents.append(agent)
                 else:
                     agent_prompts = agent.create_prompts()
-                    rewards.extend(agent.get_rewards())
                     prompts.extend(agent_prompts)
                     prompts_span.append(prompts_span[-1] + len(agent_prompts))
                     valid_agents.append(agent)
             else:
                 invalid_agents.append(agent)
-        return prompts, prompts_span, valid_agents, invalid_agents, expanded_agents, rewards
+
+        return prompts, prompts_span, valid_agents, invalid_agents, expanded_agents
 
     def generate_postprocess(self, outputs: list[list[RequestOutput]], valid_agents: list[Agent]) -> list[Agent]:
         post_agents = []
@@ -111,9 +110,7 @@ class Solver:
                 logger.debug(f"----------------- Current Rollout: {rollout} -----------------")
                 logger.debug(f"----------------- Current Step: {step} -----------------")
 
-                # TODO: handle valid_rewards
-                prompts, prompts_span, valid_agents, invalid_agents, expanded_agents, valid_rewards = self.generate_preprocess(
-                    agents)
+                prompts, prompts_span, valid_agents, invalid_agents, expanded_agents = self.generate_preprocess(agents)
 
                 if not valid_agents + expanded_agents:
                     break

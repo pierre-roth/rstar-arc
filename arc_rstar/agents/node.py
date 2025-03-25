@@ -22,14 +22,13 @@ class Node:
         self.parent: Node | None = None
         self.children: list[Node] = []
         self.depth: int = 0
-        self.reward: float = 0
         self.tag = "0"
 
         self.inited = False
 
         self.value = 0
-        self.__visit_count: int = 0
-        self.__value_sum: float = 0
+        self.visit_count: int = 0
+        self.value_sum: float = 0
 
         self.prior_probability: float = 1.0  # Prior probability from policy model (used for PUCT)
 
@@ -93,22 +92,19 @@ class Node:
         return child
 
     def q_value(self) -> float:
-        if self.__visit_count == 0:
+        if self.visit_count == 0:
             return 0
-        return self.__value_sum / self.__visit_count
-
-    def visit_count(self) -> int:
-        return self.__visit_count
+        return self.value_sum / self.visit_count
 
     def update_visit_count(self, count: int) -> None:
-        self.__visit_count = count
+        self.visit_count = count
 
     def update(self, value: float) -> None:
         if self.inited is False:
             self.inited = True
             self.value = value
-        self.__visit_count += 1
-        self.__value_sum += value
+        self.visit_count += 1
+        self.value_sum += value
 
     def update_recursive(self, value: float) -> None:
         self.update(value)
@@ -119,11 +115,11 @@ class Node:
     def puct(self) -> float:
         if not self.parent:
             return 0
-        q_value = self.q_value() if self.visit_count() > 0 else 0
-        if self.parent.visit_count() == 0 or self.visit_count() == 0:
+        q_value = self.q_value() if self.visit_count > 0 else 0
+        if self.parent.visit_count == 0 or self.visit_count == 0:
             u_value = 0
         else:
-            u_value = self.config.c_puct * np.sqrt(np.log(self.parent.visit_count()) / (self.visit_count()))
+            u_value = self.config.c_puct * np.sqrt(np.log(self.parent.visit_count) / (self.visit_count))
         return q_value + u_value
 
     def is_valid(self) -> bool:

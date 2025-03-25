@@ -4,5 +4,6 @@ from .mcts import MCTS
 from .base_agent import Agent
 from .pw_mcts import PWMCTS
 from .similiarity_mcts import SMCTS
+from .custom import Custom
 
-__all__ = ["Node", "Agent", "BS", "MCTS", "PWMCTS", "SMCTS"]
+__all__ = ["Node", "Agent", "BS", "MCTS", "PWMCTS", "SMCTS", "Custom"]

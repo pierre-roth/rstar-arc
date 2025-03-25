@@ -108,8 +108,8 @@ def make_serializable(obj):
         return [make_serializable(item) for item in obj]
     elif isinstance(obj, dict):
         return {make_serializable(key): make_serializable(value) for key, value in obj.items()}
-    # elif hasattr(obj, '__dict__'):
-    # return {key: make_serializable(val) for key, val in obj.__dict__.items() if not key.startswith("_")}
+    elif hasattr(obj, '__dict__'):
+        return {key: make_serializable(val) for key, val in obj.__dict__.items()}
     else:
         return str(obj)
 
@@ -131,8 +131,6 @@ def serialize_nodes(nodes):
                 node_data[key] = [child.tag for child in value]
             elif key == "task":
                 node_data[key] = value.name if value is not None else None
-            elif key == "config":
-                node_data[key] = value.config_file if value is not None else None
             else:
                 node_data[key] = make_serializable(value)
         data[node.tag] = node_data

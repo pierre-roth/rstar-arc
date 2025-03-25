@@ -122,7 +122,8 @@
 - **Work planned**:
   - look into adding variable temperature to progressive widening MCTS agent
   - Add percentage-correct based terminal rewarding to the MCTS agent
-  - Implement new tree of trees agent
+  - Implement new tree of trees agent!!
+  - Number of children based generation!!
   - Work on prompt format fine-tuning
   - implement competition submission logic (i.e. choose two solutions that solve training task, but with different
     results on test tasks (two most often generated)

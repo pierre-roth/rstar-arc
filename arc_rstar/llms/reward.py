@@ -29,6 +29,4 @@ class RewardModel:
             List of floats
         """
 
-        # TODO: add "if value_func" block if reward model code is implemented
-
         return [0.0] * len(prompts)
