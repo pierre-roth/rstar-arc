@@ -2,6 +2,10 @@ search-mode: "pwmcts"
 log-level: "DEBUG"
 
 
+dtype: "float32"
+policy-model: "Qwen/Qwen2.5-Coder-1.5B-Instruct"
+
+
 num-simulations: 8
 max-depth: 7
 

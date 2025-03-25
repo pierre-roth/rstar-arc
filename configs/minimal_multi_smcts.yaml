@@ -1,6 +1,11 @@
 search-mode: "smcts"
 log-level: "DEBUG"
 
+dtype: "float32"
+
 policy-model: "Qwen/Qwen2.5-Coder-1.5B-Instruct"
 
 data-folder: "/home/piroth/rstar-arc/data_sample/very_easy"
+
+num-simulations: 8
+max-depth: 7
