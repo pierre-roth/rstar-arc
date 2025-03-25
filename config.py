@@ -30,7 +30,7 @@ DEFAULT_EXAMPLE_DATA_PATH = f"{DEFAULT_DATA_FOLDER}/examples"  # path to prompt 
 ###########################################
 
 # Code execution timeout settings
-TIMEOUT_SECONDS = 15  # Maximum time allowed for code execution
+TIMEOUT_SECONDS = 10  # Maximum cpu time allowed for code execution
 MEMORY_LIMIT_MB = 128  # Maximum memory allowed for each code execution process
 MEMORY_LIMIT_BYTES = MEMORY_LIMIT_MB * 1024 * 1024
 
