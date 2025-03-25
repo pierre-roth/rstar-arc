@@ -1,6 +1,6 @@
 search-mode: "mcts"
 log-level: "DEBUG"
 
-policy-model: "Qwen/Qwen2.5-Coder-0.5B-Instruct"
+policy-model: "Qwen/Qwen2.5-Coder-1.5B-Instruct"
 
 data-folder: "/home/piroth/rstar-arc/data_sample/very_easy"

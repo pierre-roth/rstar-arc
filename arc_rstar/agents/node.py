@@ -3,7 +3,7 @@ import logging
 import numpy as np
 
 from arc_rstar.arc_task.task import ARCTask
-from arc_rstar.tools.python_tool import extract_python_code, run_training_examples
+from arc_rstar.tools.python_tool import extract_python_code, run_examples
 from config import Config, CODE_END, TERMINAL_CODE_END, TERMINAL_MAX_DEPTH, TERMINAL_INVALID
 
 logger = logging.getLogger(__name__)
@@ -37,6 +37,8 @@ class Node:
         self.terminal_reason: str | None = None  # Reason for terminal node (will be set when terminal)
         self.valid: bool | None = None  # Will be set to True/False when validated
         self.passes_training: bool | None = None  # Whether the node passes training examples
+
+        self.execution_outputs: list = []  # Store execution outputs for debugging
 
         self.task: ARCTask | None = None  # Reference to the task used for validation
 
@@ -145,7 +147,7 @@ class Node:
             logger.debug(f"Successfully extracted code ({len(code.splitlines())} lines)")
             logger.debug("Validation: testing for errors while running training examples")
 
-            error, passed, _ = run_training_examples(self.task, code)
+            error, passed, self.execution_outputs = run_examples(self.task, code)
 
             if error:
                 self.valid = False

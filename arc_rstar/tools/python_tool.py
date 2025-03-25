@@ -4,6 +4,7 @@ import json
 import textwrap
 import signal
 
+from arc_rstar.agents import Node
 from config import TIMEOUT_SECONDS, CODE, CODE_END, STEP_END, MEMORY_LIMIT_BYTES
 
 logger = logging.getLogger(__name__)
@@ -39,7 +40,7 @@ def prepare_code_for_execution(code):
     return clean_code
 
 
-def execute_code_in_subprocess(code_str, input_grids, expected_outputs=None):
+def execute_code_in_subprocess(code_str, input_grids, expected_outputs):
     """
     Spawns a new Python interpreter to execute code against multiple grids.
 
@@ -106,7 +107,7 @@ def execute_code_in_subprocess(code_str, input_grids, expected_outputs=None):
                     results.append(result)
 
                     # Check against expected output if provided
-                    if expected_outputs and result != expected_outputs[i]:
+                    if expected_outputs[i] is not None and result != expected_outputs[i]:
                         passed = False
                 except Exception as e:
                     print(f"Error processing grid {{i}}: {{str(e)}}", file=sys.stderr)
@@ -126,7 +127,7 @@ def execute_code_in_subprocess(code_str, input_grids, expected_outputs=None):
     # Prepare input data
     input_data = {
         "input_grids": input_grids,
-        "expected_outputs": expected_outputs if expected_outputs else []
+        "expected_outputs": expected_outputs
     }
 
     try:
@@ -180,7 +181,7 @@ def execute_code_in_subprocess(code_str, input_grids, expected_outputs=None):
 
 
 def execute_code_with_task(code: str, input_grids: list[list[list[int]]],
-                           expected_outputs: list[list[list[int]]]) -> (bool, bool, list[list[list[int]]]):
+                           expected_outputs: list) -> (bool, bool, list[list[list[int]]]):
     """
     Execute code against multiple input grids using a subprocess.
 
@@ -206,6 +207,35 @@ def execute_code_with_task(code: str, input_grids: list[list[list[int]]],
     return execute_code_in_subprocess(code, input_grids, expected_outputs)
 
 
+def run_examples(task, code: str) -> (bool, bool, list[list[list[int]]]):
+    """Run code against all examples in a single process."""
+    input_grids = [example.input_grid.grid for example in task.training_examples + task.test_examples]
+    # expected_outputs = [example.output_grid.grid if example.output_grid is not None else None for example in task.training_examples + task.test_examples]
+    expected_outputs = [example.output_grid.grid for example in task.training_examples] + [None] * len(
+        task.test_examples)
+
+    return execute_code_with_task(code, input_grids, expected_outputs)
+
+
+def training_correct(node: Node) -> (bool, bool, list[list[list[int]]]):
+    if not node.valid:
+        return True, False, []
+    return False, node.passes_training, node.execution_outputs
+
+
+def test_correct(node: Node) -> (bool, bool, list[list[list[int]]]):
+    if not node.valid:
+        return True, False, []
+
+    test_outputs = [example.output_grid.grid for example in node.task.test_examples]
+    for generated_output, expected_output in zip(node.execution_outputs[len(node.task.training_examples):],
+                                                 test_outputs):
+        if generated_output != expected_output:
+            return False, False, node.execution_outputs[len(node.task.training_examples):]
+
+    return False, node.passes_training, node.execution_outputs
+
+
 def run_training_examples(task, code: str) -> (bool, bool, list[list[list[int]]]):
     """Run code against all training examples in a single process."""
     input_grids = [example.input_grid.grid for example in task.training_examples]
@@ -217,7 +247,7 @@ def run_training_examples(task, code: str) -> (bool, bool, list[list[list[int]]]
 def run_test_examples(task, code: str) -> (bool, bool, list[list[list[int]]]):
     """Run code against all test examples in a single process."""
     input_grids = [example.input_grid.grid for example in task.test_examples]
-    expected_outputs = [example.output_grid.grid for example in task.test_examples
-                        if example.output_grid is not None]
+    expected_outputs = [example.output_grid.grid if example.output_grid is not None else None for example in
+                        task.test_examples]
 
     return execute_code_with_task(code, input_grids, expected_outputs)
