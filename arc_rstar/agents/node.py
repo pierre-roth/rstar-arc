@@ -30,8 +30,6 @@ class Node:
         self.visit_count: int = 0
         self.value_sum: float = 0
 
-        self.prior_probability: float = 1.0  # Prior probability from policy model (used for PUCT)
-
         self.terminal: bool | None = None  # Will be set to True/False when terminal
         self.terminal_reason: str | None = None  # Reason for terminal node (will be set when terminal)
         self.valid: bool | None = None  # Will be set to True/False when validated
