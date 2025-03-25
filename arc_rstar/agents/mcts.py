@@ -44,6 +44,9 @@ class MCTS(Agent):
             for candidate_node, score in zip(self.candidate_nodes, scores):
                 # Update node statistics
                 if candidate_node.is_terminal():
+
+                    # TODO add get_terminal_reward function that determines the terminal reward
+
                     # For terminal nodes with solutions
                     if candidate_node.passes_training:
                         candidate_node.update_recursive(self.config.positive_reward)

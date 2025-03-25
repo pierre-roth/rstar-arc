@@ -120,7 +120,11 @@
 ### Week 3 (24.03.2025)
 
 - **Work planned**:
+  - Add percentage-correct based terminal rewarding to the MCTS agent
+  - Implement new tree of trees agent
   - Work on prompt format fine-tuning
+  - implement competition submission logic (i.e. choose two solutions that solve training task, but with different
+    results on test tasks (two most often generated)
   - test capabilities of the current system on more ARC tasks
   - test effectiveness of using larger models ("Qwen/Qwen2.5-Coder-32B-Instruct")
   - test a variety of different hyperparameters for the MCTS agent
@@ -134,7 +138,7 @@
     - Read up on ARC-AGI-2, sign up for the competition, think what changes could be interesting to make to the system
       to make it more competitive
     - Do a submission of Kaggle to get a feel for the competition, the submission process, and the evaluation process
-    - Get a score)
+    - Get a score!
 
 
 - **Work done**:
