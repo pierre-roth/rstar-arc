@@ -117,7 +117,7 @@
 - **Issues and Questions**:
   - How do I effectively work with the output of QwQ or other thinking models? (parsing, filtering, etc.)
 
-### Week 3 (24.03.2025)
+### Week 4 (24.03.2025)
 
 - **Work planned**:
   - look into adding variable temperature to progressive widening MCTS agent
