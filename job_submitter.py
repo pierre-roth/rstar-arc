@@ -42,14 +42,6 @@ PARAMETER_SWEEPS = {
         "max-depth": [8, 12],
         "policy-temperature": [0.5, 0.7, 0.9]
     },
-    # For Pure-Walker Monte Carlo Tree Search (pwmcts)
-    "pwmcts": {
-        "search-mode": ["pwmcts"],
-        "c-puct": [1.0, 2.0, 4.0],
-        "num-simulations": [8, 16, 32],
-        "max-depth": [8, 12],
-        "policy-temperature": [0.5, 0.7, 0.9]
-    }
 }
 
 # Base configurations that apply to all jobs

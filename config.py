@@ -16,12 +16,10 @@ ETH_USERNAME = "piroth"
 
 NET_SCRATCH_PATH = f"/itet-stor/{ETH_USERNAME}/net_scratch"  # net-scratch directory
 LOCAL_SCRATCH_PATH = f"/scratch/{ETH_USERNAME}"  # local scratch directory
-SECOND_LOCAL_SCRATCH_PATH = f"/scratch-second/{ETH_USERNAME}"
+SECOND_LOCAL_SCRATCH_PATH = f"/scratch-second/{ETH_USERNAME}"  # second local scratch directory
 HOME_PATH = f"/home/{ETH_USERNAME}"  # home directory
 
 DEFAULT_DATA_FOLDER = f"{HOME_PATH}/rstar-arc/data_sample"  # path for sample data in git repo
-DEFAULT_TRAINING_DATA_PATH = f"{DEFAULT_DATA_FOLDER}/training"  # Training data location
-DEFAULT_EVALUATION_DATA_PATH = f"{DEFAULT_DATA_FOLDER}/evaluation"  # Evaluation data location
 DEFAULT_DATA_PATH = f"{DEFAULT_DATA_FOLDER}/default"
 DEFAULT_EXAMPLE_DATA_PATH = f"{DEFAULT_DATA_FOLDER}/examples"  # path to prompt examples
 
@@ -77,7 +75,7 @@ class Config:
     reward_model: str = "Qwen/Qwen2.5-Coder-7B-Instruct"  # Reward Model for evaluating steps
 
     # general model configuration
-    model_base_path: str = os.path.join(LOCAL_SCRATCH_PATH, "models")  # Base path where models are stored
+    model_base_path: str = os.path.join(NET_SCRATCH_PATH, "models")  # Base path where models are stored
 
     # Policy model configuration
     max_tokens: int = 1024  # Maximum tokens for generation
@@ -95,9 +93,7 @@ class Config:
     # DATA CONFIGURATION
     ###########################################
     data_folder: str = DEFAULT_DATA_PATH  # Path to ARC task data
-    task_index: int = 1  # Index of task to run (1-based indexing)
     task_name: str = ""  # Name of specific task (overrides task_index if provided)
-    all_tasks: bool = False  # Whether to run all tasks in data_folder
 
     ###########################################
     # SEARCH ALGORITHM PARAMETERS

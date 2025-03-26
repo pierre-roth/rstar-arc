@@ -3,7 +3,7 @@ from random import choice
 
 from arc_rstar.agents.beam_search import Agent
 from arc_rstar.agents.node import Node
-from arc_rstar.agents.utils import normalized_similarity
+from arc_rstar.agents.utils import normalized_similarity_score
 from arc_rstar.arc_task.task import Grid
 from config import TERMINAL_SUBTREE_TERMINAL
 
@@ -59,7 +59,7 @@ class TreeOfTrees(Agent):
                         predicted_grids = [Grid(output_grid) for output_grid in
                                            candidate_node.execution_outputs[:len(self.task.training_examples)]]
 
-                        candidate_node.update_recursive(normalized_similarity(correct_grids, predicted_grids))
+                        candidate_node.update_recursive(normalized_similarity_score(correct_grids, predicted_grids))
                 else:
                     # For non-terminal nodes
                     candidate_node.update(score)

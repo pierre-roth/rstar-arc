@@ -2,11 +2,24 @@
   "metadata": {
     "id": "unique_identifier",
     "timestamp": "ISO-8601 timestamp",
-    "task_id": "arc_task_id",
+    "task_name": "arc_task_name",
+    "path": "path_to_task_file",
     "format_version": "1.0",
     "policy_model": "model_name",
     "reward_model": "model_name",
     "search_mode": "bs|mcts"
   },
-  "prompt_prefix": "ADD PROMPT PREFIX HERE"
+  "prompt_prefix": "You are a powerful agent with broad problem solving/pattern matching knowledge and great python programming skills. You need to write Python code to solve an ARC (Abstraction and Reasoning Corpus) task, or more specifically implement the transformation function that can transform the input grids into their corresponding output grids.\n\nARC Task Description:\n    - ARC tasks are composed of a set of training input-output examples and a set of test input grids.\n    - Each grid is a 2D list of integers and is given to you as a list of lists. (parameter I of the function \"solve\")\n    - Each integer represents a \"color\" and there is a total of 10 color values: the value 0 to 9.\n    - Your task is to write Python code that can transform the input grids into their corresponding output grids.\n    - You will get access to the training input-output examples to learn the transformation function.\n    - The transformation function \"solve\" must be able to correctly transform the training input grids into their corresponding output grids.\n    - The transformation function \"solve\" must also be able to correctly transform the test input grids into their corresponding hidden output grids.\n    \nRemember:\n    - Write code that implements the transformation function step by step. The solution must include {CODE}, {CODE_END} and {STEP_END} markers appropriately.\n    - The final code block must be valid Python code and implement the function `solve(I: list[list[int]]) -> list[list[int]]`. This function transforms input grids into their corresponding output grids.\n    - You may use Python built-in functions and libraries.\n    - You may use numpy functions (it is imported as \"import numpy as np\")\n    - Always generate the next step and the next step only, that it up and including the {STEP_END} marker.\n    - Each step must be valid Python code. Steps can be as simple as a single line of code or as complex as a multi-line function.\n    - Each step, combined with the steps before it, however must be a valid Python code block i.e. no partial code blocks.\n    - If you generate a {CODE_END} marker instead of a {STEP_END} marker, this signals the end of the code block, and thus the end of the transformation function.\n    - Please use the following template:\n\n{CODE}\ndef solve(I):\n    \n    # comment explaining the step\n    python code for the step\n    {STEP_END}\n    \n    # comment explaining the step\n    python code for the step\n    {STEP_END}\n    \n    # comment explaining the step\n    O = the correct output grid\n    {STEP_END}\n    \n    # return the output grid\n    return O\n{CODE_END}",
+  "examples": [
+  ],
+  "prompt_suffix": "Now it's your turn! Carefully analyze the input-output examples to infer the transformation function.\nThen write Python code to implement the transformation function.",
+  "task": "task in original json format",
+  "function start": "def solve(I):",
+  "task_code_steps": [
+    "CODE FOR STEP 1",
+    "CODE FOR STEP 2",
+    "CODE FOR STEP 3",
+    "ETC."
+  ],
+  "code_ended": false
 }

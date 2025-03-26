@@ -83,6 +83,7 @@ class ARCTask:
 
         self.path = path
         self.name = os.path.splitext(os.path.basename(path))[0]
+        self.json_data = None
 
         self.training_examples = []
         self.test_examples = []
@@ -94,6 +95,7 @@ class ARCTask:
         try:
             with open(self.path, 'r') as f:
                 data = json.load(f)
+                self.json_data = data
 
             # Process training data
             if 'train' in data:
