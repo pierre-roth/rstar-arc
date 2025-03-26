@@ -1,8 +1,8 @@
 import os
 import webbrowser
-import numpy as np
 
 import igraph
+import numpy as np
 import plotly.graph_objects as go
 
 from arc_rstar.tools.python_tool import extract_python_code
@@ -28,16 +28,20 @@ def build_graph_from_nodes(nodes):
         # Extract raw Python code and other data
         try:
             code = extract_python_code(node.collect_partial_solution())
-            if not node.parent:
-                return 0
             q_value = node.q_value() if node.visit_count > 0 else 0
-            if node.parent.visit_count == 0 or node.visit_count == 0:
-                u_value = 0
+
+            # Handle the case when parent is None (root node)
+            if not node.parent:
+                puct = q_value  # For root node, PUCT is just the Q-value
             else:
-                u_value = node.config["c_puct"] * np.sqrt(np.log(node.parent.visit_count) / node.visit_count)
-            puct = q_value + u_value
-            # data = f"Tag: {node.tag}<br>Value: {node.value}<br>Visit count: {node.visit_count}<br>Value sum: {node.value_sum}<br>Q-Value: {node.q_value()}"
-            data = f"Tag: {node.tag}<br>Value: {node.value}<br>Visit count: {node.visit_count()}<br>Value sum: {node.value_sum()}<br>Q-Value: {node.q_value()}<br>PUCT: {puct}"
+                # Calculate PUCT only when parent exists
+                if node.parent.visit_count == 0 or node.visit_count == 0:
+                    u_value = 0
+                else:
+                    u_value = node.config["c_puct"] * np.sqrt(np.log(node.parent.visit_count) / node.visit_count)
+                puct = q_value + u_value
+
+            data = f"Tag: {node.tag}<br>Value: {node.value}<br>Visit count: {node.visit_count}<br>Value sum: {node.value_sum}<br>Q-Value: {q_value}<br>PUCT: {puct}"
         except Exception as e:
             print(f"Error while extracting code for node {node.tag}: {e}")
             code = "NO VALID CODE FOUND!"

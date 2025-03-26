@@ -1,10 +1,10 @@
 import logging
 from random import choice
 
-from arc_rstar.arc_task.task import Grid
-from arc_rstar.agents.utils import normalized_similarity
 from arc_rstar.agents.beam_search import Agent
 from arc_rstar.agents.node import Node
+from arc_rstar.agents.utils import normalized_similarity
+from arc_rstar.arc_task.task import Grid
 
 logger = logging.getLogger(__name__)
 
@@ -45,11 +45,14 @@ class Custom(Agent):
                 # Update node statistics
                 if candidate_node.is_terminal():
 
-                    correct_grids = [example.output_grid for example in self.task.training_examples]
-                    predicted_grids = [Grid(output_grid) for output_grid in
-                                       candidate_node.execution_outputs[:len(self.task.training_examples)]]
+                    if not candidate_node.is_valid():
+                        candidate_node.update_recursive(self.config.negative_reward)
+                    else:
+                        correct_grids = [example.output_grid for example in self.task.training_examples]
+                        predicted_grids = [Grid(output_grid) for output_grid in
+                                           candidate_node.execution_outputs[:len(self.task.training_examples)]]
 
-                    candidate_node.update_recursive(normalized_similarity(correct_grids, predicted_grids))
+                        candidate_node.update_recursive(normalized_similarity(correct_grids, predicted_grids))
                 else:
                     # For non-terminal nodes
                     candidate_node.update(score)
