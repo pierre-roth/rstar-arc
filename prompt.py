@@ -10,8 +10,8 @@ def get_prompt(config: Config, task: ARCTask) -> str:
 
 ARC Task Description:
     - ARC tasks are composed of a set of training input-output examples and a set of test input grids.
-    - Each grid is a 2D list of integers and is given to you as a list of lists. (argument of the function "solve")
-    - Each integer represents a "color" and there are only 10 color values (0-9).
+    - Each grid is a 2D list of integers and is given to you as a list of lists. (parameter I of the function "solve")
+    - Each integer represents a "color" and there is a total of 10 color values: the value 0 to 9.
     - Your task is to write Python code that can transform the input grids into their corresponding output grids.
     - You will get access to the training input-output examples to learn the transformation function.
     - The transformation function "solve" must be able to correctly transform the training input grids into their corresponding output grids.

@@ -1,0 +1,9 @@
+search-mode: "custom"
+log-level: "DEBUG"
+
+data-folder: "/home/piroth/rstar-arc/data_sample/easy"
+
+num-simulations: 32
+branching-factor: 8
+max-depth: 10
+
