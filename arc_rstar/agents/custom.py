@@ -5,6 +5,7 @@ from arc_rstar.agents.beam_search import Agent
 from arc_rstar.agents.node import Node
 from arc_rstar.agents.utils import normalized_similarity
 from arc_rstar.arc_task.task import Grid
+from config import TERMINAL_SUBTREE_TERMINAL
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +16,10 @@ class Custom(Agent):
     This leverages shared functionality while maintaining MCTS-specific selection logic.
     """
 
+    def has_expanded(self) -> bool:
+        """Function that determined whether to generate more children."""
+        return not all(child.is_terminal() for child in self.current_nodes[0].children)
+
     @staticmethod
     def select_child(node: Node) -> Node | None:
         """Select the best child of a node according to PUCT formula."""
@@ -24,6 +29,8 @@ class Custom(Agent):
         # Only consider non-terminal children
         non_terminal_children = [child for child in node.children if not child.is_terminal()]
         if not non_terminal_children:
+            node.terminal = True
+            node.terminal_reason = TERMINAL_SUBTREE_TERMINAL
             return None
 
         for child in non_terminal_children:
