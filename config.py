@@ -38,6 +38,7 @@ MEMORY_LIMIT_BYTES = MEMORY_LIMIT_MB * 1024 * 1024
 TERMINAL_INVALID = "Invalid code"
 TERMINAL_MAX_DEPTH = "Maximum depth reached"
 TERMINAL_CODE_END = "Code end marker"
+TERMINAL_SUBTREE_TERMINAL = "Subtree terminal"
 
 ###########################################
 # OUTPUT FORMAT MARKERS
