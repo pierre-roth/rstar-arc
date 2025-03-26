@@ -1,0 +1,7 @@
+search-mode: "custom"
+log-level: "DEBUG"
+
+num-simulations: 32
+branching-factor: 8
+max-depth: 10
+

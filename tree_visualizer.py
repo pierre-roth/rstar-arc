@@ -1,4 +1,5 @@
 import os
+import traceback
 import webbrowser
 
 import igraph
@@ -46,6 +47,7 @@ def build_graph_from_nodes(nodes):
                 data += f"<br>Terminal reason: {node.terminal_reason}"
         except Exception as e:
             print(f"Error while extracting code for node {node.tag}: {e}")
+            traceback.print_exc()
             code = "NO VALID CODE FOUND!"
             data = "NO DATA FOUND!"
         # Replace newlines with <br> tags for multi‑line hover text.
