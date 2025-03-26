@@ -45,7 +45,7 @@ TERMINAL_SUBTREE_TERMINAL = "Subtree terminal"
 ###########################################
 # These tags are used to parse the model's output into structured sections
 STEP_END = "<end_of_step>"  # Marks the end of a reasoning step
-CODE = "<code>"  # Begins a code section
+CODE = "<beginning_of_code>"  # Begins a code section
 CODE_END = "<end_of_code>"  # Ends a code section
 
 
