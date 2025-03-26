@@ -4,7 +4,7 @@ log-level: "DEBUG"
 policy-model: "Qwen/Qwen2.5-Coder-32B-Instruct"
 policy_temperature: 1.0
 
-data-folder: "/home/piroth/rstar-arc/data_sample/very_easy"
+data-folder: "/home/piroth/rstar-arc/data_sample/easy"
 
 branching-factor: 8
 max-depth: 8

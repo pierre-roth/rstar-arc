@@ -59,6 +59,10 @@ trap 'echo "Transferring logs and cleaning up...";
       if cp /itet-stor/piroth/net_scratch/outputs/jobs/${SLURM_JOB_ID}.out "${final_job_dir}/slurm.out" &&
          cp /itet-stor/piroth/net_scratch/outputs/jobs/${SLURM_JOB_ID}.err "${final_job_dir}/slurm.err"; then
           echo "SLURM logs copied successfully to ${final_job_dir}";
+
+          ln -sfn "${final_job_dir}" /home/${ETH_USERNAME}/latest_job;
+          echo "Symlink created for latest job directory";
+
           rm -f /itet-stor/piroth/net_scratch/outputs/jobs/${SLURM_JOB_ID}.out;
           rm -f /itet-stor/piroth/net_scratch/outputs/jobs/${SLURM_JOB_ID}.err;
           echo "Original SLURM output and error files deleted";

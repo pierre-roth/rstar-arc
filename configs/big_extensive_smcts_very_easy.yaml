@@ -1,4 +1,4 @@
-search-mode: "mcts"
+search-mode: "smcts"
 log-level: "DEBUG"
 
 policy-model: "Qwen/Qwen2.5-Coder-32B-Instruct"
