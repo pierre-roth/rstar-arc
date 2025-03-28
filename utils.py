@@ -7,6 +7,7 @@ from rstar_deepthink.node import Node
 from rstar_deepthink.arc_task import ARCTask
 from rstar_deepthink.config import Config, STEP_END, CODE_END
 from rstar_deepthink.tools import extract_python_code, test_correct
+from rstar_deepthink.tools.python_tool import remove_markers, comment_out_markers
 
 logger = logging.getLogger(__name__)
 
@@ -196,7 +197,7 @@ def save_summary(config, node_lists: list[list[Node]], batch_number: int):
                 correct_answer_nodes.append(node)
 
         # sort nodes by solution length
-        correct_answer_nodes.sort(key=lambda node: len(node.collect_partial_solution().split()))
+        correct_answer_nodes.sort(key=lambda node: len(node.collect_code()))
 
         if correct_answer_nodes:
             num_solved += 1
@@ -204,9 +205,7 @@ def save_summary(config, node_lists: list[list[Node]], batch_number: int):
                 f"### Found {len(correct_answer_nodes)} correct solutions for task {correct_answer_nodes[0].task.name} ###")
             for i, node in enumerate(correct_answer_nodes):
                 task_result.append(f"## Solution {i + 1} ##")
-                task_result.append(
-                    extract_python_code(node.collect_partial_solution()).replace(STEP_END, f"# {STEP_END}\n").replace(
-                        CODE_END, "") + "\n")
+                task_result.append(comment_out_markers(node.collect_code() + "\n"))
         else:
             task_result.append(f"### No correct solutions found for task {nodelist[0].task.name} ###")
 

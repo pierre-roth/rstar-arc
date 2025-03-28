@@ -5,6 +5,7 @@ import numpy as np
 from rstar_deepthink.arc_task import ARCTask
 from rstar_deepthink.config import Config, CODE_END, TERMINAL_CODE_END, TERMINAL_MAX_DEPTH, TERMINAL_INVALID
 from rstar_deepthink.tools import extract_python_code, run_examples
+from rstar_deepthink.tools.python_tool import remove_markers
 
 logger = logging.getLogger(__name__)
 
@@ -136,7 +137,7 @@ class Node:
             # Try to extract the code - for non-terminal nodes this might fail
             logger.debug("Attempting to extract code from node...")
 
-            code = extract_python_code(self.collect_partial_solution())
+            code = remove_markers(self.collect_code())
 
             logger.debug(f"Successfully extracted code ({len(code.splitlines())} lines)")
             logger.debug("Validation: testing for errors while running training examples")
@@ -160,7 +161,7 @@ class Node:
 
         return self.valid
 
-    def collect_partial_solution(self) -> str:
+    def collect_text_and_code(self) -> str:
         # from leaf to root, and reverse
         node = self
         trajectory = []
@@ -169,6 +170,16 @@ class Node:
             node = node.parent
 
         return "".join(reversed(trajectory))
+
+    def collect_code(self):
+        # Collect code from the node and its ancestors
+        node = self
+        code = []
+        while node:
+            code.append(node.state["code"])
+            node = node.parent
+
+        return "".join(reversed(code)).strip()
 
     def is_valid_final_answer_node(self) -> bool:
         if self.is_terminal() and self.passes_training:

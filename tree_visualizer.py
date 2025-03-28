@@ -8,6 +8,7 @@ import plotly.graph_objects as go
 
 from rstar_deepthink.tools import extract_python_code
 from rstar_deepthink.config import STEP_END, CODE_END
+from rstar_deepthink.tools.python_tool import remove_markers, comment_out_markers
 from utils import load_nodes
 
 
@@ -28,7 +29,7 @@ def build_graph_from_nodes(nodes):
     for node in nodes:
         # Extract raw Python code and other data
         try:
-            code = extract_python_code(node.collect_partial_solution())
+            code = comment_out_markers(node.collect_code())
             q_value = node.q_value() if node.visit_count > 0 else 0
 
             # Handle the case when parent is None (root node)
@@ -51,7 +52,7 @@ def build_graph_from_nodes(nodes):
             code = "NO VALID CODE FOUND!"
             data = "NO DATA FOUND!"
         # Replace newlines with <br> tags for multi‑line hover text.
-        code = code.replace('\n', '<br>').replace(STEP_END, f"# {STEP_END}<br>").replace(CODE_END, "")
+        code = code.replace('\n', '<br>')
         normal_hover_texts.append(code)
         shift_hover_texts.append(data)
 

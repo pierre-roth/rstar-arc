@@ -30,7 +30,7 @@ TERMINAL_CODE_END = "Code end marker"  # Terminal marker for end of code tag
 TERMINAL_MAX_DEPTH = "Maximum depth reached"  # Terminal marker for reaching max depth
 TERMINAL_SUBTREE_TERMINAL = "Subtree terminal"  # Terminal marker for subtree terminal
 
-# special tokens ("tags") for language model
+# special markers for language model
 STEP_END = "<end_of_step>"  # Marks the end of a reasoning step
 CODE = "<beginning_of_code>"  # Begins a code section
 CODE_END = "<end_of_code>"  # Ends a code section

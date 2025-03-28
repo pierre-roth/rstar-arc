@@ -27,16 +27,28 @@ def extract_python_code(text):
     return code
 
 
-def prepare_code_for_execution(code):
-    """Prepare code by removing STEP_END and CODE_END markers and ensuring it returns a value."""
+def remove_markers(code):
+    """Remove STEP_END and CODE_END markers from the code."""
     # Remove both types of markers
-    clean_code = code.replace(f"{STEP_END}", "").replace(f"{CODE_END}", "")
+    clean_code = code.replace(f"{CODE}\n", "").replace(f"{STEP_END}", "").replace(f"{CODE_END}", "")
+    return clean_code
+
+
+def comment_out_markers(code):
+    """Comment out STEP_END and CODE_END markers in the code."""
+    # Comment out both types of markers
+    commented_code = code.replace(f"{CODE}\n", "").replace(f"{STEP_END}", f"# {STEP_END}").replace(f"{CODE_END}", "")
+    return commented_code
+
+
+def prepare_code_for_execution(code):
+    """Prepare code by ensuring it returns a value."""
 
     # If the code doesn't contain a return statement
-    if 'return ' not in "\n".join(filter(lambda x: '#' not in x, clean_code.split())):
-        clean_code += "\n    return []"
+    if 'return ' not in "\n".join(filter(lambda x: '#' not in x, code.split())):
+        code += "\n    return []"
 
-    return clean_code
+    return code
 
 
 def execute_code_in_subprocess(code_str, input_grids, expected_outputs):

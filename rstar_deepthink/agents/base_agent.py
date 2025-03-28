@@ -72,7 +72,7 @@ class Agent:
         for current_node in current_nodes:
             if not is_value_only and current_node.is_terminal():
                 continue
-            prompt = current_node.collect_partial_solution()
+            prompt = current_node.collect_text_and_code()
             prompts.append(prompt)
 
         return prompts
