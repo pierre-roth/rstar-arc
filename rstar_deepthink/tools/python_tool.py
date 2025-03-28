@@ -5,7 +5,6 @@ import subprocess
 import textwrap
 
 from rstar_deepthink.config import TIMEOUT_SECONDS, CODE, CODE_END, STEP_END, MEMORY_LIMIT_BYTES
-from rstar_deepthink.node import Node
 
 logger = logging.getLogger(__name__)
 
@@ -217,13 +216,13 @@ def run_examples(task, code: str) -> (bool, bool, list[list[list[int]]]):
     return execute_code_with_task(code, input_grids, expected_outputs)
 
 
-def training_correct(node: Node) -> (bool, bool, list[list[list[int]]]):
+def training_correct(node) -> (bool, bool, list[list[list[int]]]):
     if not node.valid:
         return True, False, []
     return False, node.passes_training, node.execution_outputs[:len(node.task.training_examples)]
 
 
-def test_correct(node: Node) -> (bool, bool, list[list[list[int]]]):
+def test_correct(node) -> (bool, bool, list[list[list[int]]]):
     if not node.valid:
         return True, False, []
 
