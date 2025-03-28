@@ -1,9 +1,9 @@
 import logging
 from datetime import datetime
 
-from arc_rstar import Solver
-from arc_rstar.agents import BS, MCTS, PWMCTS, SMCTS, Custom
-from config import Config
+from rstar_deepthink import Solver
+from rstar_deepthink.agents import BS, MCTS, PWMCTS, SMCTS, Custom
+from rstar_deepthink.config import Config
 from utils import setup_logging, load_tasks, batch, save_nodes, save_summary
 
 logger = logging.getLogger(__name__)
@@ -40,9 +40,11 @@ if __name__ == '__main__':
             logger.info(
                 f"Task {output[0].task.name} training examples passed: {any(node.is_valid_final_answer_node() for node in output)}")
 
-        # save the nodes to separate files for later analysis
-        for nodelist in outputs:
-            save_nodes(config, nodelist)
+        # TODO: filter out the correct solutions and save each one to a jsonl file (1 row per solution)
+
+        if config.save_for_visualization:
+            for nodelist in outputs:
+                save_nodes(config, nodelist)
 
         # save summary of the batch
         save_summary(config, outputs, i)

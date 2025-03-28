@@ -3,20 +3,20 @@ import logging
 import os
 import sys
 
-from arc_rstar.agents import Node
-from arc_rstar.arc_task.task import ARCTask
-from arc_rstar.tools.python_tool import extract_python_code, test_correct
-from config import Config, STEP_END, CODE_END
+from rstar_deepthink.agents import Node
+from rstar_deepthink.arc_task import ARCTask
+from rstar_deepthink.config import Config, STEP_END, CODE_END
+from rstar_deepthink.tools import extract_python_code, test_correct
 
 logger = logging.getLogger(__name__)
 
 
 def batch(iterable, n=-1):
-    l = len(iterable)
+    length = len(iterable)
     if n <= 0:
-        n = l
-    for ndx in range(0, l, n):
-        yield iterable[ndx: min(ndx + n, l)]
+        n = length
+    for ndx in range(0, length, n):
+        yield iterable[ndx: min(ndx + n, length)]
 
 
 def load_tasks(config: Config) -> list[ARCTask]:

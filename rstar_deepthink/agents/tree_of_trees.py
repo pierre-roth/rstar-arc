@@ -1,20 +1,24 @@
 import logging
 from random import choice
 
-from arc_rstar.agents.beam_search import Agent
-from arc_rstar.agents.node import Node
-from arc_rstar.agents.utils import normalized_similarity_score
-from arc_rstar.arc_task.task import Grid
-from config import TERMINAL_SUBTREE_TERMINAL
+from rstar_deepthink.agents import Agent
+from rstar_deepthink.node import Node
+from rstar_deepthink.agents import normalized_similarity_score
+from rstar_deepthink.arc_task import Grid, ARCTask
+from rstar_deepthink.config import Config, TERMINAL_SUBTREE_TERMINAL
 
 logger = logging.getLogger(__name__)
 
 
-class Custom(Agent):
+# TODO: implement Tree of Trees agent
+class TreeOfTrees(Agent):
     """
     Monte Carlo Tree Search agent that inherits from the Beam Search (BS) agent.
     This leverages shared functionality while maintaining MCTS-specific selection logic.
     """
+
+    def __init__(self, config: Config, task: ARCTask):
+        super().__init__(config, task)
 
     def has_expanded(self) -> bool:
         """Function that determined whether to generate more children."""

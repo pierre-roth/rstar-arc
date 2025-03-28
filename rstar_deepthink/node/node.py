@@ -2,9 +2,9 @@ import logging
 
 import numpy as np
 
-from arc_rstar.arc_task.task import ARCTask
-from arc_rstar.tools.python_tool import extract_python_code, run_examples
-from config import Config, CODE_END, TERMINAL_CODE_END, TERMINAL_MAX_DEPTH, TERMINAL_INVALID
+from rstar_deepthink.arc_task import ARCTask
+from rstar_deepthink.config import Config, CODE_END, TERMINAL_CODE_END, TERMINAL_MAX_DEPTH, TERMINAL_INVALID
+from rstar_deepthink.tools import extract_python_code, run_examples
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +18,7 @@ class Node:
     def __init__(self, config: Config):
         self.config: Config = config
 
-        self.state = {"text": "", "extra_info": ""}
+        self.state = {"text": ""}
         self.parent: Node | None = None
         self.children: list[Node] = []
         self.depth: int = 0
@@ -117,7 +117,7 @@ class Node:
         if self.parent.visit_count == 0 or self.visit_count == 0:
             u_value = 0
         else:
-            u_value = self.config.c_puct * np.sqrt(np.log(self.parent.visit_count) / (self.visit_count))
+            u_value = self.config.c_puct * np.sqrt(np.log(self.parent.visit_count) / self.visit_count)
         return q_value + u_value
 
     def is_valid(self) -> bool:

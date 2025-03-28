@@ -1,7 +1,7 @@
 import os
 
-from arc_rstar.arc_task.task import ARCTask
-from config import Config, CODE, CODE_END, STEP_END, DEFAULT_EXAMPLE_DATA_PATH
+from rstar_deepthink.arc_task import ARCTask
+from rstar_deepthink.config import Config, CODE, CODE_END, STEP_END, DEFAULT_EXAMPLE_DATA_PATH
 
 
 def get_prompt(config: Config, task: ARCTask) -> str:

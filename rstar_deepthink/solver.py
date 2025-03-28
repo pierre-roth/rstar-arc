@@ -3,9 +3,10 @@ import logging
 from pebble import ProcessPool
 from vllm.outputs import RequestOutput
 
-from arc_rstar.agents import Agent, Node
-from arc_rstar.llms import PolicyModel, RewardModel
-from config import Config
+from rstar_deepthink.node import Node
+from rstar_deepthink.agents import Agent
+from rstar_deepthink.llms import PolicyModel, RewardModel
+from rstar_deepthink.config import Config
 
 logger = logging.getLogger(__name__)
 

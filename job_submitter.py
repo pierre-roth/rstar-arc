@@ -7,14 +7,15 @@ and submits them as separate SLURM batch jobs. This allows for easy parameter sw
 experimentation with different configurations.
 """
 
-import os
-import sys
 import argparse
 import itertools
+import os
 import subprocess
-import yaml
+import sys
 from datetime import datetime
 from typing import Dict, List, Any, Tuple
+
+import yaml
 
 # Ensure we're in the project directory
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -202,7 +203,8 @@ def main():
     # If dry run, just show what would have been done
     if args.dry_run:
         print("\nDRY RUN - No jobs were submitted")
-        print(f"Would have submitted {len(configs) * len(search_modes)} jobs")
+        print(
+            f"Would have submitted {len(generate_configs(search_modes[0], args.configs_per_mode)) * len(search_modes)} jobs")
 
 
 if __name__ == "__main__":

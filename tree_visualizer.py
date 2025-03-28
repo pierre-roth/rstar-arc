@@ -6,8 +6,8 @@ import igraph
 import numpy as np
 import plotly.graph_objects as go
 
-from arc_rstar.tools.python_tool import extract_python_code
-from config import STEP_END, CODE_END
+from rstar_deepthink.tools import extract_python_code
+from rstar_deepthink.config import STEP_END, CODE_END
 from utils import load_nodes
 
 

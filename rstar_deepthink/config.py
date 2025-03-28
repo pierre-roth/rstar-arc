@@ -8,10 +8,6 @@ from typing import Optional
 
 import yaml
 
-#############################################
-# CONSTANTS AND DEFAULT CONFIGURATION VALUES
-#############################################
-
 ETH_USERNAME = "piroth"
 
 NET_SCRATCH_PATH = f"/itet-stor/{ETH_USERNAME}/net_scratch"  # net-scratch directory
@@ -23,25 +19,17 @@ DEFAULT_DATA_FOLDER = f"{HOME_PATH}/rstar-arc/data_sample"  # path for sample da
 DEFAULT_DATA_PATH = f"{DEFAULT_DATA_FOLDER}/default"
 DEFAULT_EXAMPLE_DATA_PATH = f"{DEFAULT_DATA_FOLDER}/examples"  # path to prompt examples
 
-###########################################
-# EXECUTION SETTINGS
-###########################################
-
-# Code execution timeout settings
 TIMEOUT_SECONDS = 10  # Maximum cpu time allowed for code execution
 MEMORY_LIMIT_MB = 128  # Maximum memory allowed for each code execution process
 MEMORY_LIMIT_BYTES = MEMORY_LIMIT_MB * 1024 * 1024
 
-# Terminal node constants
-TERMINAL_INVALID = "Invalid code"
-TERMINAL_MAX_DEPTH = "Maximum depth reached"
-TERMINAL_CODE_END = "Code end marker"
-TERMINAL_SUBTREE_TERMINAL = "Subtree terminal"
+# terminal reasons in order of priority
+TERMINAL_INVALID = "Invalid code"  # Terminal marker for invalid code
+TERMINAL_CODE_END = "Code end marker"  # Terminal marker for end of code tag
+TERMINAL_MAX_DEPTH = "Maximum depth reached"  # Terminal marker for reaching max depth
+TERMINAL_SUBTREE_TERMINAL = "Subtree terminal"  # Terminal marker for subtree terminal
 
-###########################################
-# OUTPUT FORMAT MARKERS
-###########################################
-# These tags are used to parse the model's output into structured sections
+# special tokens ("tags") for language model
 STEP_END = "<end_of_step>"  # Marks the end of a reasoning step
 CODE = "<beginning_of_code>"  # Begins a code section
 CODE_END = "<end_of_code>"  # Ends a code section
@@ -55,29 +43,22 @@ class Config:
     This class handles all configuration aspects of the rStar-ARC system,
     loading configuration from a YAML file and providing default values.
     """
-    ###########################################
-    # LOGGING PARAMETERS
-    ###########################################
+
+    arc_prize: bool = False  # Whether this is a competition submission
+
     log_level: str = "DEBUG"  # Logging level: DEBUG, INFO, WARNING, ERROR, CRITICAL
+    save_for_visualization: bool = True  # Whether to visualize the reasoning steps
+
     numeric_log_level: Optional[int] = None  # Numeric logging level (set automatically)
     model_initialization_times = {"policy": None, "reward": None}  # Time taken to initialize models
 
-    ###########################################
-    # PROMPT PARAMETERS
-    ###########################################
     num_examples: int = 2  # Controls the number of few shot examples in the prompt
 
-    ###########################################
-    # MODEL CONFIGURATION
-    ###########################################
-    # Language model selection
     policy_model: str = "Qwen/Qwen2.5-Coder-7B-Instruct"  # Model that generates reasoning steps
     reward_model: str = "Qwen/Qwen2.5-Coder-7B-Instruct"  # Reward Model for evaluating steps
 
-    # general model configuration
     model_base_path: str = os.path.join(NET_SCRATCH_PATH, "models")  # Base path where models are stored
 
-    # Policy model configuration
     max_tokens: int = 1024  # Maximum tokens for generation
     dtype: str = "bfloat16"  # Data type for model (affects precision/speed)
     max_model_len: int = 16384  # Affects the context window size
@@ -87,63 +68,37 @@ class Config:
     seed: int = 42  # Random seed for reproducibility
     deterministic: bool = False  # Whether to enforce deterministic behavior
 
-    # Reward model configuration
-
-    ###########################################
-    # DATA CONFIGURATION
-    ###########################################
     data_folder: str = DEFAULT_DATA_PATH  # Path to ARC task data
     task_name: str = ""  # Name of specific task (overrides task_index if provided)
 
-    ###########################################
-    # SEARCH ALGORITHM PARAMETERS
-    ###########################################
     search_mode: str = "bs"  # Search algorithm - "bs" for beam search, "mcts" for Monte Carlo Tree Search
 
     max_depth: int = 10  # Maximum number of reasoning steps
     batch_size: int = -1  # Batch size for parallel inference (-1 means all at once, otherwise batch size)
 
-    # BEAM search specific parameters
     beam_width: int = 3  # Number of top-scoring beams to track
     branching_factor: int = 3  # Number of children to generate per step
 
-    # MCTS search specific parameters
     c_puct: float = 2.0  # PUCT exploration constant
     num_simulations: int = 8  # Number of simulations to run for MCTS
     negative_reward: float = -1.0  # Negative reward for invalid/incorrect code
     positive_reward: float = 1.0  # Positive reward for correct code
 
-    ###########################################
-    # SLURM AND HARDWARE CONFIGURATION
-    ###########################################
     job_id: int = int(os.getenv("SLURM_JOB_ID", 0))  # Job ID (read from environment variable)
-    cpus: int = int(os.getenv("SLURM_CPUS_PER_TASK", 4))  # Number of CPUs available
+    cpus: int = int(os.getenv("SLURM_CPUS_PER_TASK", 16))  # Number of CPUs available
     gpus: int = int(os.getenv("SLURM_GPUS", 1))  # Number of GPUs available
-    mem: int = int(os.getenv("SLURM_MEM_PER_NODE", 128))  # Memory per node
+    mem: int = int(os.getenv("SLURM_MEM_PER_NODE", 32768))  # Memory per node in MB
     nodelist: str = os.getenv("SLURM_JOB_NODELIST", "")  # List of nodes assigned to the job
 
-    ###########################################
-    # OUTPUT CONFIGURATION
-    ###########################################
     output_dir: str = os.path.join(NET_SCRATCH_PATH, "outputs")  # Directory to save results
 
-    ###########################################
-    # CONFIG FILE
-    ###########################################
     config_file: str = ""  # Path to YAML config file
 
-    ###########################################
-    # SLURM PARAMETERS
-    ###########################################
-    # These parameters are used by the SLURM script, not directly by the Python application
     partition: Optional[str] = None  # SLURM partition to use
     exclude: Optional[str] = None  # Nodes to exclude
     time: Optional[str] = None  # Time limit for job
 
-    ###########################################
-    # COMPUTED FIELDS
-    ###########################################
-    # These are calculated automatically in __post_init__
+    # Computed fields
     policy_model_dir: Optional[str] = None  # Full path to policy model
     reward_model_dir: Optional[str] = None  # Full path to reward model
     temporary_path: Optional[str] = None  # Temporary path for job
@@ -155,6 +110,10 @@ class Config:
         This method runs automatically after the dataclass is instantiated,
         loading configuration from a file (if specified) and calculating derived values.
         """
+        if self.arc_prize:
+            self.save_for_visualization = False
+            # TODO: adapt config to ARC prize competition settings
+
         # Parse command line arguments to get config file path
         parser = argparse.ArgumentParser(description='rSTAR meets ARC')
         parser.add_argument('--config-file', type=str, help='Path to YAML config file')
@@ -193,7 +152,7 @@ class Config:
         try:
             # Define possible config file locations
             config_paths = [
-                os.path.join("configs", self.config_file),
+                os.path.join("../configs", self.config_file),
                 os.path.join("tmp_configs", self.config_file)
             ]
 

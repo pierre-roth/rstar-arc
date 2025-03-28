@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime
 
-from config import Config
+from rstar_deepthink.config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +18,8 @@ class RewardModel:
         end = datetime.now()
         self.config.model_initialization_times["reward"] = end - start
 
-    def score(self, prompts: list[str]) -> list[float]:
+    @staticmethod
+    def score(prompts: list[str]) -> list[float]:
         """
         Generate completions for a given list of prompts
 

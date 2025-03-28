@@ -2,10 +2,10 @@ import logging
 
 from vllm.outputs import RequestOutput
 
-from arc_rstar.agents.node import Node
-from arc_rstar.arc_task.task import ARCTask
-from config import Config
-from prompt import get_prompt
+from rstar_deepthink.arc_task import ARCTask
+from rstar_deepthink.config import Config
+from rstar_deepthink.node import Node
+from rstar_deepthink.prompt import get_prompt
 
 logger = logging.getLogger(__name__)
 

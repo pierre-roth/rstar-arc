@@ -1,19 +1,23 @@
 import logging
 from random import choice
 
-from arc_rstar.agents.beam_search import Agent
-from arc_rstar.agents.node import Node
-from arc_rstar.agents.utils import normalized_similarity_score
-from arc_rstar.arc_task.task import Grid
+from rstar_deepthink.agents import Agent
+from rstar_deepthink.config import TERMINAL_SUBTREE_TERMINAL
+from rstar_deepthink.node import Node
 
 logger = logging.getLogger(__name__)
 
 
-class SMCTS(Agent):
+class PWMCTS(Agent):
     """
     Monte Carlo Tree Search agent that inherits from the Beam Search (BS) agent.
     This leverages shared functionality while maintaining MCTS-specific selection logic.
     """
+
+    # progressively widen search at most promising nodes at each level
+    def has_expanded(self) -> bool:
+        """Function that determined whether to generate more children."""
+        return False
 
     @staticmethod
     def select_child(node: Node) -> Node | None:
@@ -24,6 +28,8 @@ class SMCTS(Agent):
         # Only consider non-terminal children
         non_terminal_children = [child for child in node.children if not child.is_terminal()]
         if not non_terminal_children:
+            node.terminal = True
+            node.terminal_reason = TERMINAL_SUBTREE_TERMINAL
             return None
 
         for child in non_terminal_children:
@@ -44,15 +50,11 @@ class SMCTS(Agent):
             for candidate_node, score in zip(self.candidate_nodes, scores):
                 # Update node statistics
                 if candidate_node.is_terminal():
-
-                    if not candidate_node.is_valid():
-                        candidate_node.update_recursive(self.config.negative_reward)
+                    # For terminal nodes with solutions
+                    if candidate_node.passes_training:
+                        candidate_node.update_recursive(self.config.positive_reward)
                     else:
-                        correct_grids = [example.output_grid for example in self.task.training_examples]
-                        predicted_grids = [Grid(output_grid) for output_grid in
-                                           candidate_node.execution_outputs[:len(self.task.training_examples)]]
-
-                        candidate_node.update_recursive(normalized_similarity_score(correct_grids, predicted_grids))
+                        candidate_node.update_recursive(self.config.negative_reward)
                 else:
                     # For non-terminal nodes
                     candidate_node.update(score)

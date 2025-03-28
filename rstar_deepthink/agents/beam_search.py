@@ -1,7 +1,7 @@
 import logging
 from random import shuffle
 
-from arc_rstar.agents.base_agent import Agent
+from rstar_deepthink.agents import Agent
 
 logger = logging.getLogger(__name__)
 

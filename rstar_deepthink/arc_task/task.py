@@ -3,7 +3,7 @@ import logging
 import os
 from typing import Optional
 
-from config import Config
+from rstar_deepthink.config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +28,7 @@ class Grid:
         if not isinstance(grid, list) or not grid:
             return False
 
-        # Check that each row is a list and that they are all of the same length.
+        # Check that each row is a list and that they all have the same length.
         # Also verify that every cell in each row is an integer.
         expected_length = None
         for row in grid:

@@ -1,24 +1,17 @@
 import logging
 from random import choice
 
-from arc_rstar.agents.beam_search import Agent
-from arc_rstar.agents.node import Node
-
-from config import TERMINAL_SUBTREE_TERMINAL
+from rstar_deepthink.agents import Agent
+from rstar_deepthink.node import Node
 
 logger = logging.getLogger(__name__)
 
 
-class PWMCTS(Agent):
+class MCTS(Agent):
     """
     Monte Carlo Tree Search agent that inherits from the Beam Search (BS) agent.
     This leverages shared functionality while maintaining MCTS-specific selection logic.
     """
-
-    # progressively widen search at most promising nodes at each level
-    def has_expanded(self) -> bool:
-        """Function that determined whether to generate more children."""
-        return False
 
     @staticmethod
     def select_child(node: Node) -> Node | None:
@@ -29,8 +22,6 @@ class PWMCTS(Agent):
         # Only consider non-terminal children
         non_terminal_children = [child for child in node.children if not child.is_terminal()]
         if not non_terminal_children:
-            node.terminal = True
-            node.terminal_reason = TERMINAL_SUBTREE_TERMINAL
             return None
 
         for child in non_terminal_children:
@@ -51,6 +42,7 @@ class PWMCTS(Agent):
             for candidate_node, score in zip(self.candidate_nodes, scores):
                 # Update node statistics
                 if candidate_node.is_terminal():
+
                     # For terminal nodes with solutions
                     if candidate_node.passes_training:
                         candidate_node.update_recursive(self.config.positive_reward)

@@ -6,7 +6,7 @@ import signal
 import subprocess
 import textwrap
 
-from config import TIMEOUT_SECONDS, CODE, CODE_END, STEP_END, MEMORY_LIMIT_BYTES
+from rstar_deepthink.config import TIMEOUT_SECONDS, CODE, CODE_END, STEP_END, MEMORY_LIMIT_BYTES
 
 logger = logging.getLogger(__name__)
 
