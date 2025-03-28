@@ -1,7 +1,0 @@
-search-mode: "bs"
-log-level: "DEBUG"
-
-dtype: "float32"
-
-policy-model: "Qwen/Qwen2.5-Coder-1.5B-Instruct"
-
