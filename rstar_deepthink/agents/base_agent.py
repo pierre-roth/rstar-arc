@@ -3,7 +3,7 @@ import logging
 from vllm.outputs import RequestOutput
 
 from rstar_deepthink.arc_task import ARCTask
-from rstar_deepthink.config import Config
+from rstar_deepthink.config import Config, CODE
 from rstar_deepthink.node import Node
 from rstar_deepthink.prompt import get_prompt
 
@@ -22,12 +22,13 @@ class Agent:
         self.final_answer_nodes: list[Node] = []
         self.rollout_idx: int = 0
 
-        self.create_root(get_prompt(config, task), task)
+        self.create_root(get_prompt(config, task), f"{CODE}\ndef solve(I):", task)
 
-    def create_root(self, prompt: str, task: ARCTask):
+    def create_root(self, prompt: str, code: str, task: ARCTask):
         """Initialize the root node with the given state."""
         self.root = Node(self.config)
         self.root.state["text"] = prompt
+        self.root.state["code"] = code
         self.root.task = task
         self.root.valid = True
 

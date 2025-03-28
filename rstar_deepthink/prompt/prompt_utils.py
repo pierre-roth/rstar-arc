@@ -54,8 +54,7 @@ Then write Python code to implement the transformation function.
 {task.to_prompt()}
 
 
-{CODE}
-def solve(I):"""
+"""
 
     ### EXAMPLE PROMPTS ###
     single_example_prompt = f"""Below is an example task with an example solution. They should give you an idea of what is expected."""

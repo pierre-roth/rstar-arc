@@ -18,7 +18,7 @@ class Node:
     def __init__(self, config: Config):
         self.config: Config = config
 
-        self.state = {"text": ""}
+        self.state = {"text": "", "code": ""}
         self.parent: Node | None = None
         self.children: list[Node] = []
         self.depth: int = 0
@@ -57,7 +57,7 @@ class Node:
             self.terminal = True
 
         # Check if ended with code end marker
-        if self.state["text"].strip().endswith(CODE_END):
+        if self.state["code"].strip().endswith(CODE_END):
             self.terminal_reason = TERMINAL_CODE_END
             self.terminal = True
 
@@ -80,7 +80,7 @@ class Node:
         child.depth = self.depth + 1
         child.tag = f"{self.tag}.{len(self.children) - 1}"
         child.task = self.task
-        child.state["text"] = text
+        child.state["code"] = text
 
         # Validate the child node upon creation
         child.is_valid()
@@ -165,8 +165,9 @@ class Node:
         node = self
         trajectory = []
         while node:
-            trajectory.append(node.state['text'])
+            trajectory.append(node.state["text"] + node.state["code"])
             node = node.parent
+
         return "".join(reversed(trajectory))
 
     def is_valid_final_answer_node(self) -> bool:
