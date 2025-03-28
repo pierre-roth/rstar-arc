@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import json
 import logging
 import signal
@@ -7,6 +5,7 @@ import subprocess
 import textwrap
 
 from rstar_deepthink.config import TIMEOUT_SECONDS, CODE, CODE_END, STEP_END, MEMORY_LIMIT_BYTES
+from rstar_deepthink.node import Node
 
 logger = logging.getLogger(__name__)
 
@@ -218,13 +217,13 @@ def run_examples(task, code: str) -> (bool, bool, list[list[list[int]]]):
     return execute_code_with_task(code, input_grids, expected_outputs)
 
 
-def training_correct(node: "Node") -> (bool, bool, list[list[list[int]]]):
+def training_correct(node: Node) -> (bool, bool, list[list[list[int]]]):
     if not node.valid:
         return True, False, []
-    return False, node.passes_training, node.execution_outputs
+    return False, node.passes_training, node.execution_outputs[:len(node.task.training_examples)]
 
 
-def test_correct(node: "Node") -> (bool, bool, list[list[list[int]]]):
+def test_correct(node: Node) -> (bool, bool, list[list[list[int]]]):
     if not node.valid:
         return True, False, []
 
@@ -234,21 +233,4 @@ def test_correct(node: "Node") -> (bool, bool, list[list[list[int]]]):
         if generated_output != expected_output:
             return False, False, node.execution_outputs[len(node.task.training_examples):]
 
-    return False, node.passes_training, node.execution_outputs
-
-
-def run_training_examples(task, code: str) -> (bool, bool, list[list[list[int]]]):
-    """Run code against all training examples in a single process."""
-    input_grids = [example.input_grid.grid for example in task.training_examples]
-    expected_outputs = [example.output_grid.grid for example in task.training_examples]
-
-    return execute_code_with_task(code, input_grids, expected_outputs)
-
-
-def run_test_examples(task, code: str) -> (bool, bool, list[list[list[int]]]):
-    """Run code against all test examples in a single process."""
-    input_grids = [example.input_grid.grid for example in task.test_examples]
-    expected_outputs = [example.output_grid.grid if example.output_grid is not None else None for example in
-                        task.test_examples]
-
-    return execute_code_with_task(code, input_grids, expected_outputs)
+    return False, node.passes_training, node.execution_outputs[len(node.task.training_examples):]
