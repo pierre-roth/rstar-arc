@@ -15,7 +15,8 @@ LOCAL_SCRATCH_PATH = f"/scratch/{ETH_USERNAME}"  # local scratch directory
 SECOND_LOCAL_SCRATCH_PATH = f"/scratch-second/{ETH_USERNAME}"  # second local scratch directory
 HOME_PATH = f"/home/{ETH_USERNAME}"  # home directory
 
-DEFAULT_DATA_FOLDER = f"{HOME_PATH}/rstar-arc/data_sample"  # path for sample data in git repo
+PROJECT_PATH = f"{HOME_PATH}/rstar-arc"  # project root directory
+DEFAULT_DATA_FOLDER = f"{PROJECT_PATH}/data_sample"  # path for sample data in git repo
 DEFAULT_DATA_PATH = f"{DEFAULT_DATA_FOLDER}/default"
 DEFAULT_EXAMPLE_DATA_PATH = f"{DEFAULT_DATA_FOLDER}/examples"  # path to prompt examples
 
@@ -153,7 +154,7 @@ class Config:
         try:
             # Define possible config file locations
             config_paths = [
-                os.path.join("../configs", self.config_file),
+                os.path.join(f"{PROJECT_PATH}/configs", self.config_file),
                 os.path.join("tmp_configs", self.config_file)
             ]
 

@@ -4,6 +4,7 @@ from datetime import datetime
 from rstar_deepthink import Solver
 from rstar_deepthink.agents import BS, MCTS, PWMCTS, SMCTS, Custom
 from rstar_deepthink.config import Config
+from train.save_sft_data import save_sft
 from utils import setup_logging, load_tasks, batch, save_nodes, save_summary
 
 logger = logging.getLogger(__name__)
@@ -47,7 +48,8 @@ if __name__ == '__main__':
                 save_nodes(config, nodelist)
 
         if config.save_sft_data:
-            pass
+            for nodelist in outputs:
+                save_sft(config, nodelist)
 
         # save summary of the batch
         save_summary(config, outputs, i)
