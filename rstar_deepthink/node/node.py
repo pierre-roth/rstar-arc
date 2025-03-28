@@ -151,7 +151,7 @@ class Node:
                 self.passes_training = passed
 
         except Exception as e:
-            logger.exception(f"Node validation failed: {str(e)}")
+            logger.error(f"Node validation failed: {str(e)}")
             self.valid = False
 
         # running is_terminal() to set terminal_reason

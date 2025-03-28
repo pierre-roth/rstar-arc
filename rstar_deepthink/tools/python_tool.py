@@ -127,10 +127,10 @@ def execute_code_in_subprocess(code_str, input_grids, expected_outputs):
         if proc.returncode < 0:
             sig = -proc.returncode
             if sig == signal.SIGXCPU:
-                logger.error("Process terminated due to CPU time limit exceeded.")
+                logger.debug("Process terminated due to CPU time limit exceeded.")
                 return True, False, []
             else:
-                logger.error(f"Process terminated by signal: {sig}")
+                logger.debug(f"Process terminated by signal: {sig}")
                 return True, False, []
 
         # Handle subprocess output
@@ -141,27 +141,27 @@ def execute_code_in_subprocess(code_str, input_grids, expected_outputs):
             logger.debug(f"Subprocess stderr: {stderr}")
 
         if proc.returncode != 0:
-            logger.error(f"Code execution failed with exit code {proc.returncode}: {stderr}")
+            logger.debug(f"Code execution failed with exit code {proc.returncode}: {stderr}")
             return True, False, []
 
         try:
             result_data = json.loads(stdout)
             if result_data.get("error", False):
-                logger.error(f"Error in executed code: {result_data.get('message', 'Unknown error')}")
+                logger.debug(f"Error in executed code: {result_data.get('message', 'Unknown error')}")
                 return True, False, []
 
             return False, result_data.get("passed", False), result_data.get("results", [])
 
         except json.JSONDecodeError:
-            logger.error(f"Failed to parse subprocess output: {stdout}")
+            logger.debug(f"Failed to parse subprocess output: {stdout}")
             return True, False, []
 
     except subprocess.TimeoutExpired:
         # This should not happen now that we removed wall-clock timeout
-        logger.error("Subprocess timed out unexpectedly. (This should be impossible)")
+        logger.debug("Subprocess timed out unexpectedly. (This should be impossible)")
         return True, False, []
     except Exception as e:
-        logger.error(f"Exception during code execution: {str(e)}")
+        logger.debug(f"Exception during code execution: {str(e)}")
         return True, False, []
 
 
@@ -182,7 +182,7 @@ def execute_code_with_task(code: str, input_grids: list[list[list[int]]],
             - outputs: list of output grids produced by the code
     """
     if not code.strip():
-        logger.warning("Cannot execute empty code")
+        logger.debug("Cannot execute empty code!")
         return True, False, []
 
     # Execute in subprocess

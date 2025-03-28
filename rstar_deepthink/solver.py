@@ -69,7 +69,7 @@ class Solver:
             except StopIteration:
                 break
             except Exception as error:
-                logger.error(f"Exception while generating postprocess (shouldn't happen): {error}")
+                logger.critical(f"Exception while generating postprocess (shouldn't happen): {error}")
                 post_agents.append(None)
 
         # update agents
