@@ -42,8 +42,6 @@ if __name__ == '__main__':
             logger.info(
                 f"Task {output[0].task.name} training examples passed: {any(node.is_valid_final_answer_node() for node in output)}")
 
-        # TODO: filter out the correct solutions and save each one to a jsonl file (1 row per solution)
-
         if config.save_for_visualization:
             for nodelist in outputs:
                 save_nodes(config, nodelist)

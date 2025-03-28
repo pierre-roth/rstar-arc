@@ -94,7 +94,7 @@ def execute_code_in_subprocess(code_str, input_grids, expected_outputs):
         try:
             # Execute the user code to define solve()
             # Using globals() allows solve to be defined in the global scope of the wrapper
-            exec_globals = {{}}
+            exec_globals = {{"np": np}}
             exec(user_code, exec_globals)
 
             # Parse input data from command line arg
