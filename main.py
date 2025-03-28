@@ -2,7 +2,7 @@ import logging
 from datetime import datetime
 
 from rstar_deepthink import Solver
-from rstar_deepthink.agents import BS, MCTS, PWMCTS, SMCTS, Custom
+from rstar_deepthink.agents import BS, MCTS, Custom
 from rstar_deepthink.config import Config
 from train.save_sft_data import save_sft
 from utils import setup_logging, load_tasks, batch, save_nodes, save_summary
@@ -28,7 +28,7 @@ if __name__ == '__main__':
     solver = Solver(config)
 
     # select the search agent
-    agent = {"bs": BS, "mcts": MCTS, "pwmcts": PWMCTS, "smcts": SMCTS, "custom": Custom}.get(config.search_mode, BS)
+    agent = {"bs": BS, "mcts": MCTS, "custom": Custom}.get(config.search_mode, BS)
 
     # process tasks in batches
     for i, task_batch in enumerate(batch(tasks, config.batch_size)):
