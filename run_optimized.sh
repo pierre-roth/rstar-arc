@@ -72,47 +72,47 @@ if ! mkdir -p "${final_job_dir}"; then
     exit 1
 fi
 
-# Set up automatic cleanup when job ends (cleans local_job_dir, copies logs)
+
+# --- CORRECTED Cleanup Trap ---
+# Set trap for termination signals to ensure exit code 1 is used
 trap "exit 1" HUP INT TERM
-trap 'echo "Transferring logs and cleaning up...";
-      # Ensure final directory exists before copying
-      mkdir -p "${final_job_dir}";
-      # Copy contents of local job dir to final dir
-      rsync -av --inplace "${local_job_dir}/" "${final_job_dir}/";
 
-      # Copy SLURM output files to detailed logs and delete originals if copy succeeds
-      # Check if SLURM output files exist before trying to copy
-      slurm_out_file="/itet-stor/piroth/net_scratch/outputs/jobs/${SLURM_JOB_ID}.out"
-      slurm_err_file="/itet-stor/piroth/net_scratch/outputs/jobs/${SLURM_JOB_ID}.err"
-      if [[ -f "$slurm_out_file" && -f "$slurm_err_file" ]]; then
-          if cp "$slurm_out_file" "${final_job_dir}/slurm.out" &&
-             cp "$slurm_err_file" "${final_job_dir}/slurm.err"; then
-              echo "SLURM logs copied successfully to ${final_job_dir}";
+# Define the cleanup actions command string first
+# Note: Comments explaining the logic are moved *outside* the command string
+# Note: We are NOT cleaning up PYTHON_INSTALL_DIR here to allow potential reuse.
+# Add 'rm -rf "${PYTHON_INSTALL_DIR}"; \' inside the single quotes below if you *always* want cleanup.
+CLEANUP_COMMAND=' \
+echo "Transferring logs and cleaning up..."; \
+mkdir -p "${final_job_dir}"; \
+rsync -av --inplace "${local_job_dir}/" "${final_job_dir}/"; \
+\
+slurm_out_file="/itet-stor/piroth/net_scratch/outputs/jobs/${SLURM_JOB_ID}.out"; \
+slurm_err_file="/itet-stor/piroth/net_scratch/outputs/jobs/${SLURM_JOB_ID}.err"; \
+if [[ -f "$slurm_out_file" && -f "$slurm_err_file" ]]; then \
+    if cp "$slurm_out_file" "${final_job_dir}/slurm.out" && \
+       cp "$slurm_err_file" "${final_job_dir}/slurm.err"; then \
+        echo "SLURM logs copied successfully to ${final_job_dir}"; \
+        ln -sfn "${final_job_dir}" /home/${ETH_USERNAME}/latest_job; \
+        echo "Symlink created/updated for latest job directory"; \
+        rm -f "$slurm_out_file"; \
+        rm -f "$slurm_err_file"; \
+        echo "Original SLURM output and error files deleted"; \
+    else \
+        echo "WARNING: Failed to copy SLURM logs to detailed directory. Original files preserved."; \
+    fi; \
+else \
+    echo "WARNING: Original SLURM logs not found at expected location ($slurm_out_file / $slurm_err_file). Cannot copy or delete them."; \
+fi; \
+\
+echo "All local job files transferred to ${final_job_dir}"; \
+echo "Removing local job directory: ${local_job_dir}"; \
+rm -rf "${local_job_dir}"; \
+echo "Cleanup trap finished."; \
+'
+# Set the trap using the command string variable for the EXIT signal
+trap "${CLEANUP_COMMAND}" EXIT
+# --- END CORRECTED Cleanup Trap ---
 
-              # Update symlink for the latest job directory
-              ln -sfn "${final_job_dir}" /home/${ETH_USERNAME}/latest_job;
-              echo "Symlink created/updated for latest job directory";
-
-              # Remove original SLURM logs only if copy was successful
-              rm -f "$slurm_out_file";
-              rm -f "$slurm_err_file";
-              echo "Original SLURM output and error files deleted";
-          else
-              echo "WARNING: Failed to copy SLURM logs to detailed directory. Original files preserved.";
-          fi;
-      else
-          echo "WARNING: Original SLURM logs not found at expected location ($slurm_out_file / $slurm_err_file). Cannot copy or delete them."
-      fi
-
-      echo "All local job files transferred to ${final_job_dir}";
-      # Clean up the ephemeral local job directory
-      echo "Removing local job directory: ${local_job_dir}";
-      rm -rf "${local_job_dir}"
-
-      # Note: We are NOT cleaning up PYTHON_INSTALL_DIR here to allow potential reuse.
-      # Add 'rm -rf "${PYTHON_INSTALL_DIR}"' here if you *always* want cleanup.
-
-      ' EXIT # Note the single quotes around the trap command
 
 # Allow specifying a different config file as the only CLI argument
 if [ $# -eq 1 ]; then
@@ -200,7 +200,6 @@ if [ "$INSTALL_PYTHON" = true ]; then
         echo "Download successful." | tee -a "${local_job_dir}/job_info.log"
 
         echo "Extracting Python into $PYTHON_INSTALL_BASE_DIR..." | tee -a "${local_job_dir}/job_info.log"
-        # *** CORRECTED EXTRACTION ***
         # Extract into the base directory. Expects it creates a 'python' subdir based on user info.
         tar -xzf "$TEMP_DOWNLOAD_PATH" -C "$PYTHON_INSTALL_BASE_DIR"
         EXTRACT_EXIT_CODE=$?
@@ -208,7 +207,7 @@ if [ "$INSTALL_PYTHON" = true ]; then
         rm -f "$TEMP_DOWNLOAD_PATH"
         # Check tar exit code
         if [ $EXTRACT_EXIT_CODE -ne 0 ]; then
-            echo "Error: Failed to extract Python archive $TEMP_DOWNLOAD_PATH into $PYTHON_INSTALL_BASE_DIR (tar exit code: $EXTRACT_EXIT_CODE)." | tee -a "${local_job_dir}/job_info.log" >&2
+            echo "Error: Failed to extract Python archive (tar exit code: $EXTRACT_EXIT_CODE). Download path: $TEMP_DOWNLOAD_PATH. Target base: $PYTHON_INSTALL_BASE_DIR" | tee -a "${local_job_dir}/job_info.log" >&2
             exit 1
         fi
 
@@ -229,7 +228,6 @@ if [ "$INSTALL_PYTHON" = true ]; then
             exit 1
         fi
         echo "Extraction complete and directory renamed." | tee -a "${local_job_dir}/job_info.log"
-        # *** END CORRECTED EXTRACTION ***
 
         # Verify Python installation executable exists after rename
         if [ ! -f "$MINIMAL_PYTHON_EXEC_PATH" ]; then
