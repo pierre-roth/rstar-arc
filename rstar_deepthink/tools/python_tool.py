@@ -9,24 +9,6 @@ from rstar_deepthink.config import TIMEOUT_SECONDS, CODE, CODE_END, STEP_END, ME
 logger = logging.getLogger(__name__)
 
 
-def extract_python_code(text):
-    """Extract Python code from text after the last CODE marker"""
-
-    logger.debug(f"Extracting code from text (which has {len(text)} characters)")
-
-    if not text.strip().endswith(STEP_END) and not text.strip().endswith(CODE_END) and not text.strip().endswith(
-            "def solve(I):"):
-        logger.warning(f"Text does not end with a valid marker (STEP_END or CODE_END)")
-
-    # Find the last CODE marker and get all content after it
-    last_code_start = text.rindex(CODE) + len(CODE)
-    code = text[last_code_start:].strip()
-
-    logger.debug(f"Extracted code block:\n{code}")
-
-    return code
-
-
 def remove_markers(code):
     """Remove STEP_END and CODE_END markers from the code."""
     # Remove both types of markers
@@ -226,12 +208,6 @@ def run_examples(task, code: str) -> (bool, bool, list[list[list[int]]]):
         task.test_examples)
 
     return execute_code_with_task(code, input_grids, expected_outputs)
-
-
-def training_correct(node) -> (bool, bool, list[list[list[int]]]):
-    if not node.valid:
-        return True, False, []
-    return False, node.passes_training, node.execution_outputs[:len(node.task.training_examples)]
 
 
 def test_correct(node) -> (bool, bool, list[list[list[int]]]):

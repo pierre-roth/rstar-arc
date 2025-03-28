@@ -4,7 +4,7 @@ import numpy as np
 
 from rstar_deepthink.arc_task import ARCTask
 from rstar_deepthink.config import Config, CODE_END, TERMINAL_CODE_END, TERMINAL_MAX_DEPTH, TERMINAL_INVALID
-from rstar_deepthink.tools import extract_python_code, run_examples
+from rstar_deepthink.tools import run_examples
 from rstar_deepthink.tools.python_tool import remove_markers
 
 logger = logging.getLogger(__name__)

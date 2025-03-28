@@ -3,11 +3,11 @@ import logging
 import os
 import sys
 
-from rstar_deepthink.node import Node
 from rstar_deepthink.arc_task import ARCTask
-from rstar_deepthink.config import Config, STEP_END, CODE_END
-from rstar_deepthink.tools import extract_python_code, test_correct
-from rstar_deepthink.tools.python_tool import remove_markers, comment_out_markers
+from rstar_deepthink.config import Config
+from rstar_deepthink.node import Node
+from rstar_deepthink.tools import test_correct
+from rstar_deepthink.tools.python_tool import comment_out_markers
 
 logger = logging.getLogger(__name__)
 

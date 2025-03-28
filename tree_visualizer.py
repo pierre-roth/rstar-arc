@@ -6,9 +6,7 @@ import igraph
 import numpy as np
 import plotly.graph_objects as go
 
-from rstar_deepthink.tools import extract_python_code
-from rstar_deepthink.config import STEP_END, CODE_END
-from rstar_deepthink.tools.python_tool import remove_markers, comment_out_markers
+from rstar_deepthink.tools.python_tool import comment_out_markers
 from utils import load_nodes
 
 
