@@ -274,14 +274,10 @@ def execute_code_with_task(code: str, input_grids: list[list[list[int]]],
 
 def run_examples(task, code: str) -> (bool, bool, list[list[list[int]]]):
     """Run code against all examples in a single process."""
-    # Ensure task objects have the expected attributes
-    try:
-        input_grids = [example.input_grid.grid for example in task.training_examples + task.test_examples]
-        expected_outputs = [example.output_grid.grid for example in task.training_examples] + [None] * len(
-            task.test_examples)
-    except AttributeError as e:
-        logger.error(f"Error accessing task attributes (input_grid/output_grid): {e}")
-        return True, False, []
+
+    input_grids = [example.input_grid.grid for example in task.training_examples + task.test_examples]
+    expected_outputs = [example.output_grid.grid for example in task.training_examples] + [None] * len(
+        task.test_examples)
 
     return execute_code_with_task(code, input_grids, expected_outputs)
 
