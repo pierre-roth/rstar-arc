@@ -88,6 +88,7 @@ def execute_code_in_subprocess(code_str, input_grids, expected_outputs):
             # Run solve on each input grid
             results = []
             passed = True
+            error = False
 
             for i, grid in enumerate(input_grids):
                 try:
@@ -106,9 +107,10 @@ def execute_code_in_subprocess(code_str, input_grids, expected_outputs):
                     print(f"Error processing grid {{i}}: {{str(e)}}", file=sys.stderr)
                     results.append(None)
                     passed = False
+                    error = True
 
             # Return the results as JSON
-            print(json.dumps({{"error": False, "passed": passed, "results": results}}))
+            print(json.dumps({{"error": error, "passed": passed, "results": results}}))
 
         except Exception as e:
             import traceback

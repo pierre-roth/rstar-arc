@@ -140,7 +140,7 @@ class Node:
             code = remove_markers(self.collect_code())
 
             logger.debug(f"Successfully extracted code ({len(code.splitlines())} lines)")
-            logger.debug("Validation: testing for errors while running training examples")
+            logger.debug("Validating by testing for errors by testing on input grids ...")
 
             error, passed, self.execution_outputs = run_examples(self.task, code)
 
