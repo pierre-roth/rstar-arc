@@ -46,6 +46,9 @@ if __name__ == '__main__':
             for nodelist in outputs:
                 save_nodes(config, nodelist)
 
+        if config.save_sft_data:
+            pass
+
         # save summary of the batch
         save_summary(config, outputs, i)
 

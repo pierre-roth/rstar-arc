@@ -48,6 +48,7 @@ class Config:
 
     log_level: str = "DEBUG"  # Logging level: DEBUG, INFO, WARNING, ERROR, CRITICAL
     save_for_visualization: bool = True  # Whether to visualize the reasoning steps
+    save_sft_data: bool = True  # Whether to save SFT data
 
     numeric_log_level: Optional[int] = None  # Numeric logging level (set automatically)
     model_initialization_times = {"policy": None, "reward": None}  # Time taken to initialize models
