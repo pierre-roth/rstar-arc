@@ -3,9 +3,10 @@ from datetime import datetime
 
 from rstar_deepthink import Solver
 from rstar_deepthink.agents import BS, MCTS, Custom
+from rstar_deepthink.arc_task import load_tasks
 from rstar_deepthink.config import Config
 from train.save_sft_data import save_sft
-from utils import setup_logging, load_tasks, batch, save_nodes, save_summary
+from utils import setup_logging, batch, save_nodes, save_summary
 
 logger = logging.getLogger(__name__)
 
