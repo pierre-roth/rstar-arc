@@ -1,4 +1,5 @@
 import logging
+import time
 
 import numpy as np
 
@@ -84,8 +85,14 @@ class Node:
         child.state["code"] = text
 
         # Validate the child node upon creation
+
+        validation_start_time = time.time()
+
         child.is_valid()
 
+        validation_duration = time.time() - validation_start_time
+
+        logger.debug(f"Validation duration for child {child.tag}: {validation_duration}")
         logger.debug(f"Added child node {child.tag} to tree.")
 
         return child
