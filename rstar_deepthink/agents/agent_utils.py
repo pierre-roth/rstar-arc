@@ -1,7 +1,7 @@
-from __future__ import annotations
+from rstar_deepthink.arc_task import Grid
 
 
-def normalized_similarity_score(correct_grids: list["Grid"], predicted_grids: list["Grid"]) -> float:
+def normalized_similarity_score(correct_grids: list[Grid], predicted_grids: list[Grid]) -> float:
     """Calculate the normalized closeness between two lists of grids."""
     total_correct = 0
     total = 0

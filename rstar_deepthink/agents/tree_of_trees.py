@@ -3,7 +3,7 @@ from random import choice
 
 from rstar_deepthink.agents import Agent
 from rstar_deepthink.node import Node
-from rstar_deepthink.agents import normalized_similarity_score
+from rstar_deepthink.agents.agent_utils import normalized_similarity_score
 from rstar_deepthink.arc_task import Grid, ARCTask
 from rstar_deepthink.config import Config, TERMINAL_SUBTREE_TERMINAL
 
