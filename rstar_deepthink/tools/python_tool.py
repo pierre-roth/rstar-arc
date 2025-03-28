@@ -23,16 +23,6 @@ def comment_out_markers(code):
     return commented_code
 
 
-def prepare_code_for_execution(code):
-    """Prepare code by ensuring it returns a value."""
-
-    # If the code doesn't contain a return statement
-    if 'return ' not in "\n".join(filter(lambda x: '#' not in x, code.split())):
-        code += "\n    return []"
-
-    return code
-
-
 def execute_code_in_subprocess(code_str, input_grids, expected_outputs):
     """
     Spawns a new Python interpreter to execute code against multiple grids.
@@ -194,9 +184,6 @@ def execute_code_with_task(code: str, input_grids: list[list[list[int]]],
     if not code.strip():
         logger.warning("Cannot execute empty code")
         return True, False, []
-
-    # Prepare the code if any pre-processing is needed
-    code = prepare_code_for_execution(code)
 
     # Execute in subprocess
     return execute_code_in_subprocess(code, input_grids, expected_outputs)
