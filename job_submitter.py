@@ -29,11 +29,10 @@ PARAMETER_SWEEPS = [
         "search-mode": ["bs"],
         "beam-width": [12],
         "branching-factor": [12],
-        "max-depth": [12],
-        "policy-temperature": [0.7, 0.9, 1.1],
-        "examples-mask": [[True, False, False], [False, True, False], [False, False, True],
-                          [True, True, False], [True, False, True], [False, True, True]],
-        "data-folder": [os.path.join(DEFAULT_DATA_FOLDER, "very_easy")]
+        "max-depth": [10],
+        "policy-temperature": [0.9, 0.95, 1.0, 1.05, 1.1, 1.15],
+        "examples-mask": [[True, True, False], [False, True, True]],
+        "data-folder": [os.path.join(DEFAULT_DATA_FOLDER, "easy")]
     }
 ]
 

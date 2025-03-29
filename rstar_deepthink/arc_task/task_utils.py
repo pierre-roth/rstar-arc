@@ -1,6 +1,7 @@
 import logging
 import os
 import sys
+from random import shuffle
 
 from rstar_deepthink.arc_task import ARCTask
 from rstar_deepthink.config import Config
@@ -30,8 +31,9 @@ def load_tasks(config: Config) -> list[ARCTask]:
         sys.exit(1)
 
     # Get all JSON files and sort them alphabetically (case-insensitive)
-    files = sorted([f for f in os.listdir(config.data_folder) if f.endswith('.json')],
-                   key=lambda x: x.lower())
+    files = [f for f in os.listdir(config.data_folder) if f.endswith('.json')]
+    # TODO: potentially remove shuffle
+    shuffle(files)
 
     # Ensure we found at least one file
     if not files:
