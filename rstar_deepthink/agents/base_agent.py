@@ -23,7 +23,7 @@ class Agent:
         self.final_answer_nodes: list[Node] = []
         self.rollout_idx: int = 0
 
-        self.create_root(get_prompt(config, task), f"{CODE}\ndef solve(I):", task)
+        self.create_root(get_prompt(config, task), f"{CODE}\ndef solve(I):\n    ", task)
 
     def create_root(self, prompt: str, code: str, task: ARCTask):
         """Initialize the root node with the given state."""

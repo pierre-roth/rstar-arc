@@ -49,7 +49,6 @@ Then write Python code to implement the transformation function.
     example_task_1 = ARCTask(config, str(os.path.join(DEFAULT_EXAMPLE_DATA_PATH, "6d0aefbc.json")))
     solution_code_1 = f"""{CODE}
 def solve(I):
-    
     # vertically mirror the grid
     x1 = [row[::-1] for row in I]
     {STEP_END}
