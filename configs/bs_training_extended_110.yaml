@@ -8,7 +8,7 @@ policy-temperature: 1.0
 
 beam-width: 12
 branching-factor: 12
-max-depth: 12
+max-depth: 11
 
 batch-size: 15
 
