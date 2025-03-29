@@ -50,7 +50,7 @@ class Grid:
         return self.grid == other.grid
 
     def __str__(self):
-        return "\n".join(" ".join(str(cell) for cell in row) for row in self.grid)
+        return "\n".join("|".join(str(cell) for cell in row) for row in self.grid)
 
 
 class Example:
