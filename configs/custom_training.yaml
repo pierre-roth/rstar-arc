@@ -3,11 +3,8 @@ log-level: "DEBUG"
 
 data-folder: "/home/piroth/rstar-arc/data_sample/training"
 
-policy-temperature: 0.8
-
-batch-size: 60
-
 num-simulations: 24
-branching-factor: 10
+branching-factor: 12
 max-depth: 12
 
+batch-size: 50
