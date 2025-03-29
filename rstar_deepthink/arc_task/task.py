@@ -141,33 +141,3 @@ class ARCTask:
                 return False
 
         return True
-
-    def to_prompt(self) -> str:
-        """Generate the initial prompt for the task to feed into the LLM."""
-        prompt = ["## Training Examples\n"]
-
-        for i, example in enumerate(self.training_examples):
-            prompt.append(f"### Training Example {i + 1}")
-            prompt.append("Input:")
-            prompt.append("```")
-            prompt.append(str(example.input_grid))
-            prompt.append("```")
-            prompt.append("Output:")
-            prompt.append("```")
-            prompt.append(str(example.output_grid))
-            prompt.append("```\n")
-
-        prompt.append("## Test Examples\n")
-
-        for i, example in enumerate(self.test_examples):
-            prompt.append(f"### Test Example {i + 1}")
-            prompt.append("Input:")
-            prompt.append("```")
-            prompt.append(str(example.input_grid))
-            prompt.append("```")
-            prompt.append("Output:")
-            prompt.append("```")
-            prompt.append("To be predicted!")
-            prompt.append("```\n")
-
-        return "\n".join(prompt)

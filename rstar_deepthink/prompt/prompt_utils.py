@@ -5,6 +5,37 @@ from rstar_deepthink.arc_task import ARCTask
 from rstar_deepthink.config import Config
 
 
+def task_to_prompt(task: ARCTask) -> str:
+    """Generate the initial prompt for the task to feed into the LLM."""
+    prompt = ["## Training Examples\n"]
+
+    for i, example in enumerate(task.training_examples):
+        prompt.append(f"### Training Example {i + 1}")
+        prompt.append("Input:")
+        prompt.append("```")
+        prompt.append(str(example.input_grid))
+        prompt.append("```")
+        prompt.append("Output:")
+        prompt.append("```")
+        prompt.append(str(example.output_grid))
+        prompt.append("```\n")
+
+    prompt.append("## Test Examples\n")
+
+    for i, example in enumerate(task.test_examples):
+        prompt.append(f"### Test Example {i + 1}")
+        prompt.append("Input:")
+        prompt.append("```")
+        prompt.append(str(example.input_grid))
+        prompt.append("```")
+        prompt.append("Output:")
+        prompt.append("```")
+        prompt.append("To be predicted!")
+        prompt.append("```\n")
+
+    return "\n".join(prompt)
+
+
 def get_prompt(config: Config, task: ARCTask) -> str:
     ### PROMPT PREFIX ###
     prompt_prefix = f"""You are a powerful agent with broad problem solving/pattern matching knowledge and great python programming skills. You need to write Python code to solve an ARC (Abstraction and Reasoning Corpus) task, or more specifically implement the transformation function that can transform the input grids into their corresponding output grids.
@@ -36,7 +67,7 @@ Remember:
     prompt_suffix = f"""Now it's your turn! Carefully analyze the input-output examples to infer the transformation function.
 Then write Python code to implement the transformation function.
 
-{task.to_prompt()}
+{task_to_prompt(task)}
 
 
 """
@@ -173,7 +204,7 @@ def solve(I):
         for i, (include, (example_task, solution_code)) in enumerate(zip(config.examples_mask, examples)):
             if include:
                 prompt += f"Example Task and Solution Number {i + 1}:\n\n"
-                prompt += example_task.to_prompt() + "\n\n"
+                prompt += task_to_prompt(example_task) + "\n\n"
                 prompt += solution_code + "\n\n"
 
         prompt += prompt_suffix
