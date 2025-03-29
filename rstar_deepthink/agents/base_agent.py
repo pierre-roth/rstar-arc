@@ -2,8 +2,9 @@ import logging
 
 from vllm.outputs import RequestOutput
 
+from constants import CODE
 from rstar_deepthink.arc_task import ARCTask
-from rstar_deepthink.config import Config, CODE
+from rstar_deepthink.config import Config
 from rstar_deepthink.node import Node
 from rstar_deepthink.prompt import get_prompt
 

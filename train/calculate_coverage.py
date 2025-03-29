@@ -1,10 +1,10 @@
-from rstar_deepthink.config import NET_SCRATCH_PATH
 import os
 import json
+from constants import NET_SCRATCH_PATH
 
 
-def calculate_coverage(round_number: int):
-    sft_path = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{round_number}", "raw.jsonl")
+def calculate_coverage(round_num: int):
+    sft_path = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{round_num}", "raw.jsonl")
     task_path = os.path.join(NET_SCRATCH_PATH, "task_data")
 
     task_names = set()

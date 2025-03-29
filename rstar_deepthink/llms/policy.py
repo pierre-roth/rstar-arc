@@ -3,7 +3,8 @@ from datetime import datetime
 
 from vllm import LLM, SamplingParams, RequestOutput
 
-from rstar_deepthink.config import Config, STEP_END, CODE_END
+from constants import STEP_END, CODE_END
+from rstar_deepthink.config import Config
 
 logger = logging.getLogger(__name__)
 

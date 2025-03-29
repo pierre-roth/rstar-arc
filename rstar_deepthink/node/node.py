@@ -3,8 +3,9 @@ import time
 
 import numpy as np
 
+from constants import CODE_END, TERMINAL_CODE_END, TERMINAL_MAX_DEPTH, TERMINAL_INVALID
 from rstar_deepthink.arc_task import ARCTask
-from rstar_deepthink.config import Config, CODE_END, TERMINAL_CODE_END, TERMINAL_MAX_DEPTH, TERMINAL_INVALID
+from rstar_deepthink.config import Config
 from rstar_deepthink.tools import run_examples
 from rstar_deepthink.tools.python_tool import remove_markers
 

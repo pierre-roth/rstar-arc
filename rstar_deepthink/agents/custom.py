@@ -1,10 +1,10 @@
 import logging
 from random import choice
 
+from constants import TERMINAL_SUBTREE_TERMINAL
 from rstar_deepthink.agents import Agent
 from rstar_deepthink.agents.agent_utils import normalized_similarity_score
 from rstar_deepthink.arc_task import Grid
-from rstar_deepthink.config import TERMINAL_SUBTREE_TERMINAL
 from rstar_deepthink.node import Node
 
 logger = logging.getLogger(__name__)
