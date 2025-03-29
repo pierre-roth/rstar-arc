@@ -93,8 +93,11 @@ class Agent:
             # Create children from outputs
             new_children = []
             for text in set(map(lambda o: o.text, request_output.outputs)):
+                # validation happens here when add_child is called
                 child = current_node.add_child(text)
                 new_children.append(child)
+
+            # TODO: potentially propagate invalidity to parent if all children are invalid
 
             # Add all new children to candidate nodes for evaluation
             self.candidate_nodes.extend(new_children)

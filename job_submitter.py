@@ -27,9 +27,9 @@ os.makedirs(TMP_CONFIGS_DIR, exist_ok=True)
 PARAMETER_SWEEPS = [
     {
         "search-mode": ["bs"],
-        "beam-width": [15],
-        "branching-factor": [15],
-        "max-depth": [11],
+        "beam-width": [12],
+        "branching-factor": [12],
+        "max-depth": [12],
         "policy-temperature": [0.7, 0.9, 1.1],
         "examples-mask": [[True, False, False], [False, True, False], [False, False, True],
                           [True, True, False], [True, False, True], [False, True, True]],
