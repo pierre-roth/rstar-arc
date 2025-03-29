@@ -29,6 +29,7 @@ class Agent:
         """Initialize the root node with the given state."""
         self.root = Node(self.config)
         self.root.state["text"] = prompt
+        logger.debug(f"Creating root for task {task.name} with prompt: \n{prompt}")
         self.root.state["code"] = code
         self.root.task = task
         self.root.valid = True
