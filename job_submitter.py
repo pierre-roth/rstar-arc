@@ -13,6 +13,7 @@ import subprocess
 import sys
 from datetime import datetime
 from typing import Any
+from time import sleep
 
 import yaml
 
@@ -134,6 +135,9 @@ def main():
             config_path = save_config(config, i)
             print(f"Saved configuration to {config_path}")
             submit_job(config_path)
+            print(f"Submitted job with config {config_path}")
+            print(f"Sleeping for 10 seconds before submitting the next job...")
+            sleep(10)
 
 
 if __name__ == "__main__":
