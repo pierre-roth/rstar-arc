@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import sys
+import itertools
 
 from rstar_deepthink.config import Config
 from rstar_deepthink.node import Node
@@ -12,11 +13,27 @@ logger = logging.getLogger(__name__)
 
 
 def batch(iterable, n=-1):
-    length = len(iterable)
     if n <= 0:
-        n = length
-    for ndx in range(0, length, n):
-        yield iterable[ndx: min(ndx + n, length)]
+        # Convert the entire iterable into a single list (batch).
+        # WARNING: This reads EVERYTHING into memory if n <= 0.
+        full_batch = list(iterable)
+        # Only yield if there was actually content, mimicking iterator exhaustion
+        if full_batch:
+            yield full_batch
+        # Stop iteration after yielding the single batch (or nothing if empty)
+        return
+
+        # --- Standard iterator batching for n > 0 ---
+        # Ensure we have an iterator
+    it = iter(iterable)
+    while True:
+        # Read n items using islice (doesn't need len)
+        chunk = list(itertools.islice(it, n))
+        if not chunk:
+            # Iterator is exhausted
+            return
+        # Yield the n-sized chunk
+        yield chunk
 
 
 def setup_logging(config: Config):
