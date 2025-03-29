@@ -1,6 +1,12 @@
-import os
 import json
-from ..constants import NET_SCRATCH_PATH
+import os
+import sys
+
+# Add the project root to sys.path
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+sys.path.append(project_root)
+
+from constants import NET_SCRATCH_PATH
 
 
 def calculate_coverage(round_num: int):
