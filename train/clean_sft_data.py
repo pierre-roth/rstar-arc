@@ -1,14 +1,19 @@
 import json
 import logging
 import os
+import sys
 
 from pebble import ProcessPool
 
-from ..constants import NET_SCRATCH_PATH, STEP_END
+# Add the project root to sys.path
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+sys.path.append(project_root)
+
+from constants import NET_SCRATCH_PATH, STEP_END
 from rstar_deepthink.arc_task import ARCTask
 from rstar_deepthink.config import Config
 from rstar_deepthink.tools import execute_code_with_task
-from ..utils import batch, setup_logging
+from utils import batch, setup_logging
 
 logger = logging.getLogger(__name__)
 
