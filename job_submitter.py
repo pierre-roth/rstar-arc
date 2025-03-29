@@ -14,6 +14,8 @@ import sys
 from datetime import datetime
 from typing import Any
 
+import yaml
+
 from constants import HOME_PATH, DEFAULT_DATA_FOLDER
 
 # Create tmp_configs directory if it doesn't exist
@@ -38,70 +40,6 @@ PARAMETER_SWEEPS = [
 BASE_CONFIG = {
     "log-level": "DEBUG"
 }
-
-
-def dump(data, stream, default_flow_style=False):
-    """
-    Emulates yaml.dump for basic data types using only the standard library.
-    Writes a YAML-like representation of data (typically a dict) to stream.
-
-    Parameters:
-        data: The data to dump (dict, list, or scalar).
-        stream: A file-like object with a write() method.
-        default_flow_style: Ignored in this implementation (always block style).
-    """
-
-    def _format_scalar(value):
-        # Format booleans, None, numbers, and strings.
-        if isinstance(value, bool):
-            return "true" if value else "false"
-        elif value is None:
-            return "null"
-        elif isinstance(value, (int, float)):
-            return str(value)
-        elif isinstance(value, str):
-            # Quote the string if it contains special characters or leading/trailing spaces.
-            if value == "" or value.strip() != value or ":" in value or "#" in value or "\n" in value:
-                # Use double quotes and escape any internal double quotes.
-                escaped = value.replace('"', '\\"')
-                return f'"{escaped}"'
-            else:
-                return value
-        else:
-            # Fallback for other types.
-            return str(value)
-
-    def _serialize(obj, indent=0):
-        ind = "  " * indent
-        if isinstance(obj, dict):
-            lines = []
-            for key, value in obj.items():
-                key_str = str(key)
-                # If value is a nested structure, output key on its own line.
-                if isinstance(value, (dict, list)):
-                    lines.append(f"{ind}{key_str}:")
-                    lines.append(_serialize(value, indent + 1))
-                else:
-                    scalar = _format_scalar(value)
-                    lines.append(f"{ind}{key_str}: {scalar}")
-            return "\n".join(lines)
-        elif isinstance(obj, list):
-            lines = []
-            for item in obj:
-                # For nested structures in lists, put the dash alone.
-                if isinstance(item, (dict, list)):
-                    lines.append(f"{ind}-")
-                    lines.append(_serialize(item, indent + 1))
-                else:
-                    scalar = _format_scalar(item)
-                    lines.append(f"{ind}- {scalar}")
-            return "\n".join(lines)
-        else:
-            # For a scalar, simply return its string representation.
-            return ind + _format_scalar(obj)
-
-    yaml_str = _serialize(data)
-    stream.write(yaml_str)
 
 
 def generate_configs(params: dict) -> list[dict[str, Any]]:
@@ -152,7 +90,7 @@ def save_config(config: dict[str, Any], idx: int) -> str:
     filepath = os.path.join(TMP_CONFIGS_DIR, filename)
 
     with open(filepath, 'w') as f:
-        dump(config, f, default_flow_style=False)
+        yaml.dump(config, f, default_flow_style=False)
 
     return filepath
 
