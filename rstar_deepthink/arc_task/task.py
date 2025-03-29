@@ -144,7 +144,7 @@ class ARCTask:
 
     def to_prompt(self) -> str:
         """Generate the initial prompt for the task to feed into the LLM."""
-        prompt = [f"# ARC Task: {self.name}\n", "## Training Examples\n"]
+        prompt = ["## Training Examples\n"]
 
         for i, example in enumerate(self.training_examples):
             prompt.append(f"### Training Example {i + 1}")
