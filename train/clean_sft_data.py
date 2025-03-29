@@ -238,6 +238,72 @@ def main():
 
     logger.info(f"Finished cleaning SFT data. {processed_count} solutions processed and saved to {cleaned_file}")
 
+    # --- Curate Best Solution per Task ---
+    logger.info(f"Starting curation of best solutions from {cleaned_file}...")
+
+    # Define the output file path for curated solutions
+    curated_file = os.path.join(sft_data_dir, "curated_solutions.jsonl")
+
+    # Dictionary to store the best solution found so far for each task
+    # Structure: {task_name: best_solution_code_string}
+    best_solutions = {}
+
+    try:
+        # Read the cleaned file line by line (efficient for large files)
+        with open(cleaned_file, 'r', encoding='utf-8') as infile:
+            for line_num, line in enumerate(infile):
+                if not line.strip():
+                    continue
+                try:
+                    data = json.loads(line)
+                    task_name = data.get("task_name")
+                    current_solution_code = data.get("solution_code")
+
+                    # Validate data presence
+                    if not task_name or current_solution_code is None:
+                        logger.warning(f"Skipping invalid entry in {cleaned_file} line {line_num + 1}: {line.strip()}")
+                        continue
+
+                    # --- Heuristic Application ---
+                    # Get the best solution currently stored for this task (if any)
+                    existing_best_code = best_solutions.get(task_name)
+
+                    # If no solution stored yet, or if the current one is shorter
+                    if existing_best_code is None or len(current_solution_code) < len(existing_best_code):
+                        # Update the dictionary with the new best solution
+                        best_solutions[task_name] = current_solution_code
+                        # Optional: Log when a better solution is found for a task
+                        # logger.debug(f"Task {task_name}: Found new best solution (length {len(current_solution_code)}).")
+
+                except json.JSONDecodeError:
+                    logger.warning(f"Skipping invalid JSON line in {cleaned_file} line {line_num + 1}: {line.strip()}")
+                except Exception as e:
+                    logger.error(
+                        f"Unexpected error processing line {line_num + 1} from {cleaned_file}: {line.strip()} - {e}")
+
+    except FileNotFoundError:
+        logger.error(f"Cleaned file not found for curation: {cleaned_file}. Cannot proceed.")
+        # Decide if you want to return or exit here based on your workflow
+        return  # Exiting main function as curation cannot proceed
+    except Exception as e:
+        logger.error(f"Failed to read {cleaned_file} for curation: {e}")
+        return  # Exiting main function
+
+    # --- Write Curated Solutions ---
+    curated_count = 0
+    logger.info(f"Found best solutions for {len(best_solutions)} unique tasks. Writing to {curated_file}...")
+    try:
+        # Write the selected best solutions to the curated file
+        with open(curated_file, 'w', encoding='utf-8') as outfile:
+            # Sort items by task name for deterministic output order (optional but good practice)
+            for task_name, solution_code in sorted(best_solutions.items()):
+                entry = json.dumps({"task_name": task_name, "solution_code": solution_code})
+                outfile.write(entry + '\n')
+                curated_count += 1
+        logger.info(f"Finished curation. Selected and saved {curated_count} best solutions to {curated_file}")
+    except IOError as e:
+        logger.error(f"Failed to write curated solutions to {curated_file}: {e}")
+
 
 if __name__ == "__main__":
     main()
