@@ -10,7 +10,7 @@
 # Default application parameters
 ETH_USERNAME=piroth
 PROJECT_NAME=rstar-arc
-DIRECTORY=/home/${ETH_USERNAME}/${PROJECT_NAME}
+DIRECTORY=/home/${ETH_USERNAME}/${PROJECT_NAME}/train
 CONDA_ENVIRONMENT=arc-solver
 
 # --- Configuration for Minimal Python Subprocess Environment ---
