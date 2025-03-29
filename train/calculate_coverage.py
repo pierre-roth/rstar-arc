@@ -1,6 +1,6 @@
 import os
 import json
-from constants import NET_SCRATCH_PATH
+from ..constants import NET_SCRATCH_PATH
 
 
 def calculate_coverage(round_num: int):
