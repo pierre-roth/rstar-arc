@@ -32,7 +32,7 @@ PARAMETER_SWEEPS = [
         "policy-temperature": [0.7, 0.9, 1.1],
         "examples-mask": [[True, False, False], [False, True, False], [False, False, True],
                           [True, True, False], [True, False, True], [False, True, True]],
-        "data-folder": [os.path.join(DEFAULT_DATA_FOLDER, "very_easy"), os.path.join(DEFAULT_DATA_FOLDER, "easy")]
+        "data-folder": [os.path.join(DEFAULT_DATA_FOLDER, "very_easy")]
     }
 ]
 
@@ -133,7 +133,7 @@ def main():
             # Save the configuration
             config_path = save_config(config, i)
             print(f"Saved configuration to {config_path}")
-            # submit_job(config_path)
+            submit_job(config_path)
 
 
 if __name__ == "__main__":
