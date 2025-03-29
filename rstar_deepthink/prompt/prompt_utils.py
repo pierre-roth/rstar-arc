@@ -49,11 +49,11 @@ Then write Python code to implement the transformation function.
     example_task_1 = ARCTask(config, str(os.path.join(DEFAULT_EXAMPLE_DATA_PATH, "6d0aefbc.json")))
     solution_code_1 = f"""{CODE}
 def solve(I):
-    # vertically mirror the grid
+    # vertically mirror the grid by reversing the order of each row
     x1 = [row[::-1] for row in I]
     {STEP_END}
     
-    # horizontally concatenate the input grid with the vertically mirrored grid
+    # horizontally concatenate the input grid with the vertically mirrored grid by concatenating corresponding rows
     O = [I[i] + x1[i] for i in range(len(I))]
     {STEP_END}
     
@@ -64,21 +64,21 @@ def solve(I):
     example_task_2 = ARCTask(config, str(os.path.join(DEFAULT_EXAMPLE_DATA_PATH, "1cf80156.json")))
     solution_code_2 = f"""{CODE}
 def solve(I):
-    # Convert input to numpy array for easier slicing
+    # Convert input to numpy array for easier manipulation
     I_np = np.array(I)
     {STEP_END}
     
-    # Find rows containing non-zero values
+    # Find rows containing non-zero values and determine min and max of non-zero row indices
     non_zero_rows = [i for i in range(len(I)) if any(val != 0 for val in I[i])]
     min_row, max_row = min(non_zero_rows), max(non_zero_rows)
     {STEP_END}
     
-    # Find columns containing non-zero values
+    # Find columns containing non-zero values and determine min and max of non-zero column indices
     non_zero_cols = [j for j in range(len(I[0])) if any(I[i][j] != 0 for i in range(len(I)))]
     min_col, max_col = min(non_zero_cols), max(non_zero_cols)
     {STEP_END}
     
-    # Extract the subgrid using numpy slicing
+    # Extract smallest subgrid containing all non-zero values using numpy slicing
     O = I_np[min_row:max_row+1, min_col:max_col+1].tolist()
     {STEP_END}
     
@@ -170,7 +170,7 @@ def solve(I):
 
         for i, (include, (example_task, solution_code)) in enumerate(zip(config.examples_mask, examples)):
             if include:
-                prompt += f"Example {i + 1}:\n\n"
+                prompt += f"Example Task and Solution {i + 1}:\n\n"
                 prompt += example_task.to_prompt() + "\n\n"
                 prompt += solution_code + "\n\n"
 
