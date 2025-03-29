@@ -10,5 +10,5 @@ beam-width: 12
 branching-factor: 12
 max-depth: 12
 
-batch-size: 10
+batch-size: 15
 

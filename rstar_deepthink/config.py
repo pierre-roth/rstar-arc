@@ -80,7 +80,7 @@ class Config:
     # Computed fields
     policy_model_dir: Optional[str] = None  # Full path to policy model
     reward_model_dir: Optional[str] = None  # Full path to reward model
-    temporary_path: Optional[str] = None  # Temporary path for job
+    local_job_dir: Optional[str] = None  # Temporary path for job
 
     def __post_init__(self):
         """
@@ -108,7 +108,8 @@ class Config:
         # Set computed model directories and other derived values
         self.policy_model_dir = os.path.join(self.model_base_path, "policy")
         self.reward_model_dir = os.path.join(self.model_base_path, "reward")
-        self.temporary_path = os.path.join(LOCAL_SCRATCH_PATH, f"job_{self.job_id}")
+        self.local_job_dir = os.path.join(LOCAL_SCRATCH_PATH, f"job_{self.job_id}")
+        self.final_job_dir = os.path.join(self.output_dir, "detailed_logs", f"job_{self.job_id}")
         self.numeric_log_level = getattr(logging, self.log_level.upper(), logging.DEBUG)
 
         self.search_mode = self.search_mode.lower()

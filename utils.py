@@ -101,7 +101,7 @@ def save_nodes(config, nodes):
     The file name is built using the task name from the first node.
     """
     task_name = nodes[0].task.name  # assumes that nodes list is non-empty
-    filename = os.path.join(config.temporary_path, f"{task_name}_nodes.json")
+    filename = os.path.join(config.local_job_dir, f"{task_name}_nodes.json")
     data = serialize_nodes(nodes)
     with open(filename, 'w') as f:
         json.dump(data, f, indent=4)
@@ -170,5 +170,7 @@ def save_summary(config, node_lists: list[list[Node]], batch_number: int):
 
     logger.info(f"Batch {batch_number + 1} summary: {num_solved} tasks solved out of {len(node_lists)}")
 
-    with open(os.path.join(config.temporary_path, f"summary_{batch_number + 1}.py"), "w") as f:
-        f.write("\n\n\n\n".join(result))
+    with open(os.path.join(config.final_job_dir, f"summary_{batch_number + 1}.py"), "w") as f:
+        f.write(
+            f"# Batch {batch_number + 1} summary: {num_solved} tasks solved out of {len(node_lists)}\n\n" + "\n\n\n\n".join(
+                result))
