@@ -1,5 +1,3 @@
-from vllm.model_executor.models.minicpmv import CPU_DEVICE
-
 ETH_USERNAME = "piroth"
 
 NET_SCRATCH_PATH = f"/itet-stor/{ETH_USERNAME}/net_scratch"  # net-scratch directory
