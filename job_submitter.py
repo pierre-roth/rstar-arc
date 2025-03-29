@@ -134,8 +134,8 @@ def main():
             # Save the configuration
             config_path = save_config(config, i)
             print(f"Saved configuration to {config_path}")
-            submit_job(config_path)
-            print(f"Submitted job with config {config_path}")
+            jobid, _ = submit_job(config_path)
+            print(f"Submitted job with job id {jobid} and config {config_path}")
             print(f"Sleeping for 10 seconds before submitting the next job...")
             sleep(10)
 
