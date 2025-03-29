@@ -14,76 +14,57 @@ import subprocess
 import sys
 from datetime import datetime
 from typing import Dict, List, Any, Tuple
+from constants import HOME_PATH, DEFAULT_DATA_FOLDER
 
 import yaml
 
-# Ensure we're in the project directory
-PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
-os.chdir(PROJECT_DIR)
-
 # Create tmp_configs directory if it doesn't exist
-TMP_CONFIGS_DIR = os.path.join(PROJECT_DIR, "tmp_configs")
+TMP_CONFIGS_DIR = os.path.join(HOME_PATH, "tmp_configs")
 os.makedirs(TMP_CONFIGS_DIR, exist_ok=True)
 
 # Define parameter configurations to sweep over
-PARAMETER_SWEEPS = {
-    # For beam search (bs)
-    "bs": {
+PARAMETER_SWEEPS = [
+    {
         "search-mode": ["bs"],
-        "beam-width": [3, 5, 8],
-        "branching-factor": [3, 5, 8],
-        "max-depth": [8, 12],
-        "policy-temperature": [0.5, 0.7, 0.9]
-    },
-    # For Monte Carlo Tree Search (mcts)
-    "mcts": {
-        "search-mode": ["mcts"],
-        "c-puct": [1.0, 2.0, 4.0],
-        "num-simulations": [8, 16, 32],
-        "max-depth": [8, 12],
-        "policy-temperature": [0.5, 0.7, 0.9]
-    },
-}
+        "beam-width": [15],
+        "branching-factor": [15],
+        "max-depth": [11],
+        "policy-temperature": [0.7, 0.9, 1.1],
+        "examples-mask": [[True, False, False], [False, True, False], [False, False, True],
+                          [True, True, False], [True, False, True], [False, True, True]],
+        "data-folder": [os.path.join(DEFAULT_DATA_FOLDER, "very_easy"), os.path.join(DEFAULT_DATA_FOLDER, "easy")]
+    }
+]
 
 # Base configurations that apply to all jobs
 BASE_CONFIG = {
-    "log-level": "INFO",
-    "batch-size": 5,  # Process 5 tasks at a time
-    "data-folder": "${HOME_PATH}/rstar-arc/data/evaluation",  # Path adjusted at runtime
-    "num-examples": 2
+    "log-level": "DEBUG"
 }
 
 
-def generate_configs(search_mode: str, num_configs: int = 5) -> List[Dict[str, Any]]:
+def generate_configs(params: dict) -> List[Dict[str, Any]]:
     """
     Generate configuration dictionaries for the specified search mode.
 
     Args:
-        search_mode: The search mode to generate configs for ("bs", "mcts", or "pwmcts")
-        num_configs: Maximum number of configurations to generate
+        params: Dictionary of parameters to sweep over
 
     Returns:
         List of configuration dictionaries
     """
-    if search_mode not in PARAMETER_SWEEPS:
-        raise ValueError(f"Unknown search mode: {search_mode}")
 
     # Get parameter sweep definition for the search mode
-    params = PARAMETER_SWEEPS[search_mode]
 
     # Create all combinations of parameters
     param_names = list(params.keys())
-    param_values = [params[name] for name in param_names]
+    param_values = list(params.values())
 
     # Generate all combinations
     all_combinations = list(itertools.product(*param_values))
 
-    # Limit to requested number of configurations
-    selected_combinations = all_combinations[:num_configs]
-
     # Create config dictionaries
     configs = []
-    for combination in selected_combinations:
+    for combination in all_combinations:
         config = BASE_CONFIG.copy()
         for name, value in zip(param_names, combination):
             config[name] = value
@@ -92,7 +73,7 @@ def generate_configs(search_mode: str, num_configs: int = 5) -> List[Dict[str, A
     return configs
 
 
-def save_config(config: Dict[str, Any], search_mode: str, idx: int) -> str:
+def save_config(config: Dict[str, Any], idx: int) -> str:
     """
     Save a configuration to a YAML file.
 
@@ -105,7 +86,7 @@ def save_config(config: Dict[str, Any], search_mode: str, idx: int) -> str:
         Path to the saved configuration file
     """
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"{search_mode}_{idx}_{timestamp}.yaml"
+    filename = f"{idx}_{timestamp}.yaml"
     filepath = os.path.join(TMP_CONFIGS_DIR, filename)
 
     with open(filepath, 'w') as f:
@@ -114,29 +95,18 @@ def save_config(config: Dict[str, Any], search_mode: str, idx: int) -> str:
     return filepath
 
 
-def submit_job(config_path: str, partition: str = None, time_limit: str = None) -> Tuple[int, str]:
+def submit_job(config_path: str) -> Tuple[int, str]:
     """
     Submit a SLURM job with the given configuration.
 
     Args:
         config_path: Path to the configuration file
-        partition: Optional SLURM partition
-        time_limit: Optional time limit for the job
 
     Returns:
         Tuple of (job_id, config_path)
     """
     # Prepare the sbatch command
-    cmd = ["sbatch"]
-
-    # Add optional parameters if provided
-    if partition:
-        cmd.extend(["--partition", partition])
-    if time_limit:
-        cmd.extend(["--time", time_limit])
-
-    # Add the run script and config file
-    cmd.extend(["run.sh", os.path.basename(config_path)])
+    cmd = ["sbatch", "run.sh", os.path.basename(config_path)]
 
     # Run the sbatch command
     try:
@@ -155,56 +125,15 @@ def submit_job(config_path: str, partition: str = None, time_limit: str = None) 
 
 
 def main():
-    """Main function for the job submitter."""
-    parser = argparse.ArgumentParser(description="Submit batch jobs with different configurations")
-    parser.add_argument("--search-mode", type=str, choices=["bs", "mcts", "pwmcts", "all"],
-                        default="all", help="Search mode to use")
-    parser.add_argument("--configs-per-mode", type=int, default=5,
-                        help="Number of configurations to generate per search mode")
-    parser.add_argument("--partition", type=str, help="SLURM partition to use")
-    parser.add_argument("--time-limit", type=str, help="Time limit for jobs (e.g., '24:00:00')")
-    parser.add_argument("--dry-run", action="store_true",
-                        help="Generate configs but don't submit jobs")
-
-    args = parser.parse_args()
-
-    # Determine which search modes to use
-    if args.search_mode == "all":
-        search_modes = ["bs", "mcts", "pwmcts"]
-    else:
-        search_modes = [args.search_mode]
-
-    submitted_jobs = []
-
     # Process each search mode
-    for mode in search_modes:
-        print(f"Generating configurations for {mode}...")
-        configs = generate_configs(mode, args.configs_per_mode)
+    for sweep in PARAMETER_SWEEPS:
+        configs = generate_configs(sweep)
 
         for i, config in enumerate(configs):
             # Save the configuration
-            config_path = save_config(config, mode, i + 1)
+            config_path = save_config(config, i)
             print(f"Saved configuration to {config_path}")
-
-            # Submit the job
-            if not args.dry_run:
-                job_id, _ = submit_job(config_path, args.partition, args.time_limit)
-                if job_id > 0:
-                    submitted_jobs.append((job_id, os.path.basename(config_path)))
-
-    # Print summary
-    if not args.dry_run and submitted_jobs:
-        print("\nSubmitted Jobs Summary:")
-        print("----------------------")
-        for job_id, config_file in submitted_jobs:
-            print(f"Job {job_id}: {config_file}")
-        print(f"Total jobs submitted: {len(submitted_jobs)}")
-
-    # If dry run, just show what would have been done
-    if args.dry_run:
-        print("\nDRY RUN - No jobs were submitted")
-        print(
-            f"Would have submitted {len(generate_configs(search_modes[0], args.configs_per_mode)) * len(search_modes)} jobs")
+            # submit_job(config_path)
 
 
 if __name__ == "__main__":

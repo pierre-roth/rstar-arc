@@ -132,7 +132,7 @@ class Config:
             # Define possible config file locations
             config_paths = [
                 os.path.join(f"{PROJECT_PATH}/configs", self.config_file),
-                os.path.join("tmp_configs", self.config_file)
+                os.path.join(f"{HOME_PATH}/tmp_configs", self.config_file)
             ]
 
             # Find the first existing config file
