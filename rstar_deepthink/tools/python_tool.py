@@ -5,7 +5,7 @@ import signal
 import subprocess
 import textwrap
 
-from constants import TIMEOUT_SECONDS, CODE, CODE_END, STEP_END, MEMORY_LIMIT_BYTES
+from constants import CPU_TIMEOUT_SECONDS, WALL_TIMEOUT_SECONDS, CODE, CODE_END, STEP_END, MEMORY_LIMIT_BYTES
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +78,7 @@ def execute_code_in_subprocess(code_str, input_grids, expected_outputs):
 
         # Set CPU time limit
         try:
-            cpu_limit = {TIMEOUT_SECONDS}
+            cpu_limit = {CPU_TIMEOUT_SECONDS}
             resource.setrlimit(resource.RLIMIT_CPU, (cpu_limit, cpu_limit))
         except Exception as e:
             print(f"Warning: Could not set CPU time limit: {{e}}", file=sys.stderr)
@@ -164,10 +164,7 @@ def execute_code_in_subprocess(code_str, input_grids, expected_outputs):
             [SUBPROCESS_PYTHON_PATH, "-c", wrapper_code, json.dumps(input_data)],
             input=code_str.encode("utf-8"),
             capture_output=True,
-            # We removed the wall-clock timeout, relying on RLIMIT_CPU set inside the wrapper.
-            # Consider adding a safety timeout here slightly longer than TIMEOUT_SECONDS,
-            # e.g., timeout=TIMEOUT_SECONDS + 5, to catch hangs not stopped by RLIMIT_CPU.
-            # timeout=TIMEOUT_SECONDS + 5
+            timeout=WALL_TIMEOUT_SECONDS
         )
 
         # Check if the subprocess was terminated by a signal
@@ -176,7 +173,7 @@ def execute_code_in_subprocess(code_str, input_grids, expected_outputs):
             # Log signal terminations at DEBUG level as requested
             if sig == signal.SIGXCPU:
                 logger.debug(
-                    f"Subprocess terminated due to CPU time limit ({TIMEOUT_SECONDS}s) exceeded (Signal {sig}).")
+                    f"Subprocess terminated due to CPU time limit ({CPU_TIMEOUT_SECONDS}s) exceeded (Signal {sig}).")
             elif sig == signal.SIGSEGV:
                 logger.debug(
                     f"Subprocess terminated by segmentation fault (Signal {sig}). Check for memory issues or invalid operations in user code.")

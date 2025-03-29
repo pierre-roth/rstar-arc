@@ -1,3 +1,5 @@
+from vllm.model_executor.models.minicpmv import CPU_DEVICE
+
 ETH_USERNAME = "piroth"
 
 NET_SCRATCH_PATH = f"/itet-stor/{ETH_USERNAME}/net_scratch"  # net-scratch directory
@@ -10,7 +12,8 @@ DEFAULT_DATA_FOLDER = f"{PROJECT_PATH}/data_sample"  # path for sample data in g
 DEFAULT_DATA_PATH = f"{DEFAULT_DATA_FOLDER}/default"
 DEFAULT_EXAMPLE_DATA_PATH = f"{DEFAULT_DATA_FOLDER}/examples"  # path to prompt examples
 
-TIMEOUT_SECONDS = 10  # Maximum cpu time allowed for code execution
+CPU_TIMEOUT_SECONDS = 10  # Maximum cpu time allowed for code execution
+WALL_TIMEOUT_SECONDS = 60  # Maximum wall time allowed for code execution
 MEMORY_LIMIT_MB = 128  # Maximum memory allowed for each code execution process
 MEMORY_LIMIT_BYTES = MEMORY_LIMIT_MB * 1024 * 1024
 
