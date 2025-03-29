@@ -8,11 +8,9 @@ from constants import NET_SCRATCH_PATH, STEP_END
 from rstar_deepthink.arc_task import ARCTask
 from rstar_deepthink.config import Config
 from rstar_deepthink.tools import execute_code_with_task
-from utils import batch  # Assuming batch(iterable, size) yields lists of items
+from utils import batch, setup_logging
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO,
-                    format='%(asctime)s - %(levelname)s - %(message)s')  # Added basic logging config
 
 
 def process_solution(args: (ARCTask, str)) -> str:  # Corrected type hint syntax
@@ -80,6 +78,8 @@ def main():
     config = Config()
 
     config.batch_size = max(1, config.cpus - 1)
+
+    setup_logging(config)
 
     # Define file paths
     sft_data_dir = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{config.round_number}")

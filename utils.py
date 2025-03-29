@@ -43,10 +43,6 @@ def setup_logging(config: Config):
     console_handler.setFormatter(formatter)
     _logger.addHandler(console_handler)
 
-    # Log some basic information at startup
-    logger.info(f"rStar-ARC initialized with job ID: {config.job_id}")
-    logger.info(f"Search mode: {config.search_mode}")
-
 
 def make_serializable(obj):
     """
