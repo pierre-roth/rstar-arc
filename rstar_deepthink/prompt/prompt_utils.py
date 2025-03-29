@@ -22,30 +22,12 @@ Remember:
     - The final code block must be valid Python code and implement the function `solve(I: list[list[int]]) -> list[list[int]]`. This function transforms input grids into their corresponding output grids.
     - You may use Python built-in functions and libraries.
     - You may use numpy functions (it is imported as "import numpy as np")
-    - Always generate the next step and the next step only, that it up and including the {STEP_END} marker.
+    - Always generate the next step and the next step only, that is up and including the {STEP_END} marker.
     - Each step must be valid Python code. Steps can be as simple as a single line of code or as complex as a multi-line function.
     - Each step, combined with the steps before it, however must be a valid Python code block i.e. no partial code blocks.
     - If you generate a {CODE_END} marker instead of a {STEP_END} marker, this signals the end of the code block, and thus the end of the transformation function.
-    - Please use the following template:
 
-{CODE}
-def solve(I):
-    
-    # comment explaining the step
-    python code for the step
-    {STEP_END}
-    
-    # comment explaining the step
-    python code for the step
-    {STEP_END}
-    
-    # comment explaining the step
-    O = the correct output grid
-    {STEP_END}
-    
-    # return the output grid
-    return O
-{CODE_END}"""
+"""
 
     ### PROMPT SUFFIX ###
     prompt_suffix = f"""Now it's your turn! Carefully analyze the input-output examples to infer the transformation function.
@@ -56,9 +38,11 @@ Then write Python code to implement the transformation function.
 
 """
 
+    num_examples = sum(config.examples_mask)
+
     ### EXAMPLE PROMPTS ###
     single_example_prompt = f"""Below is an example task with an example solution. They should give you an idea of what is expected."""
-    multiple_example_prompt = f"""Below are {config.num_examples} example tasks with example solutions. They should give you an idea of what is expected."""
+    multiple_example_prompt = f"""Below are {num_examples} example tasks with example solutions. They should give you an idea of what is expected."""
 
     ### EXAMPLES ###
     example_task_1 = ARCTask(config, str(os.path.join(DEFAULT_EXAMPLE_DATA_PATH, "6d0aefbc.json")))
@@ -174,23 +158,21 @@ def solve(I):
     ### COMBINE PROMPT ###
     examples = [(example_task_1, solution_code_1), (example_task_2, solution_code_2), (example_task_3, solution_code_3)]
 
-    assert config.num_examples <= len(
-        examples), f"Number of examples requested ({config.num_examples}) exceeds the number of available examples ({len(examples)})!"
-
-    if config.num_examples == 0:
+    if num_examples == 0:
         return prompt_prefix + "\n\n" + prompt_suffix
     else:
         prompt = prompt_prefix + "\n\n"
 
-        if config.num_examples == 1:
+        if num_examples == 1:
             prompt += f"{single_example_prompt}\n\n"
         else:
             prompt += f"{multiple_example_prompt}\n\n"
 
-        for i, (example_task, solution_code) in enumerate(examples[:config.num_examples]):
-            prompt += f"Example {i + 1}:\n\n"
-            prompt += example_task.to_prompt() + "\n\n"
-            prompt += solution_code + "\n\n"
+        for i, (include, (example_task, solution_code)) in enumerate(zip(config.examples_mask, examples)):
+            if include:
+                prompt += f"Example {i + 1}:\n\n"
+                prompt += example_task.to_prompt() + "\n\n"
+                prompt += solution_code + "\n\n"
 
         prompt += prompt_suffix
         return prompt
