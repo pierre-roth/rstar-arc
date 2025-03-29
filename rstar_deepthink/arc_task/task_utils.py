@@ -1,10 +1,10 @@
 import logging
 import os
 import sys
-from random import shuffle
 
 from rstar_deepthink.arc_task import ARCTask
 from rstar_deepthink.config import Config
+from rstar_deepthink.prompt.prompt_utils import task_to_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -32,8 +32,6 @@ def load_tasks(config: Config) -> list[ARCTask]:
 
     # Get all JSON files and sort them alphabetically (case-insensitive)
     files = [f for f in os.listdir(config.data_folder) if f.endswith('.json')]
-    # TODO: potentially remove shuffle
-    shuffle(files)
 
     # Ensure we found at least one file
     if not files:
@@ -48,5 +46,7 @@ def load_tasks(config: Config) -> list[ARCTask]:
         task_file_path = os.path.join(config.data_folder, file_name)
         task = ARCTask(config, task_file_path)
         tasks.append(task)
+
+    tasks.sort(key=lambda task: len(task_to_prompt(task)))
 
     return tasks
