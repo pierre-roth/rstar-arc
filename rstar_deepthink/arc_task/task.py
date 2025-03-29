@@ -78,7 +78,7 @@ class Example:
 
 
 class ARCTask:
-    def __init__(self, config: Config, path):
+    def __init__(self, config: Config, path: str):
         self.config = config
 
         self.path = path

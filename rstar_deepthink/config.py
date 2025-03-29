@@ -117,7 +117,7 @@ class Config:
         # Handle search mode specific settings
         if self.search_mode == "bs":
             self.num_simulations = 1
-        elif self.search_mode in ["mcts", "pwmcts", "smcts", "custom"]:
+        elif self.search_mode in ["mcts", "custom"]:
             self.beam_width = 1
 
     def _load_from_file(self):

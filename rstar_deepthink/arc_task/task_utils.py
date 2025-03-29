@@ -1,6 +1,7 @@
 import logging
 import os
 import sys
+import json
 
 from rstar_deepthink.arc_task import ARCTask
 from rstar_deepthink.config import Config
@@ -32,6 +33,21 @@ def load_tasks(config: Config) -> list[ARCTask]:
 
     # Get all JSON files and sort them alphabetically (case-insensitive)
     files = [f for f in os.listdir(config.data_folder) if f.endswith('.json')]
+
+    # remove already solved tasks
+    raw_file = os.path.join(config.sft_data_dir, f"round_{config.round_number}", "raw.jsonl")
+
+    solved_set = set()
+    with open(raw_file, "r", encoding="utf-8") as f:
+        for line in f:
+            if not line.strip():
+                continue
+            data = json.loads(line)
+            task_name = data["task_name"]
+            solved_set.add(task_name)
+
+    files = [f for f in files if os.path.splitext(f)[0] not in solved_set]
+
 
     # Ensure we found at least one file
     if not files:
