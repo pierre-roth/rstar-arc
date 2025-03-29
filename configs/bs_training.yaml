@@ -1,0 +1,12 @@
+search-mode: "bs"
+log-level: "DEBUG"
+
+data-folder: "/home/piroth/rstar-arc/data_sample/training"
+policy-temperature: 0.8
+
+batch-size: 30
+
+beam-width: 15
+branching-factor: 15
+max-depth: 12
+
