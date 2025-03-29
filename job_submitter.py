@@ -7,16 +7,16 @@ and submits them as separate SLURM batch jobs. This allows for easy parameter sw
 experimentation with different configurations.
 """
 
-import argparse
 import itertools
 import os
 import subprocess
 import sys
 from datetime import datetime
-from typing import Dict, List, Any, Tuple
-from constants import HOME_PATH, DEFAULT_DATA_FOLDER
+from typing import Any
 
 import yaml
+
+from constants import HOME_PATH, DEFAULT_DATA_FOLDER
 
 # Create tmp_configs directory if it doesn't exist
 TMP_CONFIGS_DIR = os.path.join(HOME_PATH, "tmp_configs")
@@ -42,7 +42,7 @@ BASE_CONFIG = {
 }
 
 
-def generate_configs(params: dict) -> List[Dict[str, Any]]:
+def generate_configs(params: dict) -> list[dict[str, Any]]:
     """
     Generate configuration dictionaries for the specified search mode.
 
@@ -73,7 +73,7 @@ def generate_configs(params: dict) -> List[Dict[str, Any]]:
     return configs
 
 
-def save_config(config: Dict[str, Any], idx: int) -> str:
+def save_config(config: dict[str, Any], idx: int) -> str:
     """
     Save a configuration to a YAML file.
 
@@ -95,7 +95,7 @@ def save_config(config: Dict[str, Any], idx: int) -> str:
     return filepath
 
 
-def submit_job(config_path: str) -> Tuple[int, str]:
+def submit_job(config_path: str) -> (int, str):
     """
     Submit a SLURM job with the given configuration.
 
