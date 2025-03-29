@@ -4,11 +4,11 @@ import os
 
 from pebble import ProcessPool
 
-from constants import NET_SCRATCH_PATH, STEP_END
+from ..constants import NET_SCRATCH_PATH, STEP_END
 from rstar_deepthink.arc_task import ARCTask
 from rstar_deepthink.config import Config
 from rstar_deepthink.tools import execute_code_with_task
-from utils import batch, setup_logging
+from ..utils import batch, setup_logging
 
 logger = logging.getLogger(__name__)
 
