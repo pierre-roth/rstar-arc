@@ -21,12 +21,14 @@ ARC Task Description:
 Remember:
     - Write code that implements the transformation function step by step. The solution must include {CODE}, {CODE_END} and {STEP_END} markers appropriately.
     - The final code block must be valid Python code and implement the function `solve(I: list[list[int]]) -> list[list[int]]`. This function transforms input grids into their corresponding output grids.
-    - You may use Python built-in functions and libraries.
-    - You may use numpy functions (it is imported as "import numpy as np")
-    - Always generate the next step and the next step only, that is up and including the {STEP_END} marker.
+    - You may use Python built-in functions and the standard libraries.
+    - You may use numpy functions (it is already imported as "import numpy as np", so you can use it directly)
     - Each step must be valid Python code. Steps can be as simple as a single line of code or as complex as a multi-line function.
     - Each step, combined with the steps before it, however must be a valid Python code block i.e. no partial code blocks.
     - If you generate a {CODE_END} marker instead of a {STEP_END} marker, this signals the end of the code block, and thus the end of the transformation function.
+    - It is important to accurately analyze the input-output examples to infer the transformation function.
+    - The transformation function might be completely different from the given example solutions.
+    - Look to the examples for guidance on how to correctly format your solution!
 
 """
 
@@ -42,8 +44,8 @@ Then write Python code to implement the transformation function.
     num_examples = sum(config.examples_mask)
 
     ### EXAMPLE PROMPTS ###
-    single_example_prompt = f"""Below is an example task with an example solution. They should give you an idea of what is expected."""
-    multiple_example_prompt = f"""Below are {num_examples} example tasks with example solutions. They should give you an idea of what is expected."""
+    single_example_prompt = f"""Below is one example task with solution. They should give you an idea of what is expected."""
+    multiple_example_prompt = f"""Below are {num_examples} example tasks with solutions. They should give you an idea of what is expected."""
 
     ### EXAMPLES ###
     example_task_1 = ARCTask(config, str(os.path.join(DEFAULT_EXAMPLE_DATA_PATH, "6d0aefbc.json")))
@@ -170,7 +172,7 @@ def solve(I):
 
         for i, (include, (example_task, solution_code)) in enumerate(zip(config.examples_mask, examples)):
             if include:
-                prompt += f"Example Task and Solution {i + 1}:\n\n"
+                prompt += f"Example Task and Solution Number {i + 1}:\n\n"
                 prompt += example_task.to_prompt() + "\n\n"
                 prompt += solution_code + "\n\n"
 
