@@ -79,7 +79,6 @@ def save_config(config: dict[str, Any], idx: int) -> str:
 
     Args:
         config: Configuration dictionary
-        search_mode: Search mode identifier
         idx: Configuration index
 
     Returns:

@@ -48,7 +48,6 @@ def load_tasks(config: Config) -> list[ARCTask]:
 
     files = [f for f in files if os.path.splitext(f)[0] not in solved_set]
 
-
     # Ensure we found at least one file
     if not files:
         logger.error(f"No JSON files found in directory '{config.data_folder}'.")
@@ -63,6 +62,6 @@ def load_tasks(config: Config) -> list[ARCTask]:
         task = ARCTask(config, task_file_path)
         tasks.append(task)
 
-    tasks.sort(key=lambda task: len(task_to_prompt(task)))
+    tasks.sort(key=lambda t: len(task_to_prompt(t)))
 
     return tasks
