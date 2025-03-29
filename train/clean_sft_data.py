@@ -13,62 +13,97 @@ from utils import batch, setup_logging
 logger = logging.getLogger(__name__)
 
 
-def process_solution(args: (ARCTask, str)) -> str:  # Corrected type hint syntax
+def process_solution(args: (ARCTask, str)) -> str:
     """
-    Process a solution to remove unnecessary steps in a greedy way.
+    Process a solution to remove unnecessary steps using a single backward pass.
+    O(N) complexity where N is the initial number of steps.
 
     Args:
         args: Tuple containing (task, solution_code)
 
     Returns:
-        The cleaned solution code with minimal necessary steps
+        The cleaned solution code.
     """
     task, solution_code = args
+    task_name = task.name  # For logging
 
-    # Split the solution into parts (by STEP_END)
+    # Split the solution into parts (by STEP_END) - same as greedy version
     # Ensure we handle potential empty strings from split if STEP_END is at the start/end
-    parts = [part for part in solution_code.split(STEP_END) if part]  # Filter out empty parts
+    original_parts: list[str] = [part for part in solution_code.split(STEP_END) if part]  # Filter out empty parts
+    num_original_steps = len(original_parts)
 
-    # If there's only one step or fewer, we can't remove anything
-    if len(parts) <= 1:
+    # If there's only one step or fewer, we can't remove anything - same as greedy version
+    if num_original_steps <= 1:
+        # Optional: Add log matching the style if desired
+        # logger.info(f"Task {task_name}: Solution has {num_original_steps} steps, no cleaning possible.")
         return solution_code
 
-    # Prepare inputs and expected outputs once
-    input_grids = [example.input_grid.grid for example in task.training_examples + task.test_examples]
-    expected_outputs = [example.output_grid.grid for example in task.training_examples + task.test_examples]
+    # Prepare inputs and expected outputs once - same as greedy version
+    try:
+        input_grids = [example.input_grid.grid for example in task.training_examples + task.test_examples]
+        expected_outputs = [example.output_grid.grid for example in task.training_examples + task.test_examples]
+    except AttributeError as e:
+        logger.error(f"Task {task_name}: Error accessing grid data - {e}. Skipping cleaning.")
+        return solution_code  # Return original if task structure is unexpected
 
-    current_solution_code = STEP_END.join(parts)  # Rejoin parts consistently
-    current_parts = parts
+    # --- Backward Pass Removal (O(N) logic) ---
+    # Keep track of the indices of the original steps that are currently kept
+    indices_to_keep = list(range(num_original_steps))
+    steps_removed_count = 0
 
-    # Try removing each step one by one iteratively
-    changed = True
-    while changed:
-        changed = False
-        step_to_remove = -1  # Index of the step that was successfully removed
+    logger.info(f"Task {task_name}: Starting O(N) backward pass cleaning with {num_original_steps} steps.")
 
-        for i in range(len(current_parts)):
-            # Create a new solution without the i-th step
-            temp_parts = current_parts[:i] + current_parts[i + 1:]
+    # Iterate backwards through the *original* indices
+    for i in range(num_original_steps - 1, -1, -1):
 
-            # If removing the step leaves no parts, it's invalid (unless original was just one step)
-            if not temp_parts:
-                continue
+        # Check if step 'i' is currently among the ones we are keeping.
+        # If not, it was already removed implicitly when testing a later step.
+        if i not in indices_to_keep:
+            continue
 
-            new_solution_code = STEP_END.join(temp_parts)
+        # Create the list of indices *without* step 'i'
+        temp_indices = [idx for idx in indices_to_keep if idx != i]
 
-            error, passed, _ = execute_code_with_task(new_solution_code, input_grids, expected_outputs)
+        # Cannot remove the very last step remaining
+        if not temp_indices:
+            logger.debug(f"Task {task_name}: Cannot remove step {i}, would result in empty solution.")
+            continue
 
-            if not error and passed:
-                logger.debug(f"Task {task.name}: Successfully removed step {i}")
-                current_solution_code = new_solution_code
-                current_parts = temp_parts  # Update parts for the next iteration of the while loop
-                changed = True
-                step_to_remove = i  # Record which step was removed
-                break  # Restart the removal check from the beginning with the smaller solution
+        # Build the temporary solution code from the parts corresponding to temp_indices
+        # Ensure steps are joined in their original relative order by sorting indices
+        temp_parts = [original_parts[idx] for idx in sorted(temp_indices)]
+        # Use variable name similar to greedy version
+        new_solution_code = STEP_END.join(temp_parts)
 
-        if changed:
-            logger.info(
-                f"Task {task.name}: Removed step at index {step_to_remove} (original index). New length: {len(current_parts)} steps.")
+        # Test if the solution passes without step i - similar call structure
+        error, passed, _ = execute_code_with_task(new_solution_code, input_grids, expected_outputs)
+
+        if not error and passed:
+            # Success! Removing step 'i' (original index) works.
+            # Use debug log similar to greedy version's internal success log
+            logger.debug(f"Task {task.name}: Successfully removed step with original index {i}")
+            indices_to_keep = temp_indices  # Permanently remove index i from our keeper list
+            steps_removed_count += 1
+        else:
+            # Failed: Step 'i' (original index) is necessary given the other steps currently kept.
+            logger.debug(f"Task {task.name}: Step with original index {i} is necessary, keeping.")
+            # Do nothing, indices_to_keep remains unchanged for the next iteration
+
+    # --- Build final solution ---
+    # Use variable names similar to the end of the greedy version
+    current_parts = [original_parts[idx] for idx in sorted(indices_to_keep)]
+    current_solution_code = STEP_END.join(current_parts)
+
+    # Final log message summarizing the result
+    logger.info(
+        f"Task {task.name}: Finished O(N) backward pass. Removed {steps_removed_count} steps. Final length: {len(current_parts)} steps."
+    )
+
+    # Optional: Final verification (as added in the previous O(N) version)
+    # error, passed, _ = execute_code_with_task(current_solution_code, input_grids, expected_outputs)
+    # if error or not passed:
+    #      logger.warning(f"Task {task_name}: Final code after O(N) cleaning failed verification! Error: {error}, Passed: {passed}. Returning original code.")
+    #      return solution_code # Revert to original if final check fails
 
     return current_solution_code
 
