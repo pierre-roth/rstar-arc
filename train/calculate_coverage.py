@@ -28,3 +28,9 @@ def calculate_coverage(round_number: int):
                     if task_file in task_names:
                         covered_tasks += 1
             print(f"{dir_name}: {covered_tasks}/{total_tasks} = {covered_tasks / total_tasks:.2%} coverage")
+
+
+if __name__ == "__main__":
+    # Example usage
+    round_number = 1  # Change this to the desired round number
+    calculate_coverage(round_number)
