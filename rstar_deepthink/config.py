@@ -38,7 +38,7 @@ class Config:
 
     max_tokens: int = 1024  # Maximum tokens for generation
     dtype: str = "bfloat16"  # Data type for model (affects precision/speed)
-    max_model_len: int = 16384  # Affects the context window size
+    max_model_len: int = 32768  # Affects the context window size
     top_p: float = 0.95  # Top-p sampling parameter (cumulative probability cutoff)
     top_k: int = -1  # Top-k sampling parameter (number of candidates to consider)
     policy_temperature: float = 0.7  # Sampling temperature for LLM generation
