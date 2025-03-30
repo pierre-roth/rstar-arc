@@ -142,6 +142,9 @@
     - Do a submission of Kaggle to get a feel for the competition, the submission process, and the evaluation process
     - Get a score!
 
+  - Came up with the idea of probabilistic node validation
+  -
+
 
 - **Work done**:
   - Added "percentage correct" based terminal rewarding to the MCTS agent (Custom Agent)
@@ -150,7 +153,7 @@
   - Tested variety of different hyperparameters
   - Wrote data saving code for the fine-tuning data
   - Wrote data filtering code for the fine-tuning data (gets rid of steps that don't contribute to the final solution)
-  -
+  - Handwrote 10 high quality one shot example tasks for the policy LLM
 
 
 - **Issues and Questions**:
