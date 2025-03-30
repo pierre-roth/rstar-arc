@@ -144,7 +144,13 @@
 
 
 - **Work done**:
-  - None
+  - Added "percentage correct" based terminal rewarding to the MCTS agent (Custom Agent)
+  - Started generating SFT data for the policy LLM
+  - Worked on prompt fine-tuning
+  - Tested variety of different hyperparameters
+  - Wrote data saving code for the fine-tuning data
+  - Wrote data filtering code for the fine-tuning data (gets rid of steps that don't contribute to the final solution)
+  -
 
 
 - **Issues and Questions**:

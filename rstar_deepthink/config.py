@@ -29,7 +29,8 @@ class Config:
     numeric_log_level: Optional[int] = None  # Numeric logging level (set automatically)
     model_initialization_times = {"policy": None, "reward": None}  # Time taken to initialize models
 
-    examples_mask: list[bool] = field(default_factory=lambda: [True, False, False])  # Mask for example tasks
+    examples_mask: list[bool] = field(
+        default_factory=lambda: [True, False, False, False, False, False])  # Mask for example tasks
 
     policy_model: str = "Qwen/Qwen2.5-Coder-7B-Instruct"  # Model that generates reasoning steps
     reward_model: str = "Qwen/Qwen2.5-Coder-7B-Instruct"  # Reward Model for evaluating steps

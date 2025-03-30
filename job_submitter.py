@@ -26,11 +26,12 @@ os.makedirs(TMP_CONFIGS_DIR, exist_ok=True)
 # Define parameter configurations to sweep over
 PARAMETER_SWEEPS = [
     {
-        "search-mode": ["bs"],
-        "beam-width": [12],
+        "search-mode": ["custom"],
         "branching-factor": [12],
-        "max-depth": [10],
-        "policy-temperature": [0.9, 0.95, 1.0, 1.05, 1.1, 1.15],
+        "max-depth": [14],
+        "num-simulations": [24],
+        "batch-size": [50],
+        "policy-temperature": [0.8, 0.9, 1.0, 1.1],
         "examples-mask": [[True, True, False], [False, True, True]],
         "data-folder": [os.path.join(DEFAULT_DATA_FOLDER, "easy")]
     }
@@ -38,7 +39,8 @@ PARAMETER_SWEEPS = [
 
 # Base configurations that apply to all jobs
 BASE_CONFIG = {
-    "log-level": "DEBUG"
+    "log-level": "INFO",
+    "save-for-visualization": False
 }
 
 

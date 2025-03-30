@@ -1,10 +1,13 @@
 search-mode: "custom"
-log-level: "DEBUG"
+log-level: "INFO"
 
 data-folder: "/home/piroth/rstar-arc/data_sample/training"
 
+examples-mask: [ true, true, false ]
+policy-temperature: 1.0
+
 num-simulations: 24
 branching-factor: 12
-max-depth: 12
+max-depth: 14
 
 batch-size: 50

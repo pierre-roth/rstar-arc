@@ -246,7 +246,6 @@ def main():
     logger.info(f"Finished cleaning SFT data processing. Processed {processed_in_this_run} solutions in this run.")
     logger.info(f"Total lines now in {cleaned_file}: {total_processed_lines}")
 
-
     # --- Curate Best Solution per Task ---
     # This part remains unchanged - it reads the final cleaned_file (potentially appended to)
     # It will correctly find the best solution among all lines present.

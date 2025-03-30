@@ -11,27 +11,23 @@ def task_to_prompt(task: ARCTask) -> str:
 
     for i, example in enumerate(task.training_examples):
         prompt.append(f"### Training Example {i + 1}")
-        prompt.append("Input:")
-        prompt.append("```")
-        prompt.append(str(example.input_grid))
-        prompt.append("```")
-        prompt.append("Output:")
-        prompt.append("```")
-        prompt.append(str(example.output_grid))
-        prompt.append("```\n")
+        prompt.append(f"Input shape: {example.input_grid.rows} x {example.input_grid.columns}")
+        prompt.append("Input:\n")
+        prompt.append(str(example.input_grid) + "\n")
+        prompt.append(f"Output shape: {example.input_grid.rows} x {example.input_grid.columns}")
+        prompt.append("Output:\n")
+        prompt.append(str(example.output_grid) + "\n\n")
 
     prompt.append("## Test Examples\n")
 
     for i, example in enumerate(task.test_examples):
         prompt.append(f"### Test Example {i + 1}")
-        prompt.append("Input:")
-        prompt.append("```")
-        prompt.append(str(example.input_grid))
-        prompt.append("```")
-        prompt.append("Output:")
-        prompt.append("```")
-        prompt.append("To be predicted!")
-        prompt.append("```\n")
+        prompt.append(f"Input shape: {example.input_grid.rows} x {example.input_grid.columns}")
+        prompt.append("Input:\n")
+        prompt.append(str(example.input_grid) + "\n")
+        prompt.append(f"Output shape: determined by transformation function")
+        prompt.append("Output:\n")
+        prompt.append("Result of applying transformation function to the input grid" + "\n\n")
 
     return "\n".join(prompt)
 
@@ -75,8 +71,8 @@ Then write Python code to implement the transformation function.
     num_examples = sum(config.examples_mask)
 
     ### EXAMPLE PROMPTS ###
-    single_example_prompt = f"""Below is one example task with solution. They should give you an idea of what is expected."""
-    multiple_example_prompt = f"""Below are {num_examples} example tasks with solutions. They should give you an idea of what is expected."""
+    single_example_prompt = f"""Below is one example task with solution. They should give you an idea of a solution looks like."""
+    multiple_example_prompt = f"""Below are {num_examples} example tasks with solutions. They should give you an idea of what a solution looks like."""
 
     ### EXAMPLES ###
     example_task_1 = ARCTask(config, str(os.path.join(DEFAULT_EXAMPLE_DATA_PATH, "6d0aefbc.json")))
@@ -188,9 +184,31 @@ def solve(I):
     return output
 {CODE_END}"""
 
-    ### COMBINE PROMPT ###
-    examples = [(example_task_1, solution_code_1), (example_task_2, solution_code_2), (example_task_3, solution_code_3)]
+    example_task_4 = ARCTask(config, str(os.path.join(DEFAULT_EXAMPLE_DATA_PATH, "00d62c1b.json")))
+    solution_code_4 = f"""{CODE}
+def solve(I):
+    
+    
+{CODE_END}"""
 
+    example_task_5 = ARCTask(config, str(os.path.join(DEFAULT_EXAMPLE_DATA_PATH, "00d62c1b.json")))
+    solution_code_5 = f"""{CODE}
+def solve(I):
+
+
+{CODE_END}"""
+
+    example_task_6 = ARCTask(config, str(os.path.join(DEFAULT_EXAMPLE_DATA_PATH, "00d62c1b.json")))
+    solution_code_6 = f"""{CODE}
+def solve(I):
+
+
+{CODE_END}"""
+
+    examples = [(example_task_1, solution_code_1), (example_task_2, solution_code_2), (example_task_3, solution_code_3),
+                (example_task_4, solution_code_4), (example_task_5, solution_code_5), (example_task_6, solution_code_6)]
+
+    ### COMBINE PROMPT ###
     if num_examples == 0:
         return prompt_prefix + "\n\n" + prompt_suffix
     else:
