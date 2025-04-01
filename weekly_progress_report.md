@@ -149,15 +149,30 @@
 - **Work done**:
   - Added "percentage correct" based terminal rewarding to the MCTS agent (Custom Agent)
   - Started generating SFT data for the policy LLM
+    - wrote program to give summary of covered tasks
   - Worked on prompt fine-tuning
   - Tested variety of different hyperparameters
   - Wrote data saving code for the fine-tuning data
   - Wrote data filtering code for the fine-tuning data (gets rid of steps that don't contribute to the final solution)
+  - Added variable temperature search: this is a simplified version of the number of children based approach in favor of
+    simplicity and efficiency (vllm batching does not allow different temperatures in the same request)
   - Handwrote 10 high quality one shot example tasks for the policy LLM
+  - Started work on writing a better system to give examples to the policy LLM
 
 
 - **Issues and Questions**:
-  - None
+  - Issue with context window size and OOM errors
+    - Task grid representations require a lot of tokens
+    - Longer one-shot/few-shot examples require more tokens and the model is "encouraged" to generate more tokens per
+      step
+  - I think my model choice might be suboptimal
+    - I will try using the non-instruct version of Qwen/Qwen2.5-Coder
+    - Their blog post mentions the non-instruct versions being better for code completion and fine-tuning
+  - Fine-tuning and instruction prompts / examples
+    - Do I understand correctly that fine-tuning is not done with the typical instruction prompt?
+    - Does it make a difference whether I fine tune on whole solutions or all partial solution traces?
+  - Fine-tuning: LoRA vs. full model
+    - I want the model to gain an understanding of grid, patterns, symmetry, etc.
 
 
 
