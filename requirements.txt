@@ -20,3 +20,4 @@ pyyaml
 plotly
 igraph
 Pygments
+scipy

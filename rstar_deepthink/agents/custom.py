@@ -18,12 +18,8 @@ class Custom(Agent):
 
     def has_expanded(self) -> bool:
         """Function that determined whether to generate more children."""
-        if not self.current_nodes or not self.current_nodes[0].has_children():
-            return False
-
-        return sum(
-            child.is_terminal() for child in self.current_nodes[0].children) < self.config.branching_factor * 0.74
-        # return not all(child.is_terminal() for child in self.current_nodes[0].children)
+        # always generate new children independently of whether there are any already
+        return False
 
     @staticmethod
     def select_child(node: Node) -> Node | None:

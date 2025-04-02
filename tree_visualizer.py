@@ -44,6 +44,10 @@ def build_graph_from_nodes(nodes):
             data = f"Tag: {node.tag}<br>Value: {node.value}<br>Visit count: {node.visit_count}<br>Value sum: {node.value_sum}<br>Q-Value: {q_value}<br>PUCT: {puct}"
             if node.terminal_reason is not None:
                 data += f"<br>Terminal reason: {node.terminal_reason}"
+            if node.temperature is not None:
+                data += f"<br>Temperature: {node.temperature}"
+            if node.example_name is not None:
+                data += f"<br>Example name: {node.example_name}"
         except Exception as e:
             print(f"Error while extracting code for node {node.tag}: {e}")
             traceback.print_exc()

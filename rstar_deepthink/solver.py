@@ -3,10 +3,11 @@ import logging
 from pebble import ProcessPool
 from vllm.outputs import RequestOutput
 
-from rstar_deepthink.node import Node
-from rstar_deepthink.agents import Agent
-from rstar_deepthink.llms import PolicyModel, RewardModel
+# noinspection PyUnresolvedReferences
+from rstar_deepthink.agents import Agent, temperature_lerp, temperature_beta_cdf
 from rstar_deepthink.config import Config
+from rstar_deepthink.llms import PolicyModel, RewardModel
+from rstar_deepthink.node import Node
 
 logger = logging.getLogger(__name__)
 
@@ -100,12 +101,19 @@ class Solver:
         return [agent.get_nodes() for agent in agents]
 
     def solve(self, agents: list[Agent]):
+        temperature = self.config.policy_temperature
 
-        for rollout in range(self.config.num_simulations):
+        for rollout in range(self.config.num_rollouts):
+            # Update temperature every time all examples have been used
+            if self.config.variable_temperature and rollout % len(self.config.example_names) == 0:
+                temperature = temperature_lerp(rollout, self.config.num_rollouts, self.config.min_policy_temperature,
+                                               self.config.max_policy_temperature)
+                # temperature = temperature_beta_cdf(rollout, self.config.num_simulations, self.config.min_policy_temperature, self.config.max_policy_temperature)
+
             # Initialize the initial search starting point of agents, and the initial point of each rollout is root
             for agent in agents:
                 agent.select_next_step(from_root=True)
-                agent.rollout_idx = rollout
+                agent.update(rollout, temperature)
 
             for step in range(self.config.max_depth):
                 logger.debug(f"----------------- Current Rollout: {rollout} -----------------")
@@ -116,7 +124,7 @@ class Solver:
                 if not valid_agents + expanded_agents:
                     break
 
-                outputs = self.policy.generate(prompts)
+                outputs = self.policy.generate(prompts, temperature)
 
                 logger.debug(f"Number of outputs: {len(outputs)}")
 

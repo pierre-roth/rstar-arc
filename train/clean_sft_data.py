@@ -1,9 +1,9 @@
+import collections  # For efficient line skipping with deque
+import itertools  # For efficient line skipping
 import json
 import logging
 import os
 import sys
-import itertools  # For efficient line skipping
-import collections  # For efficient line skipping with deque
 
 from pebble import ProcessPool
 
@@ -207,7 +207,8 @@ def main():
                             continue
 
                         future = pool.schedule(process_solution, args=[(task, solution_code)])
-                        batch_futures.append((task_name, future))
+                        # Pass the original data dict along to be able to reconstruct entry with metadata later
+                        batch_futures.append((task_name, future, data))
 
                     except json.JSONDecodeError:
                         # Reduce log noise
@@ -218,12 +219,23 @@ def main():
 
                 # Collect results for the current batch
                 results_this_batch = 0
-                for task_name, future in batch_futures:
+
+                for task_name, future, original_data in batch_futures:
                     try:
-                        # Wait for the result
+                        # Wait for the result (cleaned code)
                         cleaned_code = future.result()
-                        # Write the cleaned solution
-                        entry = json.dumps({"task_name": task_name, "solution_code": cleaned_code})
+
+                        # Prepare the output entry. Start with task_name and cleaned code.
+                        output_data = {
+                            "task_name": task_name,
+                            "solution_code": cleaned_code
+                        }
+                        # Check for and add metadata from original data
+                        if "metadata" in original_data:
+                            output_data["metadata"] = original_data["metadata"]
+
+                        # Write the potentially augmented solution entry
+                        entry = json.dumps(output_data)
                         outfile.write(entry + '\n')
                         results_this_batch += 1
                     except Exception as e:
@@ -247,10 +259,11 @@ def main():
     logger.info(f"Total lines now in {cleaned_file}: {total_processed_lines}")
 
     # --- Curate Best Solution per Task ---
-    # This part remains unchanged - it reads the final cleaned_file (potentially appended to)
-    # It will correctly find the best solution among all lines present.
+    # Reads the cleaned_file (which now potentially includes metadata)
+    # and selects the best (shortest code) solution per task, preserving metadata if present.
     logger.info(f"Starting curation of best solutions from {cleaned_file}...")
-    best_solutions = {}  # Dictionary to store {task_name: best_solution_code}
+
+    best_solutions: dict[str, dict] = {}  # Stores {task_name: best_solution_data_dict}
 
     try:
         # Read the potentially appended cleaned file
@@ -259,17 +272,43 @@ def main():
                 if not line.strip():
                     continue
                 try:
-                    data = json.loads(line)
-                    task_name = data.get("task_name")
-                    current_solution_code = data.get("solution_code")
+                    # Load the entire JSON object from the line
+                    current_data = json.loads(line)
+                    task_name = current_data.get("task_name")
+                    # current_solution_code = current_data.get("solution_code") # Not needed for this heuristic, but fine to leave
 
-                    if not task_name or current_solution_code is None:
-                        continue
+                    # --- Calculate current average Q ---
+                    current_avg_q = float("-inf")  # Default value if no valid q_values found
+                    current_metadata = current_data.get("metadata")
+                    if current_metadata is not None:
+                        q_values = current_metadata.get("q_values")  # Use "avg_q" if that's the actual key in the file
+                        # Check if q_values is a non-empty list
+                        if q_values is not None:
+                            current_avg_q = sum(q_values) / len(q_values)
 
-                    # Apply heuristic: shortest solution wins
-                    existing_best_code = best_solutions.get(task_name)
-                    if existing_best_code is None or len(current_solution_code) < len(existing_best_code):
-                        best_solutions[task_name] = current_solution_code
+                    # --- Compare with existing best ---
+                    existing_best_data = best_solutions.get(task_name)
+                    existing_best_avg_q = float("-inf")  # Default value
+
+                    if existing_best_data is not None:
+                        # Calculate existing best average Q (similar logic as above)
+                        existing_best_metadata = existing_best_data.get("metadata")
+                        if existing_best_metadata is not None:
+                            existing_q_values = existing_best_metadata.get("q_values")  # Use "avg_q" if needed
+                            if existing_q_values is not None:
+                                existing_best_avg_q = sum(existing_q_values) / len(existing_q_values)
+
+                    # --- Decide and store ---
+                    # Keep if it's the first OR if current avg Q is strictly greater
+                    if existing_best_data is None or current_avg_q > existing_best_avg_q:
+                        # Store the entire current data dictionary as the new best
+                        best_solutions[task_name] = current_data
+                    elif current_avg_q == existing_best_avg_q and current_avg_q != float("-inf"):
+                        # Add tie-breaking logic, e.g., shortest code
+                        existing_best_code = existing_best_data.get("solution_code", "")
+                        current_solution_code = current_data.get("solution_code", "")
+                        if len(current_solution_code) < len(existing_best_code):
+                            best_solutions[task_name] = current_data
 
                 except json.JSONDecodeError:
                     # Reduce log noise
@@ -292,8 +331,9 @@ def main():
         # Write mode 'w' is correct here, always overwrite/create curated file
         with open(curated_file, 'w', encoding='utf-8') as outfile:
             # Sort items by task name for deterministic output order
-            for task_name, solution_code in sorted(best_solutions.items()):
-                entry = json.dumps({"task_name": task_name, "solution_code": solution_code})
+            for task_name, solution_data in sorted(best_solutions.items()):
+                # Dump the entire stored dictionary (includes task_name, solution_code, and metadata if present)
+                entry = json.dumps(solution_data)
                 outfile.write(entry + '\n')
                 curated_count += 1
         logger.info(f"Finished curation. Selected and saved {curated_count} best solutions to {curated_file}")

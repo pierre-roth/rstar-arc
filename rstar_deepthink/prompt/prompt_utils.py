@@ -1,3 +1,4 @@
+import json
 import os
 
 from constants import CODE, CODE_END, STEP_END, DEFAULT_EXAMPLE_DATA_PATH
@@ -25,16 +26,17 @@ def task_to_prompt(task: ARCTask) -> str:
         prompt.append(f"Input shape: {example.input_grid.rows} x {example.input_grid.columns}")
         prompt.append("Input:\n")
         prompt.append(str(example.input_grid) + "\n")
-        prompt.append(f"Output shape: determined by transformation function")
+        prompt.append(f"Output shape: determined by solve function")
         prompt.append("Output:\n")
-        prompt.append("Result of applying transformation function to the input grid" + "\n\n")
+        prompt.append("Result of applying solve function to the input grid" + "\n\n")
 
     return "\n".join(prompt)
 
 
-def get_prompt(config: Config, task: ARCTask) -> str:
+# noinspection PyUnusedLocal
+def get_base_prompt(config: Config, task: ARCTask) -> (str, str):
     ### PROMPT PREFIX ###
-    prompt_prefix = f"""You are a powerful agent with broad problem solving/pattern matching knowledge and great python programming skills. You need to write Python code to solve an ARC (Abstraction and Reasoning Corpus) task, or more specifically implement the transformation function that can transform the input grids into their corresponding output grids.
+    prompt_prefix = f"""You are a powerful agent with broad problem solving skills, pattern matching abilities and great python programming expertise. You need to write Python code to solve an ARC (Abstraction and Reasoning Corpus) task, or more specifically implement the transformation function that can transform the input grids into their corresponding output grids.
 
 ARC Task Description:
     - ARC tasks are composed of a set of training input-output examples and a set of test input grids.
@@ -49,13 +51,14 @@ Remember:
     - Write code that implements the transformation function step by step. The solution must include {CODE}, {CODE_END} and {STEP_END} markers appropriately.
     - The final code block must be valid Python code and implement the function `solve(I: list[list[int]]) -> list[list[int]]`. This function transforms input grids into their corresponding output grids.
     - You may use Python built-in functions and the standard libraries.
-    - You may use numpy functions (it is already imported as "import numpy as np", so you can use it directly)
+    - You are allowed to use all python standard library libraries such as collections, itertools, etc. after import them.
+    - Additionally, you can use numpy after importing it.
     - Each step must be valid Python code. Steps can be as simple as a single line of code or as complex as a multi-line function.
-    - Each step, combined with the steps before it, however must be a valid Python code block i.e. no partial code blocks.
+    - Each step, combined with the steps before it must syntactically valid Python code (i.e. it must be possible to run the code without syntax errors).
     - If you generate a {CODE_END} marker instead of a {STEP_END} marker, this signals the end of the code block, and thus the end of the transformation function.
-    - It is important to accurately analyze the input-output examples to infer the transformation function.
-    - The transformation function might be completely different from the given example solutions.
-    - Look to the examples for guidance on how to correctly format your solution!
+    - It is important to accurately analyze the input-output examples to infer the transformation function "solve".
+    - The transformation function "solve" might be completely different from the given example solution.
+    - Look to the example for ideas and for guidance on how to correctly format your solution!
 
 """
 
@@ -68,162 +71,34 @@ Then write Python code to implement the transformation function.
 
 """
 
-    num_examples = sum(config.examples_mask)
+    return prompt_prefix, prompt_suffix
 
-    ### EXAMPLE PROMPTS ###
-    single_example_prompt = f"""Below is one example task with solution. They should give you an idea of a solution looks like."""
-    multiple_example_prompt = f"""Below are {num_examples} example tasks with solutions. They should give you an idea of what a solution looks like."""
 
-    ### EXAMPLES ###
-    example_task_1 = ARCTask(config, str(os.path.join(DEFAULT_EXAMPLE_DATA_PATH, "6d0aefbc.json")))
-    solution_code_1 = f"""{CODE}
-def solve(I):
-    # vertically mirror the grid by reversing the order of each row
-    x1 = [row[::-1] for row in I]
-    {STEP_END}
-    
-    # horizontally concatenate the input grid with the vertically mirrored grid by concatenating corresponding rows
-    O = [I[i] + x1[i] for i in range(len(I))]
-    {STEP_END}
-    
-    # return the output grid
-    return O
-{CODE_END}"""
+def get_example_prompt(config: Config, task_name: str) -> str:
+    """Generate the initial prompt for the task to feed into the LLM."""
+    path = os.path.join(DEFAULT_EXAMPLE_DATA_PATH, f"{task_name}.json")
+    task = ARCTask(config, path)
 
-    example_task_2 = ARCTask(config, str(os.path.join(DEFAULT_EXAMPLE_DATA_PATH, "1cf80156.json")))
-    solution_code_2 = f"""{CODE}
-def solve(I):
-    # Convert input to numpy array for easier manipulation
-    I_np = np.array(I)
-    {STEP_END}
-    
-    # Find rows containing non-zero values and determine min and max of non-zero row indices
-    non_zero_rows = [i for i in range(len(I)) if any(val != 0 for val in I[i])]
-    min_row, max_row = min(non_zero_rows), max(non_zero_rows)
-    {STEP_END}
-    
-    # Find columns containing non-zero values and determine min and max of non-zero column indices
-    non_zero_cols = [j for j in range(len(I[0])) if any(I[i][j] != 0 for i in range(len(I)))]
-    min_col, max_col = min(non_zero_cols), max(non_zero_cols)
-    {STEP_END}
-    
-    # Extract smallest subgrid containing all non-zero values using numpy slicing
-    O = I_np[min_row:max_row+1, min_col:max_col+1].tolist()
-    {STEP_END}
-    
-    # Return the output subgrid
-    return O
-{CODE_END}"""
-
-    example_task_3 = ARCTask(config, str(os.path.join(DEFAULT_EXAMPLE_DATA_PATH, "00d62c1b.json")))
-    solution_code_3 = f"""{CODE}
-def solve(I):
-    # Define helper function to find a connected component using BFS
-    def find_component(grid, start_row, start_col, visited):
-        height, width = len(grid), len(grid[0])
-        value = grid[start_row][start_col]
-        component = []
-        queue = [(start_row, start_col)]
-        
-        while queue:
-            r, c = queue.pop(0)
-            if (r < 0 or r >= height or c < 0 or c >= width or 
-                visited[r][c] or grid[r][c] != value):
+    # open "solution.jsonl" file and scan through it line by line until we find the task name
+    solution_code = ""
+    with open(os.path.join(DEFAULT_EXAMPLE_DATA_PATH, "solution.jsonl"), "r") as f:
+        for line in f:
+            if not line.strip():
                 continue
-            
-            visited[r][c] = True
-            component.append((r, c))
-            
-            # Add the four adjacent neighbors (no diagonals)
-            queue.extend([(r+1, c), (r-1, c), (r, c+1), (r, c-1)])
-                
-        return value, component
-    {STEP_END}
-    
-    # Define helper function to check if a component touches the border
-    def is_border_touching(component, height, width):
-        for r, c in component:
-            if r == 0 or r == height-1 or c == 0 or c == width-1:
-                return True
-        return False
-    {STEP_END}
-    
-    # Copy the input grid and get dimensions
-    output = [row[:] for row in I]
-    height, width = len(I), len(I[0])
-    {STEP_END}
-    
-    # Initialize visited cells tracker
-    visited = [[False for _ in range(width)] for _ in range(height)]
-    {STEP_END}
-    
-    # Find all connected components in the grid
-    components = []
-    for i in range(height):
-        for j in range(width):
-            if not visited[i][j]:
-                value, component = find_component(I, i, j, visited)
-                if component:
-                    components.append((value, component))
-    {STEP_END}
-    
-    # Find all color 0 components that don't touch the border
-    non_border_components = []
-    for value, component in components:
-        if value == 0 and not is_border_touching(component, height, width):
-            non_border_components.append(component)
-    {STEP_END} 
-    
-    # Fill all cells in non-border components with value 4
-    for component in non_border_components:
-        for r, c in component:
-            output[r][c] = 4
-    {STEP_END}
-    
-    # Return the transformed grid
-    return output
-{CODE_END}"""
+            data = json.loads(line)
+            if data["task_name"] == task_name:
+                solution_code = data["solution"]
+                break
 
-    example_task_4 = ARCTask(config, str(os.path.join(DEFAULT_EXAMPLE_DATA_PATH, "00d62c1b.json")))
-    solution_code_4 = f"""{CODE}
-def solve(I):
-    
-    
-{CODE_END}"""
+    if not solution_code:
+        raise ValueError(f"No solution found for task {task_name} ... cannot use this task as an example!")
 
-    example_task_5 = ARCTask(config, str(os.path.join(DEFAULT_EXAMPLE_DATA_PATH, "00d62c1b.json")))
-    solution_code_5 = f"""{CODE}
-def solve(I):
+    example_prompt = f"""Below is one example task with solution. This should give you an idea of what a solution looks like and what format you should adhere to.
 
+{task_to_prompt(task)}
 
-{CODE_END}"""
+{solution_code}
 
-    example_task_6 = ARCTask(config, str(os.path.join(DEFAULT_EXAMPLE_DATA_PATH, "00d62c1b.json")))
-    solution_code_6 = f"""{CODE}
-def solve(I):
+"""
 
-
-{CODE_END}"""
-
-    examples = [(example_task_1, solution_code_1), (example_task_2, solution_code_2), (example_task_3, solution_code_3),
-                (example_task_4, solution_code_4), (example_task_5, solution_code_5), (example_task_6, solution_code_6)]
-
-    ### COMBINE PROMPT ###
-    if num_examples == 0:
-        return prompt_prefix + "\n\n" + prompt_suffix
-    else:
-        prompt = prompt_prefix + "\n\n"
-
-        if num_examples == 1:
-            prompt += f"{single_example_prompt}\n\n"
-        else:
-            prompt += f"{multiple_example_prompt}\n\n"
-
-        for i, (include, (example_task, solution_code)) in enumerate(zip(config.examples_mask, examples)):
-            if include:
-                prompt += f"Example Task and Solution Number {i + 1}:\n\n"
-                prompt += task_to_prompt(example_task) + "\n\n"
-                prompt += solution_code + "\n\n"
-
-        prompt += prompt_suffix
-        return prompt
+    return example_prompt

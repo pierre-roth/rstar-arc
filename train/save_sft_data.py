@@ -22,7 +22,7 @@ def save_sft(config: Config, nodes: list[Node]):
 
     task_name = nodes[0].task.name
 
-    solutions = []
+    data = []
 
     for node in nodes:
         if node.is_valid_final_answer_node():
@@ -31,9 +31,11 @@ def save_sft(config: Config, nodes: list[Node]):
             if not error and passed_test:
                 # Store the task name and code
                 solution_code = node.collect_code()
-                solutions.append(solution_code)
+                metadata = node.collect_metadata()
+
+                data.append((solution_code, metadata))
 
     with open(file_path, 'a', encoding="utf-8") as f:
-        for solution_code in solutions:
-            entry = json.dumps({"task_name": task_name, "solution_code": solution_code})
+        for solution_code, metadata in data:
+            entry = json.dumps({"task_name": task_name, "solution_code": solution_code, "metadata": metadata})
             f.write(entry + '\n')

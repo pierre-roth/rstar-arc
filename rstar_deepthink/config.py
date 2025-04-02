@@ -22,22 +22,27 @@ class Config:
 
     log_level: str = "DEBUG"  # Logging level: DEBUG, INFO, WARNING, ERROR, CRITICAL
     save_for_visualization: bool = True  # Whether to visualize the reasoning steps
+    solve_only_unsolved: bool = False  # Whether to only solve unsolved tasks
     save_sft_data: bool = True  # Whether to save SFT data
 
     numeric_log_level: Optional[int] = None  # Numeric logging level (set automatically)
     model_initialization_times = {"policy": None, "reward": None}  # Time taken to initialize models
 
-    examples_mask: list[bool] = field(
-        default_factory=lambda: [True, False, False, False, False, False])  # Mask for example tasks
+    example_names: list[str] = field(default_factory=lambda: ["6d0aefbc", "1cf80156",
+                                                              "00d62c1b"])  # list of names of example tasks (to be used sequentially in different rollouts)
+    rotate_example: bool = False  # Whether to rotate the example tasks in each rollout
 
     policy_model: str = "Qwen/Qwen2.5-Coder-7B-Instruct"  # Model that generates reasoning steps
     reward_model: str = "Qwen/Qwen2.5-Coder-7B-Instruct"  # Reward Model for evaluating steps
 
     model_base_path: str = os.path.join(NET_SCRATCH_PATH, "models")  # Base path where models are stored
 
-    max_tokens: int = 512  # Maximum tokens for generation
+    max_tokens: int = 512  # Maximum tokens for generation of a single step
     dtype: str = "bfloat16"  # Data type for model (affects precision/speed)
     max_model_len: int = 16384  # Affects the context window size
+    # max_num_seqs: int = 1024  # Maximum number of sequences to generate in parallel
+    # max_num_batched_tokens = 16384  # Maximum number of tokens to process in a batch
+
     top_p: float = 0.95  # Top-p sampling parameter (cumulative probability cutoff)
     top_k: int = -1  # Top-k sampling parameter (number of candidates to consider)
     policy_temperature: float = 0.7  # Sampling temperature for LLM generation
@@ -45,7 +50,6 @@ class Config:
     deterministic: bool = False  # Whether to enforce deterministic behavior
 
     data_folder: str = DEFAULT_DATA_PATH  # Path to ARC task data
-    task_name: str = ""  # Name of specific task (overrides task_index if provided)
 
     search_mode: str = "bs"  # Search algorithm - "bs" for beam search, "mcts" for Monte Carlo Tree Search
 
@@ -53,10 +57,14 @@ class Config:
     batch_size: int = -1  # Batch size for parallel inference (-1 means all at once, otherwise batch size)
 
     beam_width: int = 3  # Number of top-scoring beams to track
-    branching_factor: int = 3  # Number of children to generate per step
+    branching_factor: int = 4  # Number of children to generate if no children exist yet
+
+    variable_temperature: bool = False  # Whether to use variable temperature for sampling
+    min_policy_temperature: float = 0.7  # Minimum temperature for variable temperature sampling
+    max_policy_temperature: float = 1.1  # Maximum temperature for variable temperature sampling
 
     c_puct: float = 2.0  # PUCT exploration constant
-    num_simulations: int = 8  # Number of simulations to run for MCTS
+    num_rollouts: int = 8  # Number of simulations to run for MCTS
     negative_reward: float = -1.0  # Negative reward for invalid/incorrect code
     positive_reward: float = 1.0  # Positive reward for correct code
 
@@ -115,7 +123,7 @@ class Config:
 
         # Handle search mode specific settings
         if self.search_mode == "bs":
-            self.num_simulations = 1
+            self.num_rollouts = 1
         elif self.search_mode in ["mcts", "custom"]:
             self.beam_width = 1
 

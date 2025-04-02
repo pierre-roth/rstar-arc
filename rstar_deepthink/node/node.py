@@ -21,9 +21,11 @@ class Node:
     def __init__(self, config: Config):
         self.config: Config = config
 
-        self.state = {"text": "", "code": ""}
+        self.state = {"prompt_prefix": "", "example_prompt": "", "prompt_suffix": "", "code": ""}
         self.parent: Node | None = None
         self.children: list[Node] = []
+        self.example_name: str | None = None  # Name of the example used to generate this node
+        self.temperature: float | None = None  # Temperature used to generate this node
         self.depth: int = 0
         self.tag = "0"
 
@@ -70,20 +72,24 @@ class Node:
 
         return self.terminal
 
-    def add_child(self, text: str) -> "Node":
+    def add_child(self, code: str, current_temperature: float, current_example: str) -> "Node":
         """
         Add a child node to this node.
 
         Args:
-            :param text:
+            :param code:
+            :param current_temperature:
+            :param current_example:
         """
         child = Node(self.config)
-        self.children.append(child)
+
         child.parent = self
         child.depth = self.depth + 1
         child.tag = f"{self.tag}.{len(self.children) - 1}"
         child.task = self.task
-        child.state["code"] = text
+        child.state["code"] = code
+        child.temperature = current_temperature
+        child.example_name = current_example
 
         # Validate the child node upon creation
 
@@ -94,6 +100,8 @@ class Node:
         validation_duration = time.time() - validation_start_time
 
         logger.debug(f"Validation duration for child {child.tag}: {validation_duration}")
+
+        self.children.append(child)
         logger.debug(f"Added child node {child.tag} to tree.")
 
         return child
@@ -115,9 +123,8 @@ class Node:
 
     def update_recursive(self, value: float) -> None:
         self.update(value)
-        if self.tag == "0":
-            return
-        self.parent.update_recursive(value)
+        if self.parent is not None:
+            self.parent.update_recursive(value)
 
     def puct(self) -> float:
         if not self.parent:
@@ -169,12 +176,14 @@ class Node:
 
         return self.valid
 
-    def collect_text_and_code(self) -> str:
+    def collect_prompt_and_code(self) -> str:
         # from leaf to root, and reverse
         node = self
         trajectory = []
         while node:
-            trajectory.append(node.state["text"] + node.state["code"])
+            trajectory.append(
+                node.state["prompt_prefix"] + node.state["example_prompt"] + node.state["prompt_suffix"] + node.state[
+                    "code"])
             node = node.parent
 
         return "".join(reversed(trajectory))
@@ -188,6 +197,32 @@ class Node:
             node = node.parent
 
         return "".join(reversed(code)).strip()
+
+    def collect_metadata(self) -> dict:
+        """Calculate the average Q-value of the node."""
+        q_values = []
+        node = self
+        while node:
+            q_values.append(node.q_value())
+            node = node.parent
+
+        examples_used = []
+        node = self
+        while node:
+            examples_used.append(node.example_name)
+            node = node.parent
+
+        temperatures = []
+        node = self
+        while node:
+            temperatures.append(node.temperature)
+            node = node.parent
+
+        return {
+            "q_values": q_values,
+            "examples": examples_used,
+            "temperatures": temperatures
+        }
 
     def is_valid_final_answer_node(self) -> bool:
         if self.is_terminal() and self.passes_training:

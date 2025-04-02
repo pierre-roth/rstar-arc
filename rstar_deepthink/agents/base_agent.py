@@ -6,7 +6,7 @@ from constants import CODE
 from rstar_deepthink.arc_task import ARCTask
 from rstar_deepthink.config import Config
 from rstar_deepthink.node import Node
-from rstar_deepthink.prompt import get_prompt
+from rstar_deepthink.prompt import get_base_prompt, get_example_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -22,19 +22,41 @@ class Agent:
         self.candidate_nodes: list[Node] = []
         self.final_answer_nodes: list[Node] = []
         self.rollout_idx: int = 0
+        self.current_temperature: float = self.config.policy_temperature
+        self.example_name: str | None = None
 
-        self.create_root(get_prompt(config, task), f"{CODE}\ndef solve(I):\n    ", task)
+        self.create_root(get_base_prompt(config, task), f"{CODE}\ndef solve(I):\n    ", task)
 
-    def create_root(self, prompt: str, code: str, task: ARCTask):
+    def create_root(self, base_prompt: (str, str), code: str, task: ARCTask):
         """Initialize the root node with the given state."""
         self.root = Node(self.config)
-        self.root.state["text"] = prompt
-        logger.debug(f"Creating root for task {task.name} with prompt: \n{prompt}")
+        self.root.state["prompt_prefix"] = base_prompt[0]
+        self.root.state["prompt_suffix"] = base_prompt[1]
         self.root.state["code"] = code
         self.root.task = task
         self.root.valid = True
 
         self.candidate_nodes.append(self.root)
+
+        logger.debug(
+            f"Created root for task {task.name} with prompt: \n{base_prompt} + <example_will_be_added_later> + {code}")
+
+    def update(self, rollout_idx: int, current_temperature: float) -> None:
+        """Set the example for the root node."""
+        self.rollout_idx = rollout_idx
+        self.current_temperature = current_temperature
+
+        if self.config.rotate_example:  # Rotate example
+            self.example_name = self.config.example_names[self.rollout_idx % len(self.config.example_names)]
+            self.root.state["example_prompt"] = get_example_prompt(self.config, self.example_name)
+        else:
+            self.example_name = self.config.example_names[0]
+            self.root.state["example_prompt"] = get_example_prompt(self.config, self.example_name)
+
+        # Set the example name for the root node
+        logger.debug(f"Update root for task {self.task.name} with example: {self.example_name}")
+        logger.debug(f"Current temperature: {self.current_temperature}")
+        logger.debug(f"Current example prompt: \n{self.root.state['example_prompt']}")
 
     def get_nodes(self) -> list[Node]:
         nodes = []
@@ -74,7 +96,7 @@ class Agent:
         for current_node in current_nodes:
             if not is_value_only and current_node.is_terminal():
                 continue
-            prompt = current_node.collect_text_and_code()
+            prompt = current_node.collect_prompt_and_code()
             prompts.append(prompt)
 
         return prompts
@@ -95,10 +117,8 @@ class Agent:
             new_children = []
             for text in set(map(lambda o: o.text, request_output.outputs)):
                 # validation happens here when add_child is called
-                child = current_node.add_child(text)
+                child = current_node.add_child(text, self.current_temperature, self.example_name)
                 new_children.append(child)
-
-            # TODO: potentially propagate invalidity to parent if all children are invalid
 
             # Add all new children to candidate nodes for evaluation
             self.candidate_nodes.extend(new_children)
