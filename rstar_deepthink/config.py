@@ -32,11 +32,11 @@ class Config:
                                                               "00d62c1b"])  # list of names of example tasks (to be used sequentially in different rollouts)
     rotate_example: bool = False  # Whether to rotate the example tasks in each rollout
 
-    # policy_model: str = "Qwen/Qwen2.5-Coder-7B-Instruct"  # Model that generates reasoning steps
-    # reward_model: str = "Qwen/Qwen2.5-Coder-7B-Instruct"  # Reward Model for evaluating steps
+    policy_model: str = "Qwen/Qwen2.5-Coder-7B-Instruct"  # Model that generates reasoning steps
+    reward_model: str = "Qwen/Qwen2.5-Coder-7B-Instruct"  # Reward Model for evaluating steps
 
-    policy_model: str = "Qwen/Qwen2.5-Coder-7B"  # Model that generates reasoning steps
-    reward_model: str = "Qwen/Qwen2.5-Coder-7B"  # Reward Model for evaluating steps
+    # policy_model: str = "Qwen/Qwen2.5-Coder-7B"  # Model that generates reasoning steps
+    # reward_model: str = "Qwen/Qwen2.5-Coder-7B"  # Reward Model for evaluating steps
 
     model_base_path: str = os.path.join(NET_SCRATCH_PATH, "models")  # Base path where models are stored
 
