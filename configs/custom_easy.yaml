@@ -12,9 +12,9 @@ max-policy-temperature: 1.1
 
 save-sft-data: false
 
-num-simulations: 8
-branching-factor: 4
-max-depth: 12
+num-simulations: 16
+branching-factor: 8
+max-depth: 16
 
 
 

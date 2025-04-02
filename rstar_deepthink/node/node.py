@@ -88,6 +88,9 @@ class Node:
         child.tag = f"{self.tag}.{len(self.children)}"
         child.task = self.task
         child.state["code"] = code
+
+        logger.debug(f"Code for child node {child.tag}: {code}")
+
         child.temperature = current_temperature
         child.example_name = current_example
 
