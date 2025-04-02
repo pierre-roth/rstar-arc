@@ -174,6 +174,8 @@
   - Fine-tuning: LoRA vs. full model
     - I want the model to gain an understanding of grid, patterns, symmetry, etc.
 
+
+
 ### Week 5 (31.03.2025)
 
 - **Work planned**:
@@ -181,17 +183,16 @@
   - variable temperature rollouts
   - enhance quality and quantity of handwritten examples
   - finish designing custom agent for first round
-  - Implement sft data metadata saving:
+  - Implement sft data metadata saving: 
     - for analysis/thesis writing
     - for choosing the best solutions using Q values (SFT)
     - potentially collecting positive-negative pairs for first version of reward model (PPM)
   - thoroughly test this agent and the methodology and select appropriate hyperparameters
-  - Conduct "Round 1" sft data generation by doing a massive number of rollouts on A100s with 14B model and big context
-    window length
+  - Conduct "Round 1" sft data generation by doing a massive number of rollouts on A100s with 14B model and big context window length
   - Assess situation after generation: good enough training set coverage or not??
   - Select and clean SFT data
   - Augment SFT data (including validation to make sure the solution generalizes to all re-ARC examples)
-  - Fine-tuning:
+  - Fine-tuning: 
     - select appropriate method
     - write code to do it
     - select reasonable hyperparameters
