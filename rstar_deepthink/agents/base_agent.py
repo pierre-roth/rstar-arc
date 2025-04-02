@@ -39,7 +39,7 @@ class Agent:
         self.candidate_nodes.append(self.root)
 
         logger.debug(
-            f"Created root for task {task.name} with prompt: \n{base_prompt[0]} + <example_will_be_added_later> + {base_prompt[1]} + {code}")
+            f"Created root for task {task.name} with prompt: \n{base_prompt[0]}\n<example_will_be_added_later>\n{base_prompt[1]}\n{code}")
 
     def update(self, rollout_idx: int, current_temperature: float) -> None:
         """Set the example for the root node."""
