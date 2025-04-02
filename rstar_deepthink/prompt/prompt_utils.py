@@ -81,7 +81,7 @@ def get_example_prompt(config: Config, task_name: str) -> str:
 
     # open "solution.jsonl" file and scan through it line by line until we find the task name
     solution_code = ""
-    with open(os.path.join(DEFAULT_EXAMPLE_DATA_PATH, "solution.jsonl"), "r") as f:
+    with open(os.path.join(DEFAULT_EXAMPLE_DATA_PATH, "solutions.jsonl"), "r") as f:
         for line in f:
             if not line.strip():
                 continue
