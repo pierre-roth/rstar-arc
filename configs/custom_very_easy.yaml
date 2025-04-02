@@ -3,7 +3,6 @@ log-level: "DEBUG"
 
 data-folder: "/home/piroth/rstar-arc/data_sample/very_easy"
 
-example-names: [ "6d0aefbc", "1cf80156" ]
 rotate-example: true
 
 variable-temperature: true

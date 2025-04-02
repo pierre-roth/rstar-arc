@@ -67,37 +67,49 @@ Then write Python code to implement the transformation function.
 
 {task_to_prompt(task)}
 
-
 """
 
     return prompt_prefix, prompt_suffix
 
 
-def get_example_prompt(config: Config, task_name: str) -> str:
+def get_example_prompt(config: Config, task_names: list[str]) -> str:
     """Generate the initial prompt for the task to feed into the LLM."""
-    path = os.path.join(DEFAULT_EXAMPLE_DATA_PATH, f"{task_name}.json")
-    task = ARCTask(config, path)
+    tasks = []
+    for task_name in task_names:
+        path = os.path.join(DEFAULT_EXAMPLE_DATA_PATH, f"{task_name}.json")
+        tasks.append(ARCTask(config, path))
 
     # open "solution.jsonl" file and scan through it line by line until we find the task name
-    solution_code = ""
+    solution_codes = {name: "" for name in task_names}
     with open(os.path.join(DEFAULT_EXAMPLE_DATA_PATH, "solutions.jsonl"), "r") as f:
         for line in f:
             if not line.strip():
                 continue
             data = json.loads(line)
-            if data["task_name"] == task_name:
-                solution_code = data["solution_code"]
-                break
+            if data["task_name"] in task_names:
+                solution_codes[data["task_name"]] = data["solution_code"]
 
-    if not solution_code:
-        raise ValueError(f"No solution found for task {task_name} ... cannot use this task as an example!")
+    if any(solution_code == "" for solution_code in solution_codes.values()):
+        raise ValueError(f"Not all listed examples have solution!")
 
-    example_prompt = f"""Below is one example task with solution. This should give you an idea of what a solution looks like and what format you should adhere to.
+    if len(task_names) == 1:
+        example_prompt = f"""Below is one example task with solution. This should give you an idea of what a solution looks like and what format you should adhere to.
 
-{task_to_prompt(task)}
+{task_to_prompt(tasks[0])}
 
-{solution_code}
+{solution_codes[task_names[0]]}
 
 """
+    else:
+        example_prompt = f"""Below are {len(tasks)} example tasks with solutions. They should give you an idea of what a solution looks like and what format you should adhere to.\n"""
+
+        for i, task in enumerate(tasks):
+            example_prompt += f"\n### Example Task {i + 1} ###\n"
+            example_prompt += task_to_prompt(task)
+            example_prompt += "\n"
+            example_prompt += solution_codes[task_names[i]]
+            example_prompt += "\n"
+
+        example_prompt += "\n"
 
     return example_prompt

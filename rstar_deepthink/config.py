@@ -28,8 +28,8 @@ class Config:
     numeric_log_level: Optional[int] = None  # Numeric logging level (set automatically)
     model_initialization_times = {"policy": None, "reward": None}  # Time taken to initialize models
 
-    example_names: list[str] = field(default_factory=lambda: ["6d0aefbc", "1cf80156",
-                                                              "00d62c1b"])  # list of names of example tasks (to be used sequentially in different rollouts)
+    example_names: list[list[str]] = field(default_factory=lambda: [["6d0aefbc", "1cf80156"], ["1cf80156",
+                                                                                               "00d62c1b"]])  # list of names of example tasks (to be used sequentially in different rollouts)
     rotate_example: bool = False  # Whether to rotate the example tasks in each rollout
 
     policy_model: str = "Qwen/Qwen2.5-Coder-7B-Instruct"  # Model that generates reasoning steps

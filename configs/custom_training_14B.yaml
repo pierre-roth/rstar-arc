@@ -6,7 +6,7 @@ policy-model: "Qwen/Qwen2.5-Coder-14B-Instruct"
 
 data-folder: "/itet-stor/piroth/net_scratch/task_data/training"
 
-# example-names: default = all available examples
+# example-names
 rotate-example: true
 
 variable-temperature: true
