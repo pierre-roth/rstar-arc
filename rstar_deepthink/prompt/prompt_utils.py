@@ -87,7 +87,7 @@ def get_example_prompt(config: Config, task_name: str) -> str:
                 continue
             data = json.loads(line)
             if data["task_name"] == task_name:
-                solution_code = data["solution"]
+                solution_code = data["solution_code"]
                 break
 
     if not solution_code:
