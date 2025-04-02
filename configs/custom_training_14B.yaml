@@ -3,6 +3,7 @@ log-level: "INFO"
 
 # TODO: test whether the non-instruct version works better
 policy-model: "Qwen/Qwen2.5-Coder-14B-Instruct"
+max-model-len: 32768
 
 data-folder: "/itet-stor/piroth/net_scratch/task_data/training"
 

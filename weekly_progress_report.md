@@ -174,6 +174,12 @@
   - Fine-tuning: LoRA vs. full model
     - I want the model to gain an understanding of grid, patterns, symmetry, etc.
 
+- **Results**: 
+  - "Round 0" solved tasks with 6d0aefbc and 1cf80156 as examples (Qwen/Qwen2.5-Coder-7B-Instruct): 
+    - training: 23/400 = 5.75% coverage
+    - training_extended: 712/8939 = 7.97% coverage
+    - Notable tasks that were solved: id_recolor_oe_6, 4258a5f9, compress_1
+
 
 
 ### Week 5 (31.03.2025)
