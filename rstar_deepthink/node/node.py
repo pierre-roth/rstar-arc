@@ -85,7 +85,7 @@ class Node:
 
         child.parent = self
         child.depth = self.depth + 1
-        child.tag = f"{self.tag}.{len(self.children) - 1}"
+        child.tag = f"{self.tag}.{len(self.children)}"
         child.task = self.task
         child.state["code"] = code
         child.temperature = current_temperature
