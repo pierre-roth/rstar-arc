@@ -4,7 +4,7 @@
 #SBATCH --error=/itet-stor/piroth/net_scratch/outputs/jobs/%j.err # Keep minimal SLURM logging
 #SBATCH --mem=512G
 #SBATCH --nodes=1
-#SBATCH --cpus-per-task=32
+#SBATCH --cpus-per-task=40
 #SBATCH --gres=gpu:1
 #SBATCH --constraint='a100'
 ##SBATCH --nodelist=tikgpu01
