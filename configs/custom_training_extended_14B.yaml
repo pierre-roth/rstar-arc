@@ -1,10 +1,15 @@
 search-mode: "custom"
-log-level: "DEBUG"
+log-level: "INFO"
 
+save-for-visualization: false
+round-number: 1
+
+# TODO: test whether the non-instruct version works better
 policy-model: "Qwen/Qwen2.5-Coder-14B-Instruct"
 max-model-len: 32768
 
-data-folder: "/home/piroth/rstar-arc/data_sample/very_easy"
+data-folder: "/itet-stor/piroth/net_scratch/task_data/training_extended"
+batch-size: 400
 
 # example-names
 rotate-example: true
@@ -18,5 +23,4 @@ save-sft-data: true
 num-rollouts: 8
 branching-factor: 8
 max-depth: 20
-
 

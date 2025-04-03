@@ -1,13 +1,11 @@
 search-mode: "custom"
-log-level: "DEBUG"
+log-level: "INFO"
 
 save-for-visualization: false
-round-number: 0
+round-number: 1
 
 policy-model: "Qwen/Qwen2.5-Coder-14B-Instruct"
 max-model-len: 49152
-max-tokens: 16
-
 
 data-folder: "/itet-stor/piroth/net_scratch/task_data/training"
 
@@ -20,8 +18,8 @@ max-policy-temperature: 1.1
 
 save-sft-data: true
 
-num-rollouts: 20
+num-rollouts: 8
 branching-factor: 8
-max-depth: 1
+max-depth: 20
 
 
