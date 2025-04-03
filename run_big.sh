@@ -7,7 +7,6 @@
 #SBATCH --cpus-per-task=40
 #SBATCH --gres=gpu:1
 #SBATCH --constraint='a100'
-#SBATCH --time=5-00:00:00
 
 ## GPU names: geforce_rtx_3090,rtx_a6000,a100
 
