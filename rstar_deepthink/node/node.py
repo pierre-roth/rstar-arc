@@ -208,18 +208,21 @@ class Node:
         while node:
             q_values.append(node.q_value())
             node = node.parent
+        q_values.reverse()
 
         examples_used = []
         node = self
         while node:
             examples_used.append(node.example_name)
             node = node.parent
+        examples_used.reverse()
 
         temperatures = []
         node = self
         while node:
             temperatures.append(node.temperature)
             node = node.parent
+        temperatures.reverse()
 
         return {
             "q_values": q_values,
