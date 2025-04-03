@@ -49,10 +49,10 @@ def load_tasks(config: Config) -> list[ARCTask]:
                 solved_set.add(task_name)
 
         # Add example tasks to the solved set
-        for file_name in os.listdir(DEFAULT_EXAMPLE_DATA_PATH):
+        """for file_name in os.listdir(DEFAULT_EXAMPLE_DATA_PATH):
             if file_name.endswith(".json"):
                 task_name = os.path.splitext(file_name)[0]
-                solved_set.add(task_name)
+                solved_set.add(task_name)"""
 
         files = [f for f in files if os.path.splitext(f)[0] not in solved_set]
 

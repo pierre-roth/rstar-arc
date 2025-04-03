@@ -23,9 +23,10 @@ class Custom(Agent):
             return False
 
         # Check if any current node is non-terminal
-        need_generate = len(self.final_answer_nodes) <= 2 * self.config.branching_factor
+        need_generate = any(not node.is_terminal() for node in self.current_nodes)
+        already_solved = len(self.final_answer_nodes) > 2 * self.config.branching_factor
         logger.debug(f"Need generation: {need_generate} (nodes: {len(self.current_nodes)})")
-        return need_generate
+        return need_generate and not already_solved
 
     def has_expanded(self) -> bool:
         """Function that determined whether to generate more children."""

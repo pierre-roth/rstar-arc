@@ -1,10 +1,9 @@
 search-mode: "custom"
-log-level: "INFO"
+log-level: "DEBUG"
 
 save-for-visualization: false
-round-number: 1
+round-number: 0
 
-# TODO: test whether the non-instruct version works better
 policy-model: "Qwen/Qwen2.5-Coder-14B-Instruct"
 max-model-len: 32768
 
@@ -19,7 +18,7 @@ max-policy-temperature: 1.1
 
 save-sft-data: true
 
-num-simulations: 64
+num-simulations: 1
 branching-factor: 8
 max-depth: 20
 
