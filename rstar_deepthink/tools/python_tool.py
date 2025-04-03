@@ -208,7 +208,10 @@ def execute_code_in_subprocess(code_str, input_grids, expected_outputs):
 
         # If return code is 0, attempt to parse the JSON output
         try:
-            result_data = json.loads(stdout)
+            # load only the last line to avoid issue with the LLM generating print statements etc.
+            last_line = stdout.splitlines()[-1]
+            result_data = json.loads(last_line)
+
             # Check the 'error' flag within the JSON, as non-fatal errors during grid processing set this
             internal_error = result_data.get("error", False)
             if internal_error:

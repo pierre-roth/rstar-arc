@@ -20,6 +20,6 @@ save-sft-data: true
 
 num-rollouts: 1
 branching-factor: 8
-max-depth: 20
+max-depth: 3
 
 
