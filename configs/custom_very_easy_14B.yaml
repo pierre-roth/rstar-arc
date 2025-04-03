@@ -5,7 +5,7 @@ log-level: "DEBUG"
 policy-model: "Qwen/Qwen2.5-Coder-14B-Instruct"
 max-model-len: 32768
 
-data-folder: "/itet-stor/piroth/net_scratch/task_data/very_easy"
+data-folder: "/home/piroth/rstar-arc/data_sample/very_easy"
 
 # example-names
 rotate-example: true
