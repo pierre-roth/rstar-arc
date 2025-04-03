@@ -16,6 +16,17 @@ class Custom(Agent):
     This leverages shared functionality while maintaining MCTS-specific selection logic.
     """
 
+    def should_generate_next(self) -> bool:
+        """Check if we need to generate for current nodes."""
+        if not self.current_nodes:
+            logger.debug("No current nodes to generate from")
+            return False
+
+        # Check if any current node is non-terminal
+        need_generate = len(self.final_answer_nodes) <= 2 * self.config.branching_factor
+        logger.debug(f"Need generation: {need_generate} (nodes: {len(self.current_nodes)})")
+        return need_generate
+
     def has_expanded(self) -> bool:
         """Function that determined whether to generate more children."""
         # always generate new children independently of whether there are any already
