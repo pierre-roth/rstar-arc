@@ -2,7 +2,8 @@ search-mode: "custom"
 log-level: "INFO"
 
 save-for-visualization: false
-round-number: 1
+round-number: 0
+solve-only-unsolved: true
 
 policy-model: "Qwen/Qwen2.5-Coder-14B-Instruct"
 max-model-len: 32768
@@ -10,7 +11,7 @@ max-model-len: 32768
 data-folder: "/itet-stor/piroth/net_scratch/task_data/training_extended"
 batch-size: 400
 
-# example-names
+example-names: [["6d0aefbc", "1cf80156"], ["00d62c1b"], ["e3497940"], ["8f2ea7aa"], ["3e980e27"], ["28e73c20"]]
 rotate-example: true
 
 variable-temperature: true
@@ -19,7 +20,7 @@ max-policy-temperature: 1.1
 
 save-sft-data: true
 
-num-rollouts: 8
+num-rollouts: 12
 branching-factor: 8
 max-depth: 20
 

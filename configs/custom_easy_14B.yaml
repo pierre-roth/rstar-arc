@@ -4,6 +4,8 @@ log-level: "DEBUG"
 policy-model: "Qwen/Qwen2.5-Coder-14B-Instruct"
 max-model-len: 32768
 
+round-number: 0
+
 data-folder: "/home/piroth/rstar-arc/data_sample/easy"
 
 # example-names
