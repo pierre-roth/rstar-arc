@@ -1,6 +1,9 @@
 search-mode: "custom"
 log-level: "INFO"
 
+save-for-visualization: false
+round-number: 0
+
 # TODO: test whether the non-instruct version works better
 policy-model: "Qwen/Qwen2.5-Coder-14B-Instruct"
 max-model-len: 32768
