@@ -38,5 +38,5 @@ def calculate_coverage(round_num: int):
 
 if __name__ == "__main__":
     # Example usage
-    round_number = 1  # Change this to the desired round number
+    round_number = int(input("Round number: "))
     calculate_coverage(round_number)
