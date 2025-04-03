@@ -16,7 +16,7 @@ max-policy-temperature: 1.1
 
 save-sft-data: true
 
-num-simulations: 64
+num-rollouts: 16
 branching-factor: 8
 max-depth: 20
 
