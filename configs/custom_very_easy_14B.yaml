@@ -1,8 +1,8 @@
 search-mode: "custom"
-log-level: "DEBUG"
+log-level: "INFO"
 
 policy-model: "Qwen/Qwen2.5-Coder-14B-Instruct"
-max-model-len: 32768
+max-model-len: 49152
 
 round-number: 0
 
@@ -17,7 +17,7 @@ max-policy-temperature: 1.1
 
 save-sft-data: true
 
-num-rollouts: 8
+num-rollouts: 1
 branching-factor: 8
 max-depth: 20
 
