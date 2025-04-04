@@ -41,10 +41,6 @@ class Custom(Agent):
 
         # Only consider non-terminal children
         non_terminal_children = [child for child in node.children if not child.is_terminal()]
-        if not non_terminal_children:
-            node.terminal = True
-            node.terminal_reason = TERMINAL_SUBTREE_TERMINAL
-            return None
 
         for child in non_terminal_children:
             puct_value = child.puct()
