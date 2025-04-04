@@ -24,4 +24,3 @@ num-rollouts: 22
 branching-factor: 8
 max-depth: 20
 
-
