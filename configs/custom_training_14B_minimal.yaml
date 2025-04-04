@@ -11,7 +11,7 @@ max-tokens: 16
 
 data-folder: "/itet-stor/piroth/net_scratch/task_data/training"
 
-# example-names
+example-names: [["6d0aefbc", "1cf80156"], ["00d62c1b"], ["e3497940"], ["8f2ea7aa"], ["3e980e27"], ["28e73c20"]]
 rotate-example: true
 
 variable-temperature: true
