@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import sys
 from typing import Optional
 
 from rstar_deepthink.config import Config
@@ -120,7 +121,8 @@ class ARCTask:
                         ))
 
         except Exception as e:
-            logger.error(f"Error loading task data: {e}")
+            logger.critical(f"Error loading task data: {e}")
+            sys.exit(1)
 
     def __eq__(self, other: "ARCTask"):
         """Check if two ARCTask objects are equal by comparing their train and test data"""

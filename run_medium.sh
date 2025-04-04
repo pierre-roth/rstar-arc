@@ -2,11 +2,11 @@
 #SBATCH --mail-type=NONE # mail configuration: NONE, BEGIN, END, FAIL, REQUEUE, ALL
 #SBATCH --output=/itet-stor/piroth/net_scratch/outputs/jobs/%j.out # Keep minimal SLURM logging
 #SBATCH --error=/itet-stor/piroth/net_scratch/outputs/jobs/%j.err # Keep minimal SLURM logging
-#SBATCH --mem=256G
+#SBATCH --mem=128G
 #SBATCH --nodes=1
-#SBATCH --cpus-per-task=20
+#SBATCH --cpus-per-task=32
 #SBATCH --gres=gpu:1
-#SBATCH --constraint='a100'
+#SBATCH --constraint='rtx_a6000'
 
 ## GPU names: geforce_rtx_3090,rtx_a6000,a100
 
@@ -15,7 +15,7 @@ ETH_USERNAME=piroth
 PROJECT_NAME=rstar-arc
 DIRECTORY=/home/${ETH_USERNAME}/${PROJECT_NAME}
 CONDA_ENVIRONMENT=arc-solver
-CONFIG_FILE="custom_training_14B.yaml"
+CONFIG_FILE="custom_training.yaml"
 
 # --- Configuration for Minimal Python Subprocess Environment ---
 # Using the details provided by the user (Link validated ~ Mar 28, 2025)
