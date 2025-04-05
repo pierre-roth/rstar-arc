@@ -21,6 +21,7 @@ max-policy-temperature: 0.9
 save-sft-data: true
 
 beam-width: 8
+
 branching-factor: 8
 max-depth: 20
 
