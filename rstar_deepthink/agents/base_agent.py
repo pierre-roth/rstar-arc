@@ -1,4 +1,5 @@
 import logging
+from random import choice
 
 from vllm.outputs import RequestOutput
 
@@ -50,7 +51,7 @@ class Agent:
             self.example_name = self.config.example_names[self.rollout_idx % len(self.config.example_names)]
             self.root.state["example_prompt"] = get_example_prompt(self.config, self.example_name)
         else:
-            self.example_name = self.config.example_names[0]
+            self.example_name = choice(self.config.example_names)
             self.root.state["example_prompt"] = get_example_prompt(self.config, self.example_name)
 
         # Set the example name for the root node
