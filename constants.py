@@ -6,9 +6,13 @@ SECOND_LOCAL_SCRATCH_PATH = f"/scratch-second/{ETH_USERNAME}"  # second local sc
 HOME_PATH = f"/home/{ETH_USERNAME}"  # home directory
 
 PROJECT_PATH = f"{HOME_PATH}/rstar-arc"  # project root directory
+
 DEFAULT_DATA_FOLDER = f"{PROJECT_PATH}/data_sample"  # path for sample data in git repo
 DEFAULT_DATA_PATH = f"{DEFAULT_DATA_FOLDER}/default"
 DEFAULT_EXAMPLE_DATA_PATH = f"{DEFAULT_DATA_FOLDER}/examples"  # path to prompt examples
+
+NET_SCRATCH_TASK_DATA_DIR_PATH = f"{NET_SCRATCH_PATH}/task_data"  # path for task data in net-scratch
+NET_SCRATCH_RE_ARC_DATA_PATH = f"{NET_SCRATCH_PATH}/re_arc"  # path to the re_arc directory
 
 CPU_TIMEOUT_SECONDS = 10  # Maximum cpu time allowed for code execution
 WALL_TIMEOUT_SECONDS = 60  # Maximum wall time allowed for code execution

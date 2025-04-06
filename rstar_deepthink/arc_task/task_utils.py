@@ -57,13 +57,6 @@ def load_tasks(config: Config) -> list[ARCTask]:
 
         files = [f for f in files if os.path.splitext(f)[0] not in solved_set]
 
-    # Ensure we found at least one file
-    if not files:
-        logger.error(f"No JSON files found in directory '{config.data_folder}'.")
-        sys.exit(1)
-
-    logger.info(f"Found {len(files)} JSON files in '{config.data_folder}'")
-
     # Load each file as an ARCTask
     tasks = []
     for file_name in files:
@@ -73,5 +66,15 @@ def load_tasks(config: Config) -> list[ARCTask]:
 
     # tasks.sort(key=lambda t: len(task_to_prompt(t)))
     shuffle(tasks)
+
+    if config.num_tasks > 0:
+        tasks = tasks[:config.num_tasks]
+
+    # Ensure we found at least one file
+    if not tasks:
+        logger.error(f"No JSON files found in directory '{config.data_folder}'.")
+        sys.exit(1)
+
+    logger.info(f"Processing {len(tasks)} (randomly chosen) tasks from '{config.data_folder}'")
 
     return tasks

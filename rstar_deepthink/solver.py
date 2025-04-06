@@ -115,9 +115,10 @@ class Solver:
                 agent.select_next_step(from_root=True)
                 agent.update(rollout, temperature)
 
+            logger.info(f"----------------- Current Rollout: {rollout} ----------------- ({temperature}, {agents[0].example_name})")
+
             for step in range(self.config.max_depth):
-                logger.debug(f"----------------- Current Rollout: {rollout} -----------------")
-                logger.debug(f"----------------- Current Step: {step} -----------------")
+                logger.info(f"----------------- Current Step: {step} -----------------")
 
                 prompts, prompts_span, valid_agents, invalid_agents, expanded_agents = self.generate_preprocess(agents)
 

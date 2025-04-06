@@ -3,7 +3,7 @@ import logging
 import os
 from dataclasses import dataclass, field
 from typing import Optional
-from random import choices
+from random import choices, shuffle, sample
 
 import yaml
 
@@ -53,7 +53,8 @@ class Config:
     policy_temperature: float = 0.7  # Sampling temperature for LLM generation
     seed: int = 42  # Random seed for reproducibility
     deterministic: bool = False  # Whether to enforce deterministic behavior
-
+    
+    num_tasks: int = -1  # Number of tasks to process (-1 means all tasks)
     data_folder: str = DEFAULT_DATA_PATH  # Path to ARC task data
 
     search_mode: str = "bs"  # Search algorithm - "bs" for beam search, "mcts" for Monte Carlo Tree Search
@@ -128,7 +129,9 @@ class Config:
 
         # limit the number of examples and choose them randomly (with replacement)
         if self.num_examples > 0:
-            self.example_names = choices(self.example_names, k=self.num_examples)
+            self.example_names = sample(self.example_names, k=self.num_examples)
+
+        shuffle(self.example_names)
 
         # Handle search mode specific settings
         if self.search_mode == "bs":
