@@ -159,8 +159,6 @@ def main(config: Config):
                         if task_name and task_name in task_name_to_path:
                             required_task_names.add(task_name)
                             cleaned_data_cache.append(data)
-                            # TODO remove break
-                            break
                         elif task_name:
                             logger.warning(f"Task '{task_name}' from cleaned file not found in task directory scan.")
                     except json.JSONDecodeError:
