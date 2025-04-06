@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import sys
+from random import shuffle
 
 from constants import DEFAULT_EXAMPLE_DATA_PATH
 from rstar_deepthink.arc_task import ARCTask
@@ -70,6 +71,7 @@ def load_tasks(config: Config) -> list[ARCTask]:
         task = ARCTask(config, task_file_path)
         tasks.append(task)
 
-    tasks.sort(key=lambda t: len(task_to_prompt(t)))
+    # tasks.sort(key=lambda t: len(task_to_prompt(t)))
+    shuffle(tasks)
 
     return tasks
