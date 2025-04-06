@@ -5,87 +5,79 @@ import random
 import sys
 import argparse
 import pathlib
-from typing import Optional, Dict, List, Any
+from typing import Optional, Dict, List, Any, Set, Tuple
+from concurrent.futures import TimeoutError
+from pebble import ProcessPool
 
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if project_root not in sys.path:
     sys.path.append(project_root)
 
 from constants import NET_SCRATCH_TASK_DATA_DIR_PATH, NET_SCRATCH_RE_ARC_DATA_PATH
-
 from rstar_deepthink.config import Config
-from rstar_deepthink.arc_task import ARCTask  # Assuming ARCTask can load from path or dict
 from rstar_deepthink.tools import execute_code_with_task
 from utils import setup_logging
 
 logger = logging.getLogger(__name__)
 
 
-def load_arc_tasks(base_dir: str, config: Config) -> Dict[str, ARCTask]:
+def load_task_info(base_dir: str) -> Tuple[Dict[str, str], Dict[str, Set[str]]]:
     """
-    Recursively scans base_dir for .json files, loads them as ARCTask objects.
-    Returns a dictionary mapping task_name to ARCTask object.
+    Scans the base directory for .json files.
+    Returns:
+        - task_name_to_path (Dict[str, str]): Maps task name to its full file path.
+        - structure (Dict[str, Set[str]]): Maps subdir name ('training', etc.) to set of task names.
     """
-    tasks = {}
-    logger.info(f"Loading ARC tasks from base directory: {base_dir}")
-    if not os.path.isdir(base_dir):
-        logger.error(f"ARC task base directory not found: {base_dir}")
-        return tasks
+    task_name_to_path: Dict[str, str] = {}
+    structure: Dict[str, Set[str]] = {}
+    logger.info(f"Scanning task directory structure: {base_dir}")
+    base_path = pathlib.Path(base_dir)
 
-    count = 0
-    for filepath in pathlib.Path(base_dir).rglob('*.json'):
+    for filepath in base_path.rglob('*.json'):
         task_name = filepath.stem
-        try:
-            # Pass config to ARCTask constructor
-            tasks[task_name] = ARCTask(config=config, path=str(filepath))
-            count += 1
-        except Exception as e:
-            logger.error(f"Failed to load task {task_name} from {filepath}: {e}")
-    logger.info(f"Loaded {count} ARC tasks.")
-    return tasks
+        task_name_to_path[task_name] = str(filepath)
+
+        # Store structure (subdir -> task_names)
+        relative_dir = filepath.parent.relative_to(base_path)
+        subdir_key = str(relative_dir).split(os.path.sep)[0] if relative_dir.parts else '.'
+        if subdir_key not in structure:
+            structure[subdir_key] = set()
+        structure[subdir_key].add(task_name)
+
+    logger.info(f"Finished scanning. Found {len(task_name_to_path)} tasks in subdirectories: {list(structure.keys())}")
+    return task_name_to_path, structure
+
+
+def load_json_file(filepath: str) -> Optional[Any]:
+    """Loads JSON data from a single file."""
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        logger.error(f"File not found: {filepath}")
+    except json.JSONDecodeError:
+        logger.error(f"Invalid JSON in file: {filepath}")
+    except Exception as e:
+        logger.error(f"Error loading file {filepath}: {e}")
+    return None
 
 
 def load_rearc_examples(rearc_dir: str, task_name: str) -> Optional[List[Dict[str, Any]]]:
-    """
-    Loads reARC data for a specific task from {rearc_dir}/{task_name}.json.
-    Expects a JSON list of {"input": grid, "output": grid} dictionaries.
-    Returns the list of examples or None if not found or on error.
-    """
+    """Loads reARC data for a specific task."""
     rearc_file = os.path.join(rearc_dir, f"{task_name}.json")
-    try:
-        with open(rearc_file, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-
-            logger.debug(f"Loaded {len(data)} reARC examples for task {task_name}.")
-            return data
-    except json.JSONDecodeError:
-        logger.error(f"Failed to parse JSON from reARC file: {rearc_file}")
+    if not os.path.exists(rearc_file):
+        logger.debug(f"No reARC data file for task {task_name} at {rearc_file}")
         return None
-    except Exception as e:
-        logger.error(f"Error loading reARC file {rearc_file}: {e}")
-        return None
+    return load_json_file(rearc_file)
 
 
 def test_solution_on_rearc_example(solution_code: str, rearc_example: Dict[str, Any]) -> bool:
-    """
-    Tests if the given solution_code correctly solves a single reARC example.
-    Uses execute_code_with_task for validation.
-    """
+    """Tests a solution against a single reARC example."""
     try:
-        input_grid = rearc_example['input']
-        expected_output = rearc_example['output']
-
-        # Test the code against this single pair
-        error, passed, _ = execute_code_with_task(solution_code, [input_grid], [expected_output])
-
-        # Return True only if execution had no errors AND the example passed
+        error, passed, _ = execute_code_with_task(solution_code, [rearc_example['input']], [rearc_example['output']])
         return not error and passed
-    except KeyError:
-        logger.warning("Malformed reARC example dictionary passed to testing function.")
-        return False
-    except Exception as e:
-        logger.error(f"Error during solution testing on reARC example: {e}")
-        return False
+    except Exception:
+        return False  # Assume failure on any error
 
 
 def save_augmented_data(filepath: str, data: Dict):
@@ -97,143 +89,169 @@ def save_augmented_data(filepath: str, data: Dict):
         logger.error(f"Failed to write to augmented data file {filepath}: {e}")
 
 
-def main(config: Config):
-    """Main function to process cleaned data and generate augmented SFT data."""
-    setup_logging(config)
-    logger.info("Starting SFT data augmentation process ...")
+def process_augmentation_job(job_data: Tuple[str, str, Any, Dict[str, Any], int, str]) -> List[Dict]:
+    """Loads reARC, filters, generates, and returns augmented task data."""
+    task_name, solution_code, metadata, original_task_json, k, rearc_data_dir = job_data
+    augmented_results = []
 
-    sft_data_dir = config.sft_data_dir
+    rearc_examples = load_rearc_examples(rearc_data_dir, task_name)
+
+    if rearc_examples:
+        filtered_examples = [ex for ex in rearc_examples if test_solution_on_rearc_example(solution_code, ex)]
+        n = len(filtered_examples)
+
+        if n >= k > 0:
+            num_augmented_tasks = n // k
+            random.shuffle(filtered_examples)
+            original_test_json = original_task_json.get("test", [])
+
+            for i in range(num_augmented_tasks):
+                new_examples = filtered_examples[i * k: (i + 1) * k]
+                if len(new_examples) < k:
+                    break
+
+                new_train_examples = new_examples[:-1]
+                new_test_example = [new_examples[-1]]
+
+                new_task_json = {"train": new_train_examples, "test": new_test_example}
+                output_data = {
+                    "task_name": f"{task_name}_augmented_{i + 1}",
+                    "task_json": new_task_json,
+                    "solution": solution_code,
+                    "metadata": metadata
+                }
+                augmented_results.append(output_data)
+            logger.debug(f"Task '{task_name}' generated {num_augmented_tasks} augmentations.")
+
+    return augmented_results
+
+
+def main(config: Config):
+    """Main function orchestrating the efficient augmentation process."""
+    setup_logging(config)
+    logger.info("Starting SFT data augmentation process (Simplified)...")
+
+    # --- Define Paths ---
+    sft_data_dir = os.path.join(config.sft_data_dir, f"round_{config.round_number}")
     cleaned_file = os.path.join(sft_data_dir, "cleaned.jsonl")
+    cleaned_file = os.path.join(sft_data_dir, "curated_solutions.jsonl")
     augmented_file = os.path.join(sft_data_dir, "augmented.jsonl")
     arc_tasks_base_dir = NET_SCRATCH_TASK_DATA_DIR_PATH
-    arc_training_dir = os.path.join(arc_tasks_base_dir, "training")
     rearc_data_dir = NET_SCRATCH_RE_ARC_DATA_PATH
 
-    logger.debug(f"Cleaned SFT input file: {cleaned_file}")
-    logger.debug(f"Augmented SFT output file: {augmented_file}")
-    logger.debug(f"Original ARC task base directory: {arc_tasks_base_dir}")
-    logger.debug(f"Original ARC training directory: {arc_training_dir}")
-    logger.debug(f"reARC data directory: {rearc_data_dir}")
+    # --- Scan Task Directory & Load Cleaned Data ---
+    task_name_to_path, directory_structure = load_task_info(arc_tasks_base_dir)
+    training_task_names = directory_structure.get('training', set())
 
-    all_arc_tasks = load_arc_tasks(arc_tasks_base_dir, config)
-    training_names = set(os.path.splitext(file_name) for file_name in os.listdir(arc_training_dir))
+    cleaned_data_cache: List[Dict] = []
+    required_task_names: Set[str] = set()
+    try:
+        with open(cleaned_file, 'r', encoding='utf-8') as infile:
+            for line in infile:
+                if line.strip():
+                    try:
+                        data = json.loads(line)
+                        task_name = data.get("task_name")
+                        if task_name and task_name in task_name_to_path:
+                            required_task_names.add(task_name)
+                            cleaned_data_cache.append(data)
+                            # TODO remove break
+                            break
+                        elif task_name:
+                            logger.warning(f"Task '{task_name}' from cleaned file not found in task directory scan.")
+                    except json.JSONDecodeError:
+                        logger.warning(f"Skipping invalid JSON in cleaned file: {line.strip()}")
+    except FileNotFoundError:
+        logger.error(f"Cleaned input file not found: {cleaned_file}")
+        sys.exit(1)
 
-    # --- Process Cleaned Data ---
-    processed_lines = 0
-    augmented_tasks_saved = 0
+    logger.info(f"Found {len(cleaned_data_cache)} cleaned solutions for {len(required_task_names)} existing tasks.")
 
-    # Overwrite augmented file at the start
+    # --- Prepare Augmentation Jobs & Save Originals ---
+    augmentation_jobs = []
+    original_tasks_saved = 0
+
+    # Overwrite augmented file
     try:
         with open(augmented_file, 'w') as f:
-            logger.info(f"Cleared/Created output file: {augmented_file}")
+            pass  # Just create/clear
+        logger.info(f"Cleared/Created output file: {augmented_file}")
     except IOError as e:
         logger.error(f"Could not open or clear output file {augmented_file}: {e}")
         sys.exit(1)
 
-    try:
-        with open(cleaned_file, 'r', encoding='utf-8') as infile:
-            for line_num, line in enumerate(infile):
-                processed_lines += 1
-                if not line.strip():
-                    continue
+    for data in cleaned_data_cache:
+        task_name = data["task_name"]  # Assumed to exist now
+        solution_code = data["solution_code"]
+        metadata = data.get("metadata")
 
-                try:
-                    data = json.loads(line)
-                    task_name = data.get("task_name")
-                    solution_code = data.get("solution_code")
-                    metadata = data.get("metadata")  # Keep metadata
+        original_task_json = load_json_file(task_name_to_path[task_name])
+        if not original_task_json:
+            logger.warning(f"Could not load original task JSON for '{task_name}' - skipping.")
+            continue
 
-                    logger.info(f"Processing task {task_name}")
+        # Save the original task data
+        output_data_original = {
+            "task_name": task_name,
+            "task_json": original_task_json,
+            "solution": solution_code,
+            "metadata": metadata
+        }
+        save_augmented_data(augmented_file, output_data_original)
+        original_tasks_saved += 1
 
-                    original_task = all_arc_tasks.get(task_name)
+        # If Training Task, prepare job
+        if task_name in training_task_names:
+            k = len(original_task_json.get('train', [])) + len(original_task_json.get('test', []))
+            job = (task_name, solution_code, metadata, original_task_json, k, rearc_data_dir)
+            augmentation_jobs.append(job)
 
-                    is_training = original_task.name in training_names
+    logger.info(f"Saved {original_tasks_saved} original task entries.")
+    logger.info(f"Prepared {len(augmentation_jobs)} augmentation jobs for parallel processing.")
 
-                    # --- Always save the original task data first for all tasks ---
-                    # This ensures every solution from cleaned.jsonl has at least one entry in augmented.jsonl
-                    output_data_original = {
-                        "task_name": task_name,
-                        "task_json": original_task.json_data,
-                        "solution": solution_code,
-                        "metadata": metadata
-                    }
-                    save_augmented_data(augmented_file, output_data_original)
+    # --- Parallel Augmentation ---
+    augmented_tasks_saved_count = 0
+    if augmentation_jobs:
+        num_workers = max(1, config.cpus - 1 if config.cpus > 1 else 1)
+        logger.info(f"Starting parallel augmentation using {num_workers} workers...")
+        task_timeout = 600  # Seconds per job
 
-                    # --- If Training Task, attempt augmentation ---
-                    if is_training:
-                        logger.info(f"Processing training task '{task_name}' for augmentation ...")
-                        rearc_examples = load_rearc_examples(rearc_data_dir, task_name)
+        all_augmented_results = []
+        try:
+            with ProcessPool(max_workers=num_workers) as pool:
+                future = pool.map(process_augmentation_job, augmentation_jobs, timeout=task_timeout)
+                results_iterator = future.result()
+                processed_jobs = 0
+                while True:
+                    try:
+                        augmented_data_list = next(results_iterator)
+                        all_augmented_results.extend(augmented_data_list)
+                        processed_jobs += 1
+                        logger.info(f"Completed processing {processed_jobs}/{len(augmentation_jobs)} augmentation jobs...")
+                    except StopIteration:
+                        break
+                    except TimeoutError as error:
+                        logger.error(f"Job timed out after {error.args[1]}s. Skipping results for that task.")
+                    except Exception as error:
+                        logger.error(f"Job failed: {error}", exc_info=False)  # Less verbose error for worker failure
 
-                        if rearc_examples:
-                            # Filter reARC examples: only keep those the solution solves
-                            logger.debug(f"Filtering {len(rearc_examples)} reARC examples for task '{task_name}'...")
-                            filtered_examples = [
-                                ex for ex in rearc_examples
-                                if test_solution_on_rearc_example(solution_code, ex)
-                            ]
-                            logger.debug(f"Found {len(filtered_examples)} valid reARC examples for task '{task_name}'.")
+            logger.info(f"Finished parallel processing. Saving {len(all_augmented_results)} augmented entries...")
+            for augmented_data in all_augmented_results:
+                save_augmented_data(augmented_file, augmented_data)
+                augmented_tasks_saved_count += 1
+            logger.info(f"Saved {augmented_tasks_saved_count} augmented entries.")
 
-                            # Determine k (num original training examples)
-                            k = len(original_task.training_examples) + len(original_task.test_examples)
-                            n = len(filtered_examples)
+        except Exception as e:
+            logger.error(f"Error during parallel pool execution: {e}", exc_info=True)
 
-                            if n < k:
-                                logger.warning(
-                                    f"Task '{task_name}': Not enough valid reARC examples ({n}) to match original training examples ({k}). No augmentation performed.")
-                            else:
-                                # Proceed with augmentation
-                                num_augmented_tasks = n // k
-                                logger.info(
-                                    f"Task '{task_name}': Found {n} valid reARC examples (k={k}). Generating {num_augmented_tasks} augmented tasks.")
-                                random.shuffle(filtered_examples)
-
-                                for i in range(num_augmented_tasks):
-                                    # Select k examples for the new 'train' part
-                                    new_examples = filtered_examples[i * k: (i + 1) * k]
-
-                                    # Create the new task JSON
-                                    new_task_json = {
-                                        "train": new_examples[:-1],  # All but the last example
-                                        "test": [new_examples[-1]]  # the last example is the test
-                                    }
-
-                                    # Format and save
-                                    output_data_augmented = {
-                                        "task_name": f"{task_name}_augmented_{i + 1}",
-                                        "task_json": new_task_json,
-                                        "solution": solution_code,
-                                        "metadata": metadata
-                                    }
-                                    save_augmented_data(augmented_file, output_data_augmented)
-                                    augmented_tasks_saved += 1  # Count each augmented save
-
-                                    exit()
-
-                        else:
-                            logger.warning(
-                                f"No reARC data found for training task '{task_name}'. Only original task saved.")
-
-                except json.JSONDecodeError:
-                    logger.warning(f"Skipping line {line_num + 1}: Invalid JSON.")
-                except Exception as e:
-                    logger.error(f"Error processing line {line_num + 1}: {e}", exc_info=True)
-
-                logger.debug(f"Processed {line_num + 1} lines from cleaned file. Saved {augmented_tasks_saved} entries so far.")
-
-    except FileNotFoundError:
-        logger.error(f"Input file not found: {cleaned_file}")
-        sys.exit(1)
-    except Exception as e:
-        logger.error(f"An unexpected error occurred during processing: {e}", exc_info=True)
-
-    logger.info(f"Finished augmentation. Processed {processed_lines} lines from cleaned file.")
-    logger.info(f"Total entries saved to augmented file: {augmented_tasks_saved}")
+    logger.info(f"--- Augmentation Summary ---")
+    logger.info(f"Total original entries saved: {original_tasks_saved}")
+    logger.info(f"Total augmented entries generated & saved: {augmented_tasks_saved_count}")
+    logger.info(f"Total entries in augmented file: {original_tasks_saved + augmented_tasks_saved_count}")
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Augment SFT data for rSTAR-ARC.')
+    parser = argparse.ArgumentParser(description='Augment SFT data for rSTAR-ARC (Simplified).')
     args = parser.parse_args()
-
     config_instance = Config()
-
     main(config_instance)
