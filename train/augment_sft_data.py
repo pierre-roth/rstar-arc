@@ -143,6 +143,8 @@ def main(config: Config):
                     solution_code = data.get("solution_code")
                     metadata = data.get("metadata")  # Keep metadata
 
+                    logger.info(f"Processing task {task_name}")
+
                     original_task = all_arc_tasks.get(task_name)
 
                     is_training = original_task.name in training_names
@@ -159,7 +161,7 @@ def main(config: Config):
 
                     # --- If Training Task, attempt augmentation ---
                     if is_training:
-                        logger.info(f"Processing training task '{task_name}' for augmentation...")
+                        logger.info(f"Processing training task '{task_name}' for augmentation ...")
                         rearc_examples = load_rearc_examples(rearc_data_dir, task_name)
 
                         if rearc_examples:
