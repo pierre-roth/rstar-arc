@@ -1,13 +1,16 @@
+import argparse
 import json
 import logging
 import os
+import pathlib
 import random
 import sys
-import argparse
-import pathlib
-from typing import Optional, Dict, List, Any, Set, Tuple
 from concurrent.futures import TimeoutError
+from typing import Optional, Dict, List, Any, Set, Tuple
+
 from pebble import ProcessPool
+
+from rstar_deepthink.tools.python_tool import remove_markers
 
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if project_root not in sys.path:
@@ -74,7 +77,8 @@ def load_rearc_examples(rearc_dir: str, task_name: str) -> Optional[List[Dict[st
 def test_solution_on_rearc_example(solution_code: str, rearc_example: Dict[str, Any]) -> bool:
     """Tests a solution against a single reARC example."""
     try:
-        error, passed, _ = execute_code_with_task(solution_code, [rearc_example['input']], [rearc_example['output']])
+        error, passed, _ = execute_code_with_task(remove_markers(solution_code), [rearc_example['input']],
+                                                  [rearc_example['output']])
         return not error and passed
     except Exception:
         return False  # Assume failure on any error
@@ -99,6 +103,7 @@ def process_augmentation_job(job_data: Tuple[str, str, Any, Dict[str, Any], int,
     if rearc_examples:
         filtered_examples = [ex for ex in rearc_examples if test_solution_on_rearc_example(solution_code, ex)]
         n = len(filtered_examples)
+        logger.debug(f"{task_name}: out of {len(rearc_examples)} reARC examples, {n} passed the test.")
 
         if n >= k > 0:
             num_augmented_tasks = n // k
@@ -227,7 +232,8 @@ def main(config: Config):
                         augmented_data_list = next(results_iterator)
                         all_augmented_results.extend(augmented_data_list)
                         processed_jobs += 1
-                        logger.info(f"Completed processing {processed_jobs}/{len(augmentation_jobs)} augmentation jobs...")
+                        logger.info(
+                            f"Completed processing {processed_jobs}/{len(augmentation_jobs)} augmentation jobs...")
                     except StopIteration:
                         break
                     except TimeoutError as error:
