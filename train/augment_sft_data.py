@@ -10,8 +10,6 @@ from typing import Optional, Dict, List, Any, Set, Tuple
 
 from pebble import ProcessPool
 
-from rstar_deepthink.tools.python_tool import remove_markers
-
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if project_root not in sys.path:
     sys.path.append(project_root)
@@ -19,6 +17,7 @@ if project_root not in sys.path:
 from constants import NET_SCRATCH_TASK_DATA_DIR_PATH, NET_SCRATCH_RE_ARC_DATA_PATH
 from rstar_deepthink.config import Config
 from rstar_deepthink.tools import execute_code_with_task
+from rstar_deepthink.tools.python_tool import remove_markers
 from utils import setup_logging
 
 logger = logging.getLogger(__name__)
