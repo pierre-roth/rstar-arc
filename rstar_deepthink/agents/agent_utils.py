@@ -45,7 +45,10 @@ def temperature_lerp(current_rollout, max_rollouts, min_temp, max_temp):
       The calculated temperature for the current rollout.
     """
 
-    return min_temp + (max_temp - min_temp) * (current_rollout / max_rollouts)
+    if max_rollouts == 1:
+        return (min_temp + max_temp) / 2
+
+    return min_temp + (max_temp - min_temp) * (current_rollout / (max_rollouts - 1))
 
 
 def temperature_beta_cdf(current_rollout, max_rollouts, min_temp, max_temp, target_fraction=0.5, concentration=0.75):
