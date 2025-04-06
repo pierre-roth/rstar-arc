@@ -3,6 +3,7 @@ import logging
 import os
 from dataclasses import dataclass, field
 from typing import Optional
+from random import choices
 
 import yaml
 
@@ -28,6 +29,7 @@ class Config:
     numeric_log_level: Optional[int] = None  # Numeric logging level (set automatically)
     model_initialization_times = {"policy": None, "reward": None}  # Time taken to initialize models
 
+    num_examples: int = -1  # Number of examples to use for training (default: all)
     example_names: list[list[str]] = field(default_factory=lambda: [["6d0aefbc", "1cf80156"], ["1cf80156",
                                                                                                "00d62c1b"]])  # list of names of example tasks (to be used sequentially in different rollouts)
     rotate_example: bool = False  # Whether to rotate the example tasks in each rollout
@@ -123,6 +125,10 @@ class Config:
         self.numeric_log_level = getattr(logging, self.log_level.upper(), logging.DEBUG)
 
         self.search_mode = self.search_mode.lower()
+
+        # limit the number of examples and choose them randomly (with replacement)
+        if self.num_examples > 0:
+            self.example_names = choices(self.example_names, k=self.num_examples)
 
         # Handle search mode specific settings
         if self.search_mode == "bs":
