@@ -207,6 +207,8 @@ def main(config: Config):
                                     save_augmented_data(augmented_file, output_data_augmented)
                                     augmented_tasks_saved += 1  # Count each augmented save
 
+                                    exit()
+
                         else:
                             logger.warning(
                                 f"No reARC data found for training task '{task_name}'. Only original task saved.")

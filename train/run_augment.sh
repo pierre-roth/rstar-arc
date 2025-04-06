@@ -4,7 +4,7 @@
 #SBATCH --error=/itet-stor/piroth/net_scratch/outputs/jobs/%j.err # Keep minimal SLURM logging
 #SBATCH --mem=64G
 #SBATCH --nodes=1
-#SBATCH --cpus-per-task=32
+#SBATCH --cpus-per-task=4
 
 
 # Default application parameters
