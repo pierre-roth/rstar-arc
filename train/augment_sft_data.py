@@ -83,13 +83,17 @@ def test_solution_on_rearc_example(solution_code: str, rearc_example: Dict[str, 
         return False  # Assume failure on any error
 
 
-def save_augmented_data(filepath: str, data: Dict):
-    """Appends a JSON line to the output file."""
+def write_batch_data(filepath: str, data_batch: List[Dict]):
+    """Writes a batch of JSON lines to the output file."""
+    if not data_batch:
+        return
+
     try:
         with open(filepath, 'a', encoding='utf-8') as f:
-            f.write(json.dumps(data) + '\n')
+            for data in data_batch:
+                f.write(json.dumps(data) + '\n')
     except IOError as e:
-        logger.error(f"Failed to write to augmented data file {filepath}: {e}")
+        logger.error(f"Failed to write batch to augmented data file {filepath}: {e}")
 
 
 def process_augmentation_job(job_data: Tuple[str, str, Dict[str, Any], int, str]) -> List[Dict]:
@@ -169,7 +173,7 @@ def main(config: Config):
 
     # --- Prepare Augmentation Jobs & Save Originals ---
     augmentation_jobs = []
-    original_tasks_saved = 0
+    original_task_batch = []
 
     # Overwrite augmented file
     try:
@@ -180,6 +184,9 @@ def main(config: Config):
         logger.error(f"Could not open or clear output file {augmented_file}: {e}")
         sys.exit(1)
 
+    original_tasks_saved = 0
+    BATCH_SIZE = 1000  # Define a reasonable batch size for writing operations
+
     for data in cleaned_data_cache:
         task_name = data["task_name"]  # Assumed to exist now
         solution_code = data["solution_code"]
@@ -189,20 +196,29 @@ def main(config: Config):
             logger.warning(f"Could not load original task JSON for '{task_name}' - skipping.")
             continue
 
-        # Save the original task data
+        # Prepare the original task data
         output_data_original = {
             "task_name": task_name,
             "task_json": original_task_json,
             "solution": solution_code,
         }
-        save_augmented_data(augmented_file, output_data_original)
+        original_task_batch.append(output_data_original)
         original_tasks_saved += 1
+
+        # Batch write when we reach BATCH_SIZE
+        if len(original_task_batch) >= BATCH_SIZE:
+            write_batch_data(augmented_file, original_task_batch)
+            original_task_batch = []
 
         # If Training Task, prepare job
         if task_name in training_task_names:
             k = len(original_task_json.get('train', [])) + len(original_task_json.get('test', []))
             job = (task_name, solution_code, original_task_json, k, rearc_data_dir)
             augmentation_jobs.append(job)
+
+    # Write any remaining original task entries
+    if original_task_batch:
+        write_batch_data(augmented_file, original_task_batch)
 
     logger.info(f"Saved {original_tasks_saved} original task entries.")
     logger.info(f"Prepared {len(augmentation_jobs)} augmentation jobs for parallel processing.")
@@ -214,7 +230,7 @@ def main(config: Config):
         logger.info(f"Starting parallel augmentation using {num_workers} workers...")
         task_timeout = 600  # Seconds per job
 
-        all_augmented_results = []
+        augmented_results_batch = []
         try:
             with ProcessPool(max_workers=num_workers) as pool:
                 future = pool.map(process_augmentation_job, augmentation_jobs, timeout=task_timeout)
@@ -223,8 +239,15 @@ def main(config: Config):
                 while True:
                     try:
                         augmented_data_list = next(results_iterator)
-                        all_augmented_results.extend(augmented_data_list)
+                        augmented_results_batch.extend(augmented_data_list)
+                        augmented_tasks_saved_count += len(augmented_data_list)
                         processed_jobs += 1
+
+                        # Batch write when we reach BATCH_SIZE
+                        if len(augmented_results_batch) >= BATCH_SIZE:
+                            write_batch_data(augmented_file, augmented_results_batch)
+                            augmented_results_batch = []
+
                         logger.info(
                             f"Completed processing {processed_jobs}/{len(augmentation_jobs)} augmentation jobs...")
                     except StopIteration:
@@ -234,11 +257,11 @@ def main(config: Config):
                     except Exception as error:
                         logger.error(f"Job failed: {error}", exc_info=False)  # Less verbose error for worker failure
 
-            logger.info(f"Finished parallel processing. Saving {len(all_augmented_results)} augmented entries...")
-            for augmented_data in all_augmented_results:
-                save_augmented_data(augmented_file, augmented_data)
-                augmented_tasks_saved_count += 1
-            logger.info(f"Saved {augmented_tasks_saved_count} augmented entries.")
+            # Write any remaining augmented entries
+            if augmented_results_batch:
+                write_batch_data(augmented_file, augmented_results_batch)
+
+            logger.info(f"Finished parallel processing. Saved {augmented_tasks_saved_count} augmented entries.")
 
         except Exception as e:
             logger.error(f"Error during parallel pool execution: {e}", exc_info=True)
