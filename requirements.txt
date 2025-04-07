@@ -21,3 +21,4 @@ plotly
 igraph
 Pygments
 scipy
+peft

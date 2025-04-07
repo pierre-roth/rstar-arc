@@ -132,7 +132,7 @@ def process_augmentation_job(job_data: Tuple[str, str, Any, Dict[str, Any], int,
 
 def main(config: Config):
     """Main function orchestrating the efficient augmentation process."""
-    setup_logging(config)
+    setup_logging(config.numeric_log_level)
     logger.info("Starting SFT data augmentation process (Simplified)...")
 
     # --- Define Paths ---

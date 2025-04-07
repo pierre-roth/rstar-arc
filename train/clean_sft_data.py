@@ -93,7 +93,7 @@ def main():
     config.batch_size = max(1, config.cpus)  # Leave one CPU for main thread
 
     # Assuming setup_logging configures the root logger or specific loggers
-    setup_logging(config)
+    setup_logging(config.numeric_log_level)
 
     # Define file paths
     sft_data_dir = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{config.round_number}")

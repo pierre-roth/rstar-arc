@@ -36,7 +36,7 @@ def batch(iterable, n=-1):
         yield chunk
 
 
-def setup_logging(config: Config):
+def setup_logging(numeric_log_level: int):
     """
     Set up the logging configuration based on settings.
 
@@ -46,7 +46,7 @@ def setup_logging(config: Config):
 
     # Create logger
     _logger = logging.getLogger()
-    _logger.setLevel(config.numeric_log_level)
+    _logger.setLevel(numeric_log_level)
 
     # Clear any existing handlers
     for handler in _logger.handlers[:]:

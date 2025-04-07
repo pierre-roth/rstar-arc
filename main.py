@@ -17,7 +17,7 @@ if __name__ == '__main__':
     config = Config()
 
     # Setup logging
-    setup_logging(config)
+    setup_logging(config.numeric_log_level)
 
     # Job start info logging
     logging.info(f"Starting job with {config}")
