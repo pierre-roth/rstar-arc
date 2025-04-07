@@ -2,9 +2,9 @@ import logging
 import math
 import os
 import sys
-import wandb  # Added wandb import
 
 import torch
+import wandb
 from datasets import load_dataset
 from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training, PeftModel
 from transformers import (
@@ -13,8 +13,7 @@ from transformers import (
     BitsAndBytesConfig,
     TrainingArguments,
     Trainer,
-    DataCollatorForLanguageModeling,
-    EvalPrediction,
+    DataCollatorForLanguageModeling
 )
 
 # --- Setup Logging ---
@@ -210,19 +209,6 @@ logger.info("Trainable parameters overview:")
 model.print_trainable_parameters()
 
 
-# --- Define Compute Metrics Function ---
-def compute_metrics(eval_pred: EvalPrediction):
-    """Computes perplexity from evaluation loss."""
-    # The Trainer calculates eval_loss automatically
-    loss = eval_pred.metrics.get("eval_loss")
-    if loss is not None:
-        perplexity = math.exp(loss)
-        return {"perplexity": perplexity, "eval_loss": loss}  # Return both loss and perplexity
-    else:
-        logger.warning("compute_metrics did not receive eval_loss. Cannot calculate perplexity.")
-        return {}  # Return empty if loss isn't available
-
-
 # --- Initialize wandb ---
 logger.info("Initializing wandb...")
 wandb.init(
@@ -288,7 +274,6 @@ trainer = Trainer(
     eval_dataset=tokenized_datasets["validation"],
     tokenizer=tokenizer,
     data_collator=data_collator,
-    compute_metrics=compute_metrics,  # Pass the custom metrics function
 )
 logger.info("Trainer initialized.")
 
