@@ -72,7 +72,7 @@ training_arguments = TrainingArguments(
     save_total_limit=2,  # Keep only the last 2 checkpoints
     fp16=False,  # Use bf16 for training with Ampere+ GPUs
     bf16=True,  # Set to True if your GPU supports bfloat16 (recommended)
-    report_to="tensorboard",  # Or "wandb" or "none"
+    # report_to="tensorboard",  # Or "wandb" or "none"
     gradient_checkpointing=True,  # Saves memory, but slows down training slightly
     gradient_checkpointing_kwargs={'use_reentrant': False},  # Recommended for newer PyTorch versions
     # You might need to add evaluation args if you have a validation set:
