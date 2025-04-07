@@ -27,7 +27,7 @@ from constants import NET_SCRATCH_PATH
 MODEL_ID = "Qwen/Qwen2.5-Coder-0.5B"  # The specific model from Hugging Face Hub
 DATASET_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{0}", "augmented.jsonl")
 OUTPUT_DIR = os.path.join(NET_SCRATCH_PATH, "models", "fine_tuned", "policy")  # Directory to save the trained adapter
-MAX_SEQ_LENGTH = 6144  # Adjust based on your data and GPU memory
+MAX_SEQ_LENGTH = 4096  # Adjust based on your data and GPU memory
 
 # --- QLoRA Configuration (for efficiency) ---
 # Use 4-bit quantization to reduce memory footprint
@@ -60,7 +60,7 @@ lora_config = LoraConfig(
 # --- Training Arguments ---
 training_arguments = TrainingArguments(
     output_dir=OUTPUT_DIR,
-    per_device_train_batch_size=2,  # Adjust based on GPU memory (start small)
+    per_device_train_batch_size=1,  # Adjust based on GPU memory (start small)
     gradient_accumulation_steps=4,  # Increase effective batch size (batch_size * grad_accum)
     optim="paged_adamw_8bit",  # Optimizer suitable for QLoRA
     learning_rate=2e-4,  # Learning rate for LoRA
