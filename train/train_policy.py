@@ -105,6 +105,7 @@ training_arguments = TrainingArguments(
     report_to="wandb",  # Use Weights & Biases
     gradient_checkpointing=True,  # Save memory during training
     gradient_checkpointing_kwargs={'use_reentrant': False},  # Recommended setting
+
     evaluation_strategy="steps",  # Evaluate every eval_steps
     eval_steps=100,  # Evaluation frequency (match save_steps is common)
     per_device_eval_batch_size=1,  # Can often be larger than train batch size
@@ -359,7 +360,7 @@ try:
 
     # Load a few raw validation examples
     raw_validation_dataset = load_dataset("json", data_files={"validation": VALIDATION_DATASET_PATH})["validation"]
-    num_samples_to_check = 3  # Number of samples to generate for
+    num_samples_to_check = 2  # Number of samples to generate for
 
     # Create a table to log sample predictions
     prediction_table = wandb.Table(columns=["sample_id", "prompt", "actual_solution", "generated_solution"])
