@@ -98,7 +98,7 @@ print(f"Tokenizer loaded. Pad token ID: {tokenizer.pad_token_id}")
 # for causal language modeling.
 def preprocess_data(examples):
     # Combine prompt and completion, adding EOS token at the end
-    texts = [task_to_prompt(ARCTask.from_dict(example["task_json"])) + example["solution"] for example in examples]
+    texts = [task_to_prompt(ARCTask.from_dict(task_json)) + solution for task_json, solution in zip(examples["task_json"], examples["solution"])]
     # Tokenize the combined texts
     # Ensure truncation to handle sequences longer than max_length
     model_inputs = tokenizer(
