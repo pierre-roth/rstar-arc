@@ -276,4 +276,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Augment SFT data for rSTAR-ARC (Simplified).')
     args = parser.parse_args()
     config_instance = Config()
+    # set log higher to INFO
+    config_instance.numeric_log_level = logging.INFO
     main(config_instance)
