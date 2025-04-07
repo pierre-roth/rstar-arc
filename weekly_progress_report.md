@@ -209,9 +209,13 @@
 - **Work done**:
   - rollout-index based examples ("rotating examples")
   - variable temperature rollouts (lerp and beta CDF)
-  - enhanced quality and quantity of handwritten examples (total of 23 examples)
+  - enhanced quality and quantity of handwritten examples (total of 30+ examples, some left out of training)
   - finished designing custom agent for first round (in custom.py))
-  - 
+  - did a lot of testing and SFT-data saving
+  - implemented solution metadata saving
+  - some slight modifications to the data cleaning code
+  - implemented the data augmentation code
+  - wrote SFT code and did some minimal testing with 0.5B parameter model
   - 
 
 
