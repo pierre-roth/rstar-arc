@@ -1,9 +1,12 @@
+import logging
+import math
 import os
 import sys
+import wandb  # Added wandb import
 
 import torch
 from datasets import load_dataset
-from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
+from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training, PeftModel
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
@@ -11,156 +14,272 @@ from transformers import (
     TrainingArguments,
     Trainer,
     DataCollatorForLanguageModeling,
+    EvalPrediction,
 )
 
-# Add project root to Python path
+# --- Setup Logging ---
+# Configure logging to output to console and optionally to a file
+logging.basicConfig(
+    level=logging.INFO,  # Log INFO level messages and above
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+    handlers=[
+        logging.StreamHandler(sys.stdout),  # Log to console
+    ]
+)
+
+logger = logging.getLogger(__name__)  # Get logger for this module
+
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from rstar_deepthink.arc_task import ARCTask
-from rstar_deepthink.arc_task.task_utils import task_to_prompt
-from constants import NET_SCRATCH_PATH
+from rstar_deepthink.arc_task import ARCTask  # Example import
+from rstar_deepthink.arc_task.task_utils import task_to_prompt  # Example import
+from constants import NET_SCRATCH_PATH  # Example import
 
+logger.info("Project root added to path and custom modules imported.")
 
 # --- Configuration ---
-MODEL_ID = "Qwen/Qwen2.5-Coder-0.5B"  # The specific model from Hugging Face Hub
+logger.info("--- Configuration ---")
+MODEL_ID = "Qwen/Qwen2.5-Coder-0.5B"
 # TODO: change file name to 'augmented.jsonl'
 TRAINING_DATASET_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{0}", "test_small.jsonl")
 VALIDATION_DATASET_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{0}", "validation.jsonl")
-OUTPUT_DIR = os.path.join(NET_SCRATCH_PATH, "models", "fine_tuned", "policy")  # Directory to save the trained adapter
+OUTPUT_DIR = os.path.join(NET_SCRATCH_PATH, "models", "fine_tuned", "policy")
 MAX_SEQ_LENGTH = 4096  # Adjust based on your data and GPU memory
+WANDB_PROJECT = "deepthink-sft"  # Added wandb project name
+WANDB_ENTITY = None  # Set to your team name or username if needed
+
+logger.info(f"MODEL_ID: {MODEL_ID}")
+logger.info(f"TRAINING_DATASET_PATH: {TRAINING_DATASET_PATH}")
+logger.info(f"VALIDATION_DATASET_PATH: {VALIDATION_DATASET_PATH}")
+logger.info(f"OUTPUT_DIR: {OUTPUT_DIR}")
+logger.info(f"MAX_SEQ_LENGTH: {MAX_SEQ_LENGTH}")
+logger.info(f"WANDB_PROJECT: {WANDB_PROJECT}")
 
 # --- QLoRA Configuration (for efficiency) ---
-# Use 4-bit quantization to reduce memory footprint
 bnb_config = BitsAndBytesConfig(
     load_in_4bit=True,
-    bnb_4bit_quant_type="nf4",  # Use NF4 quantization
-    bnb_4bit_compute_dtype=torch.bfloat16,  # Use bfloat16 for computation
-    bnb_4bit_use_double_quant=True,  # Optional, can improve quality slightly
+    bnb_4bit_quant_type="nf4",
+    bnb_4bit_compute_dtype=torch.bfloat16,
+    bnb_4bit_use_double_quant=True,
 )
+logger.info(
+    f"BitsAndBytesConfig: load_in_4bit={bnb_config.load_in_4bit}, quant_type={bnb_config.bnb_4bit_quant_type}, compute_dtype={bnb_config.bnb_4bit_compute_dtype}")
 
 # --- LoRA Configuration (specify which layers to adapt) ---
 lora_config = LoraConfig(
-    r=16,  # Rank of the update matrices. Lower = fewer parameters, faster training
-    lora_alpha=32,  # Alpha parameter for scaling. Common practice: alpha = 2*r
-    # Specify modules to target. Common for Qwen-like models:
+    r=16,
+    lora_alpha=32,
     target_modules=[
-        "q_proj",
-        "k_proj",
-        "v_proj",
-        "o_proj",
-        "gate_proj",
-        "up_proj",
-        "down_proj",
+        "q_proj", "k_proj", "v_proj", "o_proj",
+        "gate_proj", "up_proj", "down_proj",
     ],
-    lora_dropout=0.05,  # Dropout probability for LoRA layers
-    bias="none",  # Usually set to 'none' for LoRA
-    task_type="CAUSAL_LM",  # Specify the task type
+    lora_dropout=0.05,
+    bias="none",
+    task_type="CAUSAL_LM",
 )
+logger.info(
+    f"LoraConfig: r={lora_config.r}, alpha={lora_config.lora_alpha}, dropout={lora_config.lora_dropout}, target_modules={lora_config.target_modules}")
 
 # --- Training Arguments ---
+run_name = f"{MODEL_ID.split('/')[-1]}-finetune-{os.path.basename(TRAINING_DATASET_PATH).split('.')[0]}"
 training_arguments = TrainingArguments(
     output_dir=OUTPUT_DIR,
-    per_device_train_batch_size=1,  # Adjust based on GPU memory (start small)
-    gradient_accumulation_steps=4,  # Increase effective batch size (batch_size * grad_accum)
-    optim="paged_adamw_8bit",  # Optimizer suitable for QLoRA
-    learning_rate=2e-4,  # Learning rate for LoRA
-    lr_scheduler_type="cosine",  # Learning rate scheduler
-    num_train_epochs=1,  # Start with 1 epoch, increase if needed
-    warmup_ratio=0.03,  # Warmup steps proportion
-    logging_steps=50,  # Log metrics every N steps
-    save_steps=100,  # Save checkpoint every N steps
+    per_device_train_batch_size=1,  # Keep small for small models/memory
+    gradient_accumulation_steps=4,  # Effective batch size = 1 * 4 = 4
+    optim="paged_adamw_8bit",
+    learning_rate=2e-4,
+    lr_scheduler_type="cosine",
+    num_train_epochs=1,  # Start with 1, increase if needed
+    warmup_ratio=0.03,
+    logging_strategy="steps",  # Log metrics every logging_steps
+    logging_steps=10,  # Log training loss frequently
+    logging_first_step=True,  # Log metrics for the very first step
+    save_strategy="steps",  # Save checkpoints every save_steps
+    save_steps=100,  # Save checkpoint frequency
     save_total_limit=2,  # Keep only the last 2 checkpoints
-    fp16=False,  # Use bf16 for training with Ampere+ GPUs
-    bf16=True,  # Set to True if your GPU supports bfloat16 (recommended)
-    # report_to="tensorboard",  # Or "wandb" or "none"
-    gradient_checkpointing=True,  # Saves memory, but slows down training slightly
-    gradient_checkpointing_kwargs={'use_reentrant': False},  # Recommended for newer PyTorch versions
-
-    evaluation_strategy="steps",  # Evaluate every `eval_steps`
-    eval_steps=100,  # How often to evaluate (can match save_steps or be different)
-    per_device_eval_batch_size=1,  # Batch size for evaluation (can often be larger than train)
-    load_best_model_at_end=True,  # Load the best checkpoint (based on metric_for_best_model) at the end
-    metric_for_best_model="eval_loss",  # Metric to determine the best model (lower loss is better)
-    greater_is_better=False,  # Set to True if using a metric like accuracy where higher is better
+    fp16=False,  # Disable fp16 if using bf16
+    bf16=True,  # Enable bf16 for Ampere+ GPUs (preferred)
+    report_to="wandb",  # Use Weights & Biases
+    gradient_checkpointing=True,  # Save memory during training
+    gradient_checkpointing_kwargs={'use_reentrant': False},  # Recommended setting
+    evaluation_strategy="steps",  # Evaluate every eval_steps
+    eval_steps=100,  # Evaluation frequency (match save_steps is common)
+    per_device_eval_batch_size=1,  # Can often be larger than train batch size
+    load_best_model_at_end=True,  # Load the best model based on metric_for_best_model
+    metric_for_best_model="eval_loss",  # Primary metric to determine the best model (lower is better)
+    greater_is_better=False,  # False for loss and perplexity
+    run_name=run_name,  # Descriptive run name for tracking
 )
+# Log the arguments dictionary for detailed records
+logger.info(f"TrainingArguments: {training_arguments.to_dict()}")
 
 # --- Load Tokenizer ---
-# trust_remote_code=True is often required for newer models like Qwen
+logger.info(f"Loading tokenizer: {MODEL_ID}")
 tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, trust_remote_code=True)
+
 # Set padding token if it's not already set
 if tokenizer.pad_token is None:
-    print("Setting pad_token to eos_token")
+    logger.warning("Tokenizer does not have a pad token. Setting pad_token to eos_token.")
     tokenizer.pad_token = tokenizer.eos_token
-tokenizer.padding_side = "right"  # Important for causal LM
 
-print(f"Tokenizer loaded. Pad token ID: {tokenizer.pad_token_id}")
+# Set padding side to 'right' for training Causal LMs
+tokenizer.padding_side = "right"
+logger.info(
+    f"Tokenizer loaded. Pad token: '{tokenizer.pad_token}', ID: {tokenizer.pad_token_id}. Padding side set to '{tokenizer.padding_side}'.")
 
 
 # --- Data Preprocessing Function ---
-# This function formats the prompt and completion into a single sequence
-# for causal language modeling.
 def preprocess_data(examples):
-    # Combine prompt and completion, adding EOS token at the end
-    texts = [task_to_prompt(ARCTask.from_dict(task_json)) + solution for task_json, solution in zip(examples["task_json"], examples["solution"])]
-    # Tokenize the combined texts
-    # Ensure truncation to handle sequences longer than max_length
-    model_inputs = tokenizer(
-        texts,
-        max_length=MAX_SEQ_LENGTH,
-        truncation=True,
-        padding="max_length"  # Pad sequences to max_length
-    )
-    # For Causal LM, the labels are the same as the input_ids.
-    # The model learns to predict the next token.
-    model_inputs["labels"] = model_inputs["input_ids"].copy()
-    return model_inputs
+    """Formats prompt and solution, then tokenizes for Causal LM."""
+    try:
+        # Combine prompt and completion, adding EOS token for Causal LM training
+        texts = [
+            task_to_prompt(ARCTask.from_dict(task_json)) + solution + tokenizer.eos_token
+            for task_json, solution in zip(examples["task_json"], examples["solution"])
+        ]
+        # Tokenize, ensuring truncation and padding
+        model_inputs = tokenizer(
+            texts,
+            max_length=MAX_SEQ_LENGTH,
+            truncation=True,
+            padding="max_length"  # Pad sequences to max_length for batching
+        )
+        # For Causal LM, labels are the same as input_ids. The model learns to predict the next token.
+        # The loss function in Trainer handles shifting internally.
+        model_inputs["labels"] = model_inputs["input_ids"].copy()
+        return model_inputs
+    except Exception as e:
+        logger.error(f"Error during preprocessing: {e}")
+        # Return empty dict or raise error depending on desired behavior
+        return {}
 
 
 # --- Load and Prepare Dataset ---
-print("Loading dataset...")
-# Assuming your dataset has 'train' split. Add 'validation' if you have one.
-dataset = load_dataset("json", data_files={"train": TRAINING_DATASET_PATH, "validation": VALIDATION_DATASET_PATH})
-print(f"Dataset loaded: {dataset}")
+logger.info("Loading dataset...")
+try:
+    dataset = load_dataset("json", data_files={"train": TRAINING_DATASET_PATH, "validation": VALIDATION_DATASET_PATH})
+    logger.info(f"Dataset loaded: {dataset}")
 
-print("Preprocessing and tokenizing dataset...")
-tokenized_datasets = dataset.map(
-    preprocess_data,
-    batched=True,  # Process multiple examples at once
-    remove_columns=dataset["train"].column_names,  # Remove original columns
-    num_proc=os.cpu_count() // 2  # Use multiple CPU cores for faster processing
-)
-print(f"Dataset preprocessing finished: {tokenized_datasets}")
+    logger.info("Preprocessing and tokenizing dataset (this may take a while)...")
+    tokenized_datasets = dataset.map(
+        preprocess_data,
+        batched=True,
+        remove_columns=dataset["train"].column_names,  # Remove original columns
+        num_proc=max(1, os.cpu_count() // 2)  # Use multiple cores if available
+    )
+    logger.info(f"Dataset preprocessing finished: {tokenized_datasets}")
+
+except FileNotFoundError as e:
+    logger.error(f"Dataset file not found: {e}. Please check paths: {TRAINING_DATASET_PATH}, {VALIDATION_DATASET_PATH}")
+    sys.exit(1)  # Exit if data is missing
+except Exception as e:
+    logger.error(f"Error loading or processing dataset: {e}")
+    sys.exit(1)
 
 # --- Load Model with Quantization ---
-print(f"Loading base model: {MODEL_ID} with QLoRA config...")
+logger.info(f"Loading base model: {MODEL_ID} with QLoRA config...")
 model = AutoModelForCausalLM.from_pretrained(
     MODEL_ID,
     quantization_config=bnb_config,
-    device_map="auto",  # Automatically distribute model across available GPUs
-    trust_remote_code=True,  # Required for some models like Qwen
-    # torch_dtype=torch.bfloat16 # Optionally set dtype here if not using quantization fully
+    device_map="auto",  # Automatically distribute across available GPUs/CPU
+    trust_remote_code=True,
+    torch_dtype=torch.bfloat16  # Match compute dtype in bnb_config
 )
-model.config.use_cache = False  # Disable cache during training for efficiency with gradient checkpointing
-model.config.pretraining_tp = 1  # Set if needed, depends on model architecture, usually 1 is fine
+logger.info("Base model loaded.")
+
+# Configure model for training
+model.config.use_cache = False  # Disable cache for efficiency with gradient checkpointing
+model.config.pretraining_tp = 1  # Usually 1, adjust if model requires different tensor parallelism
 
 # --- Prepare Model for PEFT (LoRA) ---
-print("Preparing model for k-bit training and applying LoRA...")
-# Prepare model for k-bit training (necessary for QLoRA)
+logger.info("Preparing model for k-bit training (if applicable) and applying LoRA...")
+# Prepare model for k-bit training (required for QLoRA)
 model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=training_arguments.gradient_checkpointing)
+logger.info("Model prepared for k-bit training.")
 
-# Apply LoRA configuration to the model
+# Apply LoRA configuration
 model = get_peft_model(model, lora_config)
+logger.info("LoRA adapter applied to the model.")
 
 # Print trainable parameters to verify LoRA setup
+logger.info("Trainable parameters overview:")
 model.print_trainable_parameters()
+
+
+# --- Define Compute Metrics Function ---
+def compute_metrics(eval_pred: EvalPrediction):
+    """Computes perplexity from evaluation loss."""
+    # The Trainer calculates eval_loss automatically
+    loss = eval_pred.metrics.get("eval_loss")
+    if loss is not None:
+        perplexity = math.exp(loss)
+        return {"perplexity": perplexity, "eval_loss": loss}  # Return both loss and perplexity
+    else:
+        logger.warning("compute_metrics did not receive eval_loss. Cannot calculate perplexity.")
+        return {}  # Return empty if loss isn't available
+
+
+# --- Initialize wandb ---
+logger.info("Initializing wandb...")
+wandb.init(
+    project=WANDB_PROJECT,
+    entity=WANDB_ENTITY,
+    name=run_name,
+    config={
+        "model_name": MODEL_ID,
+        "training_dataset": TRAINING_DATASET_PATH,
+        "validation_dataset": VALIDATION_DATASET_PATH,
+        "max_seq_length": MAX_SEQ_LENGTH,
+        "lora_r": lora_config.r,
+        "lora_alpha": lora_config.lora_alpha,
+        "lora_dropout": lora_config.lora_dropout,
+        "lora_target_modules": lora_config.target_modules,
+        "learning_rate": training_arguments.learning_rate,
+        "batch_size": training_arguments.per_device_train_batch_size * training_arguments.gradient_accumulation_steps,
+        "epochs": training_arguments.num_train_epochs,
+        "warmup_ratio": training_arguments.warmup_ratio,
+        "train_samples": len(tokenized_datasets["train"]),
+        "validation_samples": len(tokenized_datasets["validation"]),
+        "quantization": {
+            "load_in_4bit": bnb_config.load_in_4bit,
+            "quant_type": bnb_config.bnb_4bit_quant_type,
+            "use_double_quant": bnb_config.bnb_4bit_use_double_quant,
+        }
+    }
+)
+
+# Log model architecture
+model_info = {
+    "model_config": model.config.to_dict(),
+    "trainable_params": model.print_trainable_parameters(),
+    "total_params": sum(p.numel() for p in model.parameters()),
+}
+wandb.log({"model_info": model_info})
+
+# Log a sample prompt/completion pair for reference
+if len(dataset["train"]) > 0:
+    sample_idx = 0
+    sample = dataset["train"][sample_idx]
+    sample_task = ARCTask.from_dict(sample["task_json"])
+    sample_prompt = task_to_prompt(sample_task)
+    sample_completion = sample["solution"]
+    wandb.log({
+        "sample_data": {
+            "prompt": sample_prompt,
+            "completion": sample_completion
+        }
+    })
+
+logger.info("wandb initialized successfully.")
 
 # --- Initialize Trainer ---
 # Data Collator for Causal LM. mlm=False ensures standard next-token prediction.
 data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
 
-print("Initializing Trainer...")
+logger.info("Initializing Trainer...")
 trainer = Trainer(
     model=model,
     args=training_arguments,
@@ -168,19 +287,132 @@ trainer = Trainer(
     eval_dataset=tokenized_datasets["validation"],
     tokenizer=tokenizer,
     data_collator=data_collator,
+    compute_metrics=compute_metrics,  # Pass the custom metrics function
 )
+logger.info("Trainer initialized.")
 
 # --- Start Training ---
-print("Starting training...")
-train_result = trainer.train()
+logger.info("Starting training...")
+try:
+    train_result = trainer.train()
 
-# --- Save Training Statistics and Final Model ---
-metrics = train_result.metrics
-trainer.log_metrics("train", metrics)
-trainer.save_metrics("train", metrics)
+    # --- Save Training Statistics and Final Model ---
+    metrics = train_result.metrics
+    metrics["train_samples"] = len(tokenized_datasets["train"])  # Add number of train samples
 
-print(f"Training finished. Saving final LoRA adapter weights to {OUTPUT_DIR}")
-# This saves only the trained LoRA adapter weights, not the entire base model.
-trainer.save_model(OUTPUT_DIR)
+    trainer.log_metrics("train", metrics)
+    trainer.save_metrics("train", metrics)
+    trainer.save_state()  # Save optimizer, scheduler, etc.
 
-print("Script finished successfully!")
+    logger.info(f"Training finished. Saving final LoRA adapter weights to {OUTPUT_DIR}")
+    # Saves only the trained LoRA adapter weights + config
+    trainer.save_model(OUTPUT_DIR)
+    logger.info(f"LoRA adapter saved to {OUTPUT_DIR}")
+
+    # --- Explicit Final Evaluation ---
+    # If load_best_model_at_end=True, the trainer already evaluated the best checkpoint.
+    # This provides metrics for the *final* state, which might differ slightly.
+    logger.info("Running final evaluation on the validation set using the *last* checkpoint state...")
+    final_eval_results = trainer.evaluate(eval_dataset=tokenized_datasets["validation"])
+    logger.info(f"Final Evaluation Results (last checkpoint): {final_eval_results}")
+    # Log and save these final metrics separately if needed
+    trainer.log_metrics("final_eval", final_eval_results)
+    trainer.save_metrics("final_eval", final_eval_results)
+
+    # Log final results to wandb
+    wandb.log({
+        "final_eval/loss": final_eval_results.get("eval_loss"),
+        "final_eval/perplexity": final_eval_results.get("perplexity", math.exp(final_eval_results.get("eval_loss", 0)))
+    })
+
+except Exception as e:
+    logger.error(f"An error occurred during training: {e}", exc_info=True)  # Log traceback
+    wandb.finish()  # Make sure to close wandb run even on error
+    sys.exit(1)
+
+# --- Qualitative Evaluation ---
+logger.info("Performing qualitative evaluation on a few validation samples...")
+
+try:
+    # Ensure the best model checkpoint is loaded if load_best_model_at_end=True
+    # If not using load_best_model_at_end, the model variable holds the last state.
+    # For robust qualitative eval, explicitly load the saved adapter.
+    logger.info(f"Loading base model {MODEL_ID} again for inference...")
+    base_model_for_eval = AutoModelForCausalLM.from_pretrained(
+        MODEL_ID,
+        quantization_config=bnb_config,  # Use the same quantization
+        device_map="auto",
+        trust_remote_code=True,
+        torch_dtype=torch.bfloat16
+    )
+    logger.info(f"Loading fine-tuned LoRA adapter from {OUTPUT_DIR}...")
+    model_for_inference = PeftModel.from_pretrained(base_model_for_eval, OUTPUT_DIR)
+    model_for_inference = model_for_inference.merge_and_unload()  # Optional: Merge adapter for faster inference if memory allows
+    model_for_inference.eval()  # Set to evaluation mode
+    logger.info("Model and adapter loaded for inference.")
+
+    # Reload tokenizer with left padding for generation
+    tokenizer_for_eval = AutoTokenizer.from_pretrained(MODEL_ID, trust_remote_code=True)
+    if tokenizer_for_eval.pad_token is None:
+        tokenizer_for_eval.pad_token = tokenizer_for_eval.eos_token
+    tokenizer_for_eval.padding_side = "left"  # Crucial for generation
+
+    # Load a few raw validation examples
+    raw_validation_dataset = load_dataset("json", data_files={"validation": VALIDATION_DATASET_PATH})["validation"]
+    num_samples_to_check = 3  # Number of samples to generate for
+
+    # Create a table to log sample predictions
+    prediction_table = wandb.Table(columns=["sample_id", "prompt", "actual_solution", "generated_solution"])
+
+    for i in range(min(num_samples_to_check, len(raw_validation_dataset))):
+        example = raw_validation_dataset[i]
+        prompt_text = task_to_prompt(ARCTask.from_dict(example["task_json"]))
+        actual_solution = example["solution"]
+
+        logger.info(f"\n--- Qualitative Sample {i + 1} ---")
+        logger.info(f"Prompt:\n{prompt_text}")
+        logger.info(f"\nActual Solution:\n{actual_solution}")
+
+        # Ensure prompt is not too long before encoding
+        # Simple truncation here, more sophisticated handling might be needed
+        max_prompt_len = MAX_SEQ_LENGTH - 150  # Reserve space for generation
+        if len(tokenizer_for_eval.encode(prompt_text)) > max_prompt_len:
+            logger.warning(f"Prompt for sample {i + 1} is too long, truncating.")
+            # A simple way to truncate (might cut mid-word)
+            prompt_text = tokenizer_for_eval.decode(tokenizer_for_eval.encode(prompt_text)[:max_prompt_len])
+
+        inputs = tokenizer_for_eval(prompt_text, return_tensors="pt", padding=True, truncation=True,
+                                    max_length=max_prompt_len).to(model_for_inference.device)
+
+        # Generate output
+        with torch.no_grad():
+            outputs = model_for_inference.generate(
+                **inputs,
+                max_new_tokens=MAX_SEQ_LENGTH // 4,  # Max tokens to generate
+                temperature=0.8,  # Control randomness (lower = more focused)
+                top_p=0.95,  # Nucleus sampling
+                do_sample=True,  # Use sampling
+                pad_token_id=tokenizer_for_eval.pad_token_id,
+                eos_token_id=tokenizer_for_eval.eos_token_id
+            )
+
+        # Decode only the newly generated part
+        generated_text = tokenizer_for_eval.decode(outputs[0, inputs['input_ids'].shape[1]:], skip_special_tokens=True)
+        logger.info(f"\nGenerated Solution:\n{generated_text}")
+        logger.info("-" * 30)
+
+        # Add row to the wandb Table
+        prediction_table.add_data(i, prompt_text, actual_solution, generated_text)
+
+    # Log the table to wandb
+    wandb.log({"sample_predictions": prediction_table})
+
+except FileNotFoundError:
+    logger.error(
+        f"Could not load adapter from {OUTPUT_DIR} for qualitative evaluation. Ensure training saved the model correctly.")
+except Exception as e:
+    logger.error(f"An error occurred during qualitative evaluation: {e}", exc_info=True)
+
+# Finish wandb run
+wandb.finish()
+logger.info("Script finished successfully!")

@@ -22,3 +22,4 @@ igraph
 Pygments
 scipy
 peft
+wandb
