@@ -25,7 +25,9 @@ from constants import NET_SCRATCH_PATH
 
 # --- Configuration ---
 MODEL_ID = "Qwen/Qwen2.5-Coder-0.5B"  # The specific model from Hugging Face Hub
-DATASET_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{0}", "augmented.jsonl")
+# TODO: change file name to 'augmented.jsonl'
+TRAINING_DATASET_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{0}", "test_small.jsonl")
+VALIDATION_DATASET_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{0}", "validation.jsonl")
 OUTPUT_DIR = os.path.join(NET_SCRATCH_PATH, "models", "fine_tuned", "policy")  # Directory to save the trained adapter
 MAX_SEQ_LENGTH = 4096  # Adjust based on your data and GPU memory
 
@@ -75,10 +77,13 @@ training_arguments = TrainingArguments(
     # report_to="tensorboard",  # Or "wandb" or "none"
     gradient_checkpointing=True,  # Saves memory, but slows down training slightly
     gradient_checkpointing_kwargs={'use_reentrant': False},  # Recommended for newer PyTorch versions
-    # You might need to add evaluation args if you have a validation set:
-    # evaluation_strategy="steps",
-    # eval_steps=100,
-    # per_device_eval_batch_size=4,
+
+    evaluation_strategy="steps",  # Evaluate every `eval_steps`
+    eval_steps=100,  # How often to evaluate (can match save_steps or be different)
+    per_device_eval_batch_size=1,  # Batch size for evaluation (can often be larger than train)
+    load_best_model_at_end=True,  # Load the best checkpoint (based on metric_for_best_model) at the end
+    metric_for_best_model="eval_loss",  # Metric to determine the best model (lower loss is better)
+    greater_is_better=False,  # Set to True if using a metric like accuracy where higher is better
 )
 
 # --- Load Tokenizer ---
@@ -116,7 +121,7 @@ def preprocess_data(examples):
 # --- Load and Prepare Dataset ---
 print("Loading dataset...")
 # Assuming your dataset has 'train' split. Add 'validation' if you have one.
-dataset = load_dataset("json", data_files={"train": DATASET_PATH})
+dataset = load_dataset("json", data_files={"train": TRAINING_DATASET_PATH, "validation": VALIDATION_DATASET_PATH})
 print(f"Dataset loaded: {dataset}")
 
 print("Preprocessing and tokenizing dataset...")
@@ -160,7 +165,7 @@ trainer = Trainer(
     model=model,
     args=training_arguments,
     train_dataset=tokenized_datasets["train"],
-    # eval_dataset=tokenized_datasets["validation"], # Uncomment if you have a validation set
+    eval_dataset=tokenized_datasets["validation"],
     tokenizer=tokenizer,
     data_collator=data_collator,
 )
