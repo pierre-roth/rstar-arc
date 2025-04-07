@@ -92,9 +92,9 @@ def save_augmented_data(filepath: str, data: Dict):
         logger.error(f"Failed to write to augmented data file {filepath}: {e}")
 
 
-def process_augmentation_job(job_data: Tuple[str, str, Any, Dict[str, Any], int, str]) -> List[Dict]:
+def process_augmentation_job(job_data: Tuple[str, str, Dict[str, Any], int, str]) -> List[Dict]:
     """Loads reARC, filters, generates, and returns augmented task data."""
-    task_name, solution_code, metadata, original_task_json, k, rearc_data_dir = job_data
+    task_name, solution_code, original_task_json, k, rearc_data_dir = job_data
     augmented_results = []
 
     rearc_examples = load_rearc_examples(rearc_data_dir, task_name)
@@ -107,7 +107,6 @@ def process_augmentation_job(job_data: Tuple[str, str, Any, Dict[str, Any], int,
         if n >= k > 0:
             num_augmented_tasks = n // k
             random.shuffle(filtered_examples)
-            original_test_json = original_task_json.get("test", [])
 
             for i in range(num_augmented_tasks):
                 new_examples = filtered_examples[i * k: (i + 1) * k]
@@ -122,7 +121,6 @@ def process_augmentation_job(job_data: Tuple[str, str, Any, Dict[str, Any], int,
                     "task_name": f"{task_name}_augmented_{i + 1}",
                     "task_json": new_task_json,
                     "solution": solution_code,
-                    "metadata": metadata
                 }
                 augmented_results.append(output_data)
             logger.debug(f"Task '{task_name}' generated {num_augmented_tasks} augmentations.")
@@ -185,7 +183,6 @@ def main(config: Config):
     for data in cleaned_data_cache:
         task_name = data["task_name"]  # Assumed to exist now
         solution_code = data["solution_code"]
-        metadata = data.get("metadata")
 
         original_task_json = load_json_file(task_name_to_path[task_name])
         if not original_task_json:
@@ -197,7 +194,6 @@ def main(config: Config):
             "task_name": task_name,
             "task_json": original_task_json,
             "solution": solution_code,
-            "metadata": metadata
         }
         save_augmented_data(augmented_file, output_data_original)
         original_tasks_saved += 1
@@ -205,7 +201,7 @@ def main(config: Config):
         # If Training Task, prepare job
         if task_name in training_task_names:
             k = len(original_task_json.get('train', [])) + len(original_task_json.get('test', []))
-            job = (task_name, solution_code, metadata, original_task_json, k, rearc_data_dir)
+            job = (task_name, solution_code, original_task_json, k, rearc_data_dir)
             augmentation_jobs.append(job)
 
     logger.info(f"Saved {original_tasks_saved} original task entries.")
