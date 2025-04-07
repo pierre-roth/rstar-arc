@@ -25,6 +25,5 @@ num-rollouts: 44
 branching-factor: 8
 max-depth: 20
 
-num-tasks: 15
 batch-size: 15
 
