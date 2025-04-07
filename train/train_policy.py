@@ -25,7 +25,7 @@ from constants import NET_SCRATCH_PATH
 
 # --- Configuration ---
 MODEL_ID = "Qwen/Qwen2.5-Coder-0.5B"  # The specific model from Hugging Face Hub
-DATASET_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{0}", "augmented.jsonl")  # CHANGE THIS to the actual path of your jsonl file
+DATASET_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{0}", "test_small.jsonl")  # CHANGE THIS to the actual path of your jsonl file
 OUTPUT_DIR = os.path.join(NET_SCRATCH_PATH, "models", "fine_tuned", "policy")  # Directory to save the trained adapter
 MAX_SEQ_LENGTH = 4096  # Adjust based on your data and GPU memory
 
