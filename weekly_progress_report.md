@@ -216,8 +216,13 @@
   - some slight modifications to the data cleaning code
   - implemented the data augmentation code
   - wrote SFT code and did some minimal testing with 0.5B parameter model
-  - 
-
+  -
 
 - **Issues and Questions**:
   - 
+
+- **Results**: 
+  - Round number: 0
+    - training: 73/400 = 18.25% coverage
+    - training_extended: 1180/8939 = 13.20% coverage
+    - Total unique tasks: 1253
