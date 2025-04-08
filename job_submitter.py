@@ -107,7 +107,7 @@ def submit_job(config_path: str) -> (int, str):
         Tuple of (job_id, config_path)
     """
     # Prepare the sbatch command
-    cmd = ["sbatch", "run.sh", os.path.basename(config_path)]
+    cmd = ["sbatch", "run_3090.sh", os.path.basename(config_path)]
 
     # Run the sbatch command
     try:

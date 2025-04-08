@@ -57,6 +57,10 @@ def load_tasks(config: Config) -> list[ARCTask]:
 
         files = [f for f in files if os.path.splitext(f)[0] not in solved_set]
 
+    if config.task_names is not None:
+        # Filter files based on task names
+        files = [f for f in files if os.path.splitext(f)[0] in config.task_names]
+
     # Load each file as an ARCTask
     tasks = []
     for file_name in files:

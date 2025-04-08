@@ -1,19 +1,24 @@
 import logging
-from random import choice
+from random import choice, random
 
 from rstar_deepthink.agents import Agent
-from rstar_deepthink.agents.agent_utils import normalized_similarity_score
+from rstar_deepthink.agents.agent_utils import normalized_similarity_score, get_description
 from rstar_deepthink.arc_task import Grid
 from rstar_deepthink.node import Node
 
 logger = logging.getLogger(__name__)
 
 
-class Custom(Agent):
+class Bootstrap(Agent):
     """
-    Custom Monte Carlo Tree Search agent that inherits from Agent.
-    This leverages shared functionality while maintaining MCTS-specific selection logic.
+        Custom Monte Carlo Tree Search agent that inherits from Agent.
+        This leverages shared functionality while maintaining MCTS-specific selection logic.
+        In addition, it does hardcoded task object analysis/captioning.
     """
+    def __init__(self, config, task):
+        super().__init__(config, task)
+        self.task_name = task.name
+        self.root.state["hint"] = "Here is a hint on how to solve the task: \n" + get_description(self.task_name) + f"\n\nMake sure to write detailed comments for each step!\n\n"
 
     def should_generate_next(self) -> bool:
         """Check if we need to generate for current nodes."""
@@ -28,9 +33,11 @@ class Custom(Agent):
         return need_generate and not already_solved
 
     def has_expanded(self) -> bool:
-        """Function that determined whether to generate more children."""
-        # always generate new children independently of whether there are any already
-        return False
+        if not self.current_nodes:
+            return False
+
+        # Check if the first current node has children (either all or none have children)
+        return self.current_nodes[0].has_children() and random() < (1 - 1/(2*self.config.branching_factor))
 
     @staticmethod
     def select_child(node: Node) -> Node | None:

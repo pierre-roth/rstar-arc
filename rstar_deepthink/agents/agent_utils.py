@@ -1,6 +1,28 @@
+import json
+import os.path
+
 import scipy.stats
 
 from rstar_deepthink.arc_task import Grid
+from constants import DEFAULT_DATA_FOLDER
+
+
+def get_description(task_name: str) -> str:
+    # options: best_arc_descriptions.json, augmented_arc_descriptions.json
+    path = os.path.join(DEFAULT_DATA_FOLDER, "bootstrap", f"descriptions.json")
+    key = f"{task_name}.json"
+
+    # safely load the description from the json file
+    try:
+        with open(path, 'r') as f:
+            data = json.load(f)
+            description = data.get(key, "Description not found.")
+    except FileNotFoundError:
+        description = "Description file not found."
+    except json.JSONDecodeError:
+        description = "Error decoding JSON file."
+
+    return description
 
 
 def normalized_similarity_score(correct_grids: list[Grid], predicted_grids: list[Grid]) -> float:

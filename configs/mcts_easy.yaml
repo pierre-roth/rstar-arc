@@ -1,9 +1,0 @@
-search-mode: "mcts"
-log-level: "DEBUG"
-
-data-folder: "/home/piroth/rstar-arc/data_sample/easy"
-
-num-simulations: 32
-branching-factor: 10
-max-depth: 10
-

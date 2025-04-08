@@ -1,9 +1,0 @@
-search-mode: "bs"
-log-level: "DEBUG"
-
-data-folder: "/home/piroth/rstar-arc/data_sample/easy"
-
-beam-width: 12
-branching-factor: 12
-max-depth: 12
-

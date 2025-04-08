@@ -36,6 +36,7 @@ class Config:
 
     policy_model: str = "Qwen/Qwen2.5-Coder-7B-Instruct"  # Model that generates reasoning steps
     reward_model: str = "Qwen/Qwen2.5-Coder-7B-Instruct"  # Reward Model for evaluating steps
+    fine_tuned: bool = False  # Whether the model is fine-tuned
 
     # policy_model: str = "Qwen/Qwen2.5-Coder-7B"  # Model that generates reasoning steps
     # reward_model: str = "Qwen/Qwen2.5-Coder-7B"  # Reward Model for evaluating steps
@@ -53,9 +54,10 @@ class Config:
     policy_temperature: float = 0.7  # Sampling temperature for LLM generation
     seed: int = 42  # Random seed for reproducibility
     deterministic: bool = False  # Whether to enforce deterministic behavior
-    
+
     num_tasks: int = -1  # Number of tasks to process (-1 means all tasks)
     data_folder: str = DEFAULT_DATA_PATH  # Path to ARC task data
+    task_names: list[str] | None = None  # List of task names to process
 
     search_mode: str = "bs"  # Search algorithm - "bs" for beam search, "mcts" for Monte Carlo Tree Search
 
