@@ -11,13 +11,13 @@ max-model-len: 49152
 data-folder: "/itet-stor/piroth/net_scratch/task_data/training"
 
 num-examples: 1
-example-names: [["6d0aefbc", "1cf80156"]]
+example-names: [["6b9890af"]]
 
 rotate-example: false
 
 variable-temperature: true
-min-policy-temperature: 0.8
-max-policy-temperature: 1.0
+min-policy-temperature: 0.75
+max-policy-temperature: 0.95
 
 save-sft-data: true
 
