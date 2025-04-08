@@ -16,8 +16,8 @@ example-names: [["06df4c85"]]
 rotate-example: false
 
 variable-temperature: true
-min-policy-temperature: 0.8
-max-policy-temperature: 1.1
+min-policy-temperature: 0.9
+max-policy-temperature: 1.0
 
 save-sft-data: true
 
