@@ -5,25 +5,25 @@ save-for-visualization: false
 round-number: 1
 solve-only-unsolved: true
 
-policy-model: "Qwen/Qwen2.5-Coder-7B-Instruct"
-max-model-len: 49152
+policy-model: "Qwen/Qwen2.5-Coder-7B"
+max-model-len: 32768
 
 data-folder: "/itet-stor/piroth/net_scratch/task_data/training"
 
 num-examples: 1
-example-names: [["06df4c85"]]
+example-names: [["6b9890af"]]
 
 rotate-example: false
 
 variable-temperature: true
-min-policy-temperature: 0.8
-max-policy-temperature: 1.0
+min-policy-temperature: 0.75
+max-policy-temperature: 0.9
 
 save-sft-data: true
 
-num-rollouts: 16
-branching-factor: 10
+num-rollouts: 24
+branching-factor: 8
 max-depth: 20
 
-batch-size: 45
+batch-size: 30
 

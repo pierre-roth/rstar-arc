@@ -49,6 +49,7 @@ class PolicyModel:
         sampling_parameters = SamplingParams(
             temperature=temperature,
             top_p=self.config.top_p,
+            repetition_penalty=1.05,
             max_tokens=self.config.max_tokens,
             n=self.config.branching_factor,
             stop=[STEP_END, CODE_END],
