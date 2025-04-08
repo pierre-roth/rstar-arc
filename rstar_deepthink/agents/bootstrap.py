@@ -41,7 +41,7 @@ class Bootstrap(Agent):
             return False
 
         # Check if the first current node has children (either all or none have children)
-        return self.current_nodes[0].has_children() and random() < (1 - 1/(2*self.config.branching_factor))
+        return self.current_nodes[0].has_children() and random() < (1 - 1/self.config.branching_factor)
 
     @staticmethod
     def select_child(node: Node) -> Node | None:
