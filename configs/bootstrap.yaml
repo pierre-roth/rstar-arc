@@ -1,0 +1,25 @@
+search-mode: "bootstrap"
+log-level: "DEBUG"
+
+save-for-visualization: true
+round-number: 1
+solve-only-unsolved: false
+
+policy-model: "Qwen/Qwen2.5-Coder-7B-Instruct"
+max-model-len: 49152
+
+num-examples: 1
+example-names: [["6d0aefbc", "1cf80156"]]
+
+rotate-example: false
+
+variable-temperature: true
+min-policy-temperature: 0.8
+max-policy-temperature: 1.1
+
+save-sft-data: false
+
+num-rollouts: 8
+branching-factor: 8
+max-depth: 10
+

@@ -36,10 +36,10 @@ class Config:
 
     policy_model: str = "Qwen/Qwen2.5-Coder-7B-Instruct"  # Model that generates reasoning steps
     reward_model: str = "Qwen/Qwen2.5-Coder-7B-Instruct"  # Reward Model for evaluating steps
-    fine_tuned: bool = False  # Whether the model is fine-tuned
-
     # policy_model: str = "Qwen/Qwen2.5-Coder-7B"  # Model that generates reasoning steps
     # reward_model: str = "Qwen/Qwen2.5-Coder-7B"  # Reward Model for evaluating steps
+
+    fine_tuned: bool = False  # Whether the model is fine-tuned
 
     model_base_path: str = os.path.join(NET_SCRATCH_PATH, "models")  # Base path where models are stored
 
