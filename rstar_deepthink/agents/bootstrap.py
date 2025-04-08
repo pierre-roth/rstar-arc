@@ -19,7 +19,10 @@ class Bootstrap(Agent):
     def __init__(self, config, task):
         super().__init__(config, task)
         self.task_name = task.name
-        self.root.state["hint"] = "Here is a hint on how to solve the task: \n" + get_description(self.task_name) + f"\n\nMake sure to write the code in steps with the step end marker {STEP_END} and write detailed comments for each step!\n\n"
+        hint = ("Here is a hint on how to solve the task: \n" + get_description(self.task_name)
+                + f"\n\nMake sure to write the code in steps with the step end marker {STEP_END} and write detailed comments for each step!\n\n")
+        self.root.state["hint"] = hint
+        logger.debug(f"Hint: \n" + hint)
 
     def should_generate_next(self) -> bool:
         """Check if we need to generate for current nodes."""
