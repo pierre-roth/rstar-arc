@@ -46,7 +46,8 @@ MODEL_ID = "Qwen/Qwen2.5-Coder-0.5B"
 TRAINING_DATASET_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{0}", "test_small.jsonl")
 VALIDATION_DATASET_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{0}", "validation.jsonl")
 OUTPUT_DIR = os.path.join(NET_SCRATCH_PATH, "models", "fine_tuned", "policy")
-MAX_SEQ_LENGTH = 4096  # Adjust based on your data and GPU memory
+# TODO: set max_seq_length based even higher
+MAX_SEQ_LENGTH = 8192  # Adjust based on your data and GPU memory
 WANDB_PROJECT = "deepthink-sft"  # Added wandb project name
 WANDB_ENTITY = None  # Set to your team name or username if needed
 
@@ -87,7 +88,7 @@ run_name = f"{MODEL_ID.split('/')[-1]}-finetune-{os.path.basename(TRAINING_DATAS
 training_arguments = TrainingArguments(
     output_dir=OUTPUT_DIR,
     per_device_train_batch_size=1,  # Keep small for small models/memory
-    gradient_accumulation_steps=4,  # Effective batch size = 1 * 4 = 4
+    gradient_accumulation_steps=2,  # Effective batch size = 1 * 2 = 2
     optim="paged_adamw_8bit",
     learning_rate=2e-4,
     lr_scheduler_type="cosine",
@@ -225,7 +226,7 @@ wandb.init(
         "lora_dropout": lora_config.lora_dropout,
         "lora_target_modules": lora_config.target_modules,
         "learning_rate": training_arguments.learning_rate,
-        "batch_size": training_arguments.per_device_train_batch_size * training_arguments.gradient_accumulation_steps,
+        "effective_batch_size": training_arguments.per_device_train_batch_size * training_arguments.gradient_accumulation_steps,
         "epochs": training_arguments.num_train_epochs,
         "warmup_ratio": training_arguments.warmup_ratio,
         "train_samples": len(tokenized_datasets["train"]),
@@ -318,6 +319,7 @@ except Exception as e:
 
 # --- Qualitative Evaluation ---
 logger.info("Performing qualitative evaluation on a few validation samples...")
+GENERATION_PREFIX = "<beginning_of_code>\ndef solve(I):"
 
 try:
     # Ensure the best model checkpoint is loaded if load_best_model_at_end=True
@@ -352,7 +354,7 @@ try:
 
     for i in range(min(num_samples_to_check, len(raw_validation_dataset))):
         example = raw_validation_dataset[i]
-        prompt_text = task_to_prompt(ARCTask.from_dict(example["task_json"]))
+        prompt_text = task_to_prompt(ARCTask.from_dict(example["task_json"])) + "\n" + GENERATION_PREFIX
         actual_solution = example["solution"]
 
         logger.info(f"\n--- Qualitative Sample {i + 1} ---")
