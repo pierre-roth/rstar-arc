@@ -68,8 +68,8 @@ def load_tasks(config: Config) -> list[ARCTask]:
         task = ARCTask(config, task_file_path)
         tasks.append(task)
 
-    # tasks.sort(key=lambda t: len(task_to_prompt(t)))
-    shuffle(tasks)
+    tasks.sort(key=lambda t: len(task_to_prompt(t)))
+    # shuffle(tasks)
 
     if config.num_tasks > 0:
         tasks = tasks[:config.num_tasks]
