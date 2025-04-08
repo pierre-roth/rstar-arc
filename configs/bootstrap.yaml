@@ -11,10 +11,10 @@ max-model-len: 16384
 data-folder: "/home/piroth/rstar-arc/data_sample/very_easy"
 
 num-examples: 1
-example-names: [["6d0aefbc", "1cf80156"]]
+example-names: [["6b9890af"]]
 
 variable-temperature: true
-min-policy-temperature: 0.85
+min-policy-temperature: 0.8
 max-policy-temperature: 1.0
 
 save-sft-data: false
