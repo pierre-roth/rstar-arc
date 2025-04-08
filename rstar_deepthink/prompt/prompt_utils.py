@@ -54,6 +54,7 @@ Remember:
     - You are allowed to use all python standard library libraries such as collections, itertools, etc. after import them.
     - Additionally, you can use numpy after importing it.
     - Each step must be valid Python code. Steps can be as simple as a single line of code or as complex as a multi-line function.
+    - Every step must be valid Python code when combined with the previous steps! This means no "open" loops, if statements, or other incomplete code.
     - If you generate a {CODE_END} marker instead of a {STEP_END} marker, this signals the end of the code block, and thus the end of the transformation function.
     - It is important to accurately analyze the input-output examples to infer the transformation function "solve".
     - The transformation function "solve" might be completely different from the given example solution.
