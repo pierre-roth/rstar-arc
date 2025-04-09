@@ -17,7 +17,7 @@ rotate-example: false
 
 variable-temperature: true
 min-policy-temperature: 0.75
-max-policy-temperature: 0.95
+max-policy-temperature: 1.0
 
 save-sft-data: true
 
