@@ -51,7 +51,9 @@ if __name__ == "__main__":
 
     coverages = []
     for i in range(0, round_number+1):
-        coverages.append(calculate_coverage(round_number))
+        print(f"Calculating coverage for round {i}: ")
+        coverages.append(calculate_coverage(i))
+        print("\n")
 
     all_tasks = {}
     for coverage in coverages:
