@@ -77,5 +77,8 @@ if __name__ == "__main__":
         print(f"  - {folder}: {len(tasks)} unique tasks")
     print(f"Total unique tasks: {len(total_unique)}")
 
-    print(f"Solved training tasks: {list(all_solved['training'])}")
-    print(f"Unsolved training tasks: {list(all_tasks['training'] - all_solved['training'])}")
+    # ask whether to print all tasks
+    print_all = input("Print all tasks? (y/n): ").strip().lower()
+    if print_all == "y":
+        print(f"Solved training tasks: {list(all_solved['training'])}")
+        print(f"Unsolved training tasks: {list(all_tasks['training'] - all_solved['training'])}")
