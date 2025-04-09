@@ -42,9 +42,25 @@ def calculate_coverage(round_num: int):
             print(f"{dir_name}: {covered_tasks}/{total_tasks} = {covered_tasks / total_tasks:.2%} coverage")
 
     print(f"Total unique tasks: {len(task_names)}")
+    return folders
 
 
 if __name__ == "__main__":
     # Example usage
     round_number = int(input("Round number: "))
-    calculate_coverage(round_number)
+
+    coverages = []
+    for i in range(0, round_number+1):
+        coverages.append(calculate_coverage(round_number))
+
+    all_tasks = {}
+    for coverage in coverages:
+        for folder, tasks in coverage.items():
+            if folder not in all_tasks:
+                all_tasks[folder] = set()
+            all_tasks[folder].update(tasks)
+
+    print("Ensemble coverage:")
+    for folder, tasks in all_tasks.items():
+        print(f"  - {folder}: {len(tasks)} unique tasks")
+
