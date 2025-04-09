@@ -9,7 +9,7 @@ from constants import DEFAULT_DATA_FOLDER
 
 def get_description(task_name: str) -> str:
     # options: best_arc_descriptions.json, augmented_arc_descriptions.json
-    path = os.path.join(DEFAULT_DATA_FOLDER, "bootstrap", f"descriptions.json")
+    path = os.path.join(DEFAULT_DATA_FOLDER, "bootstrap", f"descriptions_3.json")
     key = f"{task_name}.json"
 
     # safely load the description from the json file
