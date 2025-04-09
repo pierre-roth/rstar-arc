@@ -24,6 +24,7 @@ def calculate_coverage(round_num: int):
 
     # per folder covered tasks
     folders = {}
+    solved = {}
 
     # go through every directory in task path and calculate coverage for each one
     for dir_name in os.listdir(task_path):
@@ -33,16 +34,18 @@ def calculate_coverage(round_num: int):
             covered_tasks = 0
 
             folders[dir_name] = set()
+            solved[dir_name] = set()
             for task_file in os.listdir(dir_path):
                 if task_file.endswith(".json"):
                     total_tasks += 1
+                    folders[dir_name].add(task_file)
                     if task_file in task_names:
-                        folders[dir_name].add(task_file)
+                        solved[dir_name].add(task_file)
                         covered_tasks += 1
             print(f"{dir_name}: {covered_tasks}/{total_tasks} = {covered_tasks / total_tasks:.2%} coverage")
 
     print(f"Total unique tasks: {len(task_names)}")
-    return folders
+    return folders, solved
 
 
 if __name__ == "__main__":
@@ -56,13 +59,23 @@ if __name__ == "__main__":
         print("\n")
 
     all_tasks = {}
-    for coverage in coverages:
-        for folder, tasks in coverage.items():
+    all_solved = {}
+    for fol, sol in coverages:
+        for folder, tasks in sol.items():
+            if folder not in all_solved:
+                all_solved[folder] = set()
+            all_solved[folder].update(tasks)
+        for folder, tasks in fol.items():
             if folder not in all_tasks:
                 all_tasks[folder] = set()
             all_tasks[folder].update(tasks)
 
     print("Ensemble coverage:")
-    for folder, tasks in all_tasks.items():
+    total_unique = set()
+    for folder, tasks in all_solved.items():
+        total_unique.update(tasks)
         print(f"  - {folder}: {len(tasks)} unique tasks")
+    print(f"Total unique tasks: {len(total_unique)}")
 
+    print(f"Solved training tasks: {list(all_solved['training'])}")
+    print(f"Unsolved training tasks: {list(all_tasks['training'] - all_solved['training'])}")
