@@ -47,7 +47,7 @@ TRAINING_DATASET_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{0}",
 VALIDATION_DATASET_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{0}", "validation.jsonl")
 OUTPUT_DIR = os.path.join(NET_SCRATCH_PATH, "models", "fine_tuned", "policy")
 # TODO: set max_seq_length based even higher
-MAX_SEQ_LENGTH = 8192  # Adjust based on your data and GPU memory
+MAX_SEQ_LENGTH = 12288  # Adjust based on your data and GPU memory
 WANDB_PROJECT = "deepthink-sft"  # Added wandb project name
 WANDB_ENTITY = None  # Set to your team name or username if needed
 
@@ -88,7 +88,7 @@ run_name = f"{MODEL_ID.split('/')[-1]}-finetune-{os.path.basename(TRAINING_DATAS
 training_arguments = TrainingArguments(
     output_dir=OUTPUT_DIR,
     per_device_train_batch_size=1,  # Keep small for small models/memory
-    gradient_accumulation_steps=2,  # Effective batch size = 1 * 2 = 2
+    gradient_accumulation_steps=8,  # Effective batch size = batch_size * grad_accum_steps
     optim="paged_adamw_8bit",
     learning_rate=2e-4,
     lr_scheduler_type="cosine",
