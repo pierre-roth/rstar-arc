@@ -17,7 +17,7 @@ rotate-example: false
 
 variable-temperature: true
 min-policy-temperature: 0.75
-max-policy-temperature: 0.9
+max-policy-temperature: 0.95
 
 save-sft-data: true
 
@@ -25,5 +25,5 @@ num-rollouts: 24
 branching-factor: 8
 max-depth: 20
 
-batch-size: 30
+batch-size: 45
 
