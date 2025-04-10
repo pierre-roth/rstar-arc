@@ -24,6 +24,12 @@ class Bootstrap(Agent):
         self.root.state["hint"] = hint
         logger.debug(f"Hint: \n" + hint)
 
+    def update(self, rollout_idx: int, current_temperature: float) -> None:
+        super().update(rollout_idx, current_temperature)
+
+        if self.config.hint_rollouts is not None and rollout_idx >= self.config.hint_rollouts:
+            self.root.state["hint"] = ""
+
     def should_generate_next(self) -> bool:
         """Check if we need to generate for current nodes."""
         if not self.current_nodes:
@@ -32,7 +38,7 @@ class Bootstrap(Agent):
 
         # Check if any current node is non-terminal
         need_generate = any(not node.is_terminal() for node in self.current_nodes)
-        already_solved = len(self.final_answer_nodes) > 2 * self.config.branching_factor
+        already_solved = (len(self.final_answer_nodes) >= self.config.solutions_per_task) if self.config.solutions_per_task is not None else False
         logger.debug(f"Need generation: {need_generate} (nodes: {len(self.current_nodes)})")
         return need_generate and not already_solved
 
@@ -41,7 +47,7 @@ class Bootstrap(Agent):
             return False
 
         # Check if the first current node has children (either all or none have children)
-        return self.current_nodes[0].has_children() and random() < (1 - 1/self.config.branching_factor)
+        return self.current_nodes[0].has_children() and random() > self.config.regeneration_probability
 
     @staticmethod
     def select_child(node: Node) -> Node | None:

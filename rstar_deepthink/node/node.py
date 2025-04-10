@@ -34,6 +34,8 @@ class Node:
         self.value = 0
         self.visit_count: int = 0
         self.value_sum: float = 0
+        self.final_correct: int = 0
+        self.final_wrong: int = 0
 
         self.terminal: bool | None = None  # Will be set to True/False when terminal
         self.terminal_reason: str | None = None  # Reason for terminal node (will be set when terminal)

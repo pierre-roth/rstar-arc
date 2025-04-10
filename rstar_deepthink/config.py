@@ -24,6 +24,7 @@ class Config:
     log_level: str = "DEBUG"  # Logging level: DEBUG, INFO, WARNING, ERROR, CRITICAL
     save_for_visualization: bool = True  # Whether to visualize the reasoning steps
     solve_only_unsolved: bool = False  # Whether to only solve unsolved tasks
+    solutions_per_task: int | None = None  # Bound the number of solutions (that pass training examples) to find for each task (None means as many as possible)
     save_sft_data: bool = True  # Whether to save SFT data
 
     numeric_log_level: Optional[int] = None  # Numeric logging level (set automatically)
@@ -59,6 +60,7 @@ class Config:
     num_tasks: int = -1  # Number of tasks to process (-1 means all tasks)
     data_folder: str = DEFAULT_DATA_PATH  # Path to ARC task data
     task_names: list[str] | None = None  # List of task names to process
+    sort_by_length = False  # Whether to sort tasks by length
 
     search_mode: str = "bs"  # Search algorithm - "bs" for beam search, "mcts" for Monte Carlo Tree Search
 
@@ -67,6 +69,7 @@ class Config:
 
     beam_width: int = 3  # Number of top-scoring beams to track
     branching_factor: int = 4  # Number of children to generate if no children exist yet
+    regeneration_probability: float = 1/8  # Probability of regenerating a node if it has no children
 
     variable_temperature: bool = False  # Whether to use variable temperature for sampling
     min_policy_temperature: float = 0.7  # Minimum temperature for variable temperature sampling
@@ -74,6 +77,8 @@ class Config:
 
     c_puct: float = 2.0  # PUCT exploration constant
     num_rollouts: int = 8  # Number of simulations to run for MCTS
+    hint_rollouts: int | None = None  # Number of rollouts with hint enabled (None means all rollouts)
+
     negative_reward: float = -1.0  # Negative reward for invalid/incorrect code
     positive_reward: float = 1.0  # Positive reward for correct code
 
