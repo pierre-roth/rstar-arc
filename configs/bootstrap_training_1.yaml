@@ -9,6 +9,7 @@ policy-model: "Qwen/Qwen2.5-Coder-7B-Instruct"
 max-model-len: 32768
 
 data-folder: "/itet-stor/piroth/net_scratch/task_data/training"
+sort-by-length: true
 
 num-examples: 1
 example-names: [["6b9890af"]]
