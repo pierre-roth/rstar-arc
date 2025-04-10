@@ -5,7 +5,7 @@ save-for-visualization: false
 round-number: 1
 solve-only-unsolved: true
 
-policy-model: "Qwen/Qwen2.5-Coder-32B-Instruct-GPTQ-Int4"
+policy-model: "Qwen/Qwen2.5-Coder-32B-Instruct-GPTQ-Int8"
 max-model-len: 32768
 dtype: "auto"
 
