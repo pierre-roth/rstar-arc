@@ -5,19 +5,19 @@ save-for-visualization: false
 round-number: 1
 solve-only-unsolved: true
 
-policy-model: "Qwen/Qwen2.5-Coder-7B"
+policy-model: "Qwen/Qwen2.5-Coder-7B-Instruct"
 max-model-len: 32768
 
 data-folder: "/itet-stor/piroth/net_scratch/task_data/training"
 
 num-examples: 1
-example-names: [["6b9890af"]]
+example-names: [["06df4c85"]]
 
 rotate-example: false
 
 variable-temperature: true
-min-policy-temperature: 0.75
-max-policy-temperature: 0.95
+min-policy-temperature: 0.7
+max-policy-temperature: 1.0
 
 save-sft-data: true
 
