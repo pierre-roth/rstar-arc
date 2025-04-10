@@ -101,13 +101,13 @@ def _extract_preference_pairs(nodes: list[Node], config: Config) -> list[dict]:
 
     # Iterate through nodes to find decision points
     for node in nodes:
-        if not node.children:  # Skip leaves
+        if not node.is_valid() or not node.children:  # Skip leaves
             continue
 
         # Separate children based on whether they lead to correct/incorrect outcomes
         # These attributes should now exist after calling _compute_final_outcomes
-        chosen_candidates = [child for child in node.children if child.final_correct > 0]
-        rejected_candidates = [child for child in node.children if child.final_wrong > 0]
+        chosen_candidates = [child for child in node.children if child.is_valid() and child.final_correct > 0]
+        rejected_candidates = [child for child in node.children if child.is_valid() and child.final_wrong > 0]
 
         # Only proceed if we have both types of candidates
         if not chosen_candidates or not rejected_candidates:
