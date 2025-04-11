@@ -173,8 +173,12 @@ def save_sft(config: Config, nodes: list[Node]):
     output_dir = os.path.join(config.sft_data_dir, f"round_{config.round_number}")
     os.makedirs(output_dir, exist_ok=True)
 
-    sft_file_path = os.path.join(output_dir, "raw.jsonl")  # File for SFT data
-    pref_file_path = os.path.join(output_dir, "preference.jsonl")  # File for RM preference data
+    if not config.evaluation:
+        sft_file_path = os.path.join(output_dir, "raw.jsonl")  # File for SFT data
+        pref_file_path = os.path.join(output_dir, "preference.jsonl")  # File for RM preference data
+    else:
+        sft_file_path = os.path.join(output_dir, "raw_evaluation.jsonl")  # File for SFT data
+        pref_file_path = os.path.join(output_dir, "preference_evaluation.jsonl")  # File for RM preference data
 
     task_name = nodes[0].task.name
     logger.info(f"Processing save_sft for task: {task_name}")

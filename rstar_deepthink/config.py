@@ -26,6 +26,7 @@ class Config:
     solve_only_unsolved: bool = False  # Whether to only solve unsolved tasks
     solutions_per_task: int | None = None  # Bound the number of solutions (that pass training examples) to find for each task (None means as many as possible)
     save_sft_data: bool = True  # Whether to save SFT data
+    evaluation: bool = False  # Whether the model is running on the evaluation set
 
     numeric_log_level: Optional[int] = None  # Numeric logging level (set automatically)
     model_initialization_times = {"policy": None, "reward": None}  # Time taken to initialize models
