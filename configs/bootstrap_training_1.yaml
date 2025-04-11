@@ -9,10 +9,11 @@ policy-model: "Qwen/Qwen2.5-Coder-7B-Instruct"
 max-model-len: 32768
 
 data-folder: "/itet-stor/piroth/net_scratch/task_data/training"
-sort-by-length: true
+num-tasks: 135
+sort-by-length: false
 
 num-examples: 1
-example-names: [["6b9890af"]]
+example-names: [["3e980e27"]]
 
 rotate-example: false
 
@@ -23,6 +24,8 @@ max-policy-temperature: 1.0
 save-sft-data: true
 
 num-rollouts: 24
+hint-rollouts: 18
+
 branching-factor: 8
 max-depth: 20
 
