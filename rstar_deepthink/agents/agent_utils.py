@@ -8,7 +8,7 @@ from constants import DEFAULT_DATA_FOLDER
 
 
 def get_description(task_name: str) -> str:
-    path = os.path.join(DEFAULT_DATA_FOLDER, "bootstrap", f"descriptions_3.json")
+    path = os.path.join(DEFAULT_DATA_FOLDER, "bootstrap", f"descriptions_4.json")
     key = f"{task_name}.json"
 
     # safely load the description from the json file
