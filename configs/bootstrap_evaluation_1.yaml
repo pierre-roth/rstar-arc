@@ -6,17 +6,16 @@ round-number: 1
 solve-only-unsolved: false
 solutions-per-task: 64
 
-policy-model: "Qwen/Qwen2.5-Coder-32B-Instruct-GPTQ-Int8"
+policy-model: "Qwen/Qwen2.5-Coder-7B-Instruct"
 max-model-len: 32768
-dtype: "auto"
+
 
 evaluation: true
 data-folder: "/itet-stor/piroth/net_scratch/task_data/evaluation"
-num-tasks: 60
-sort-by-length: true
+sort-by-length: false
 
 num-examples: 1
-example-names: [["ddf7fa4f"]]
+example-names: [["228f6490"]]
 
 rotate-example: false
 
@@ -26,11 +25,11 @@ max-policy-temperature: 1.0
 
 save-sft-data: true
 
-num-rollouts: 32
-hint-rollouts: 24
+num-rollouts: 24
+hint-rollouts: 18
 
 branching-factor: 8
 max-depth: 18
 
-batch-size: 60
+batch-size: 45
 
