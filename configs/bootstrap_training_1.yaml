@@ -3,18 +3,17 @@ log-level: "INFO"
 
 save-for-visualization: false
 round-number: 1
-solve-only-unsolved: true
+solve-only-unsolved: false
 solutions-per-task: 64
 
 policy-model: "Qwen/Qwen2.5-Coder-7B-Instruct"
 max-model-len: 32768
 
 data-folder: "/itet-stor/piroth/net_scratch/task_data/training"
-num-tasks: 135
 sort-by-length: false
 
 num-examples: 1
-example-names: [["5c2c9af4"]]
+example-names: [["228f6490"]]
 
 rotate-example: false
 
