@@ -22,6 +22,7 @@ class Bootstrap(Agent):
         hint = ("Here is a hint on how to solve the task: \n" + get_description(self.task_name)
                 + f"\n\nMake sure to write the code in steps with the step end marker {STEP_END} and write detailed comments for each step!\n\n")
         self.root.state["hint"] = hint
+        self.hint_backup = hint
         logger.debug(f"Hint: \n" + hint)
 
     def update(self, rollout_idx: int, current_temperature: float) -> None:
@@ -29,6 +30,10 @@ class Bootstrap(Agent):
 
         if self.config.hint_rollouts is not None and rollout_idx >= self.config.hint_rollouts:
             self.root.state["hint"] = ""
+        elif self.rollout_idx > 4 and random() > 0.6:
+            self.root.state["hint"] = ""
+        else:
+            self.root.state["hint"] = self.hint_backup
 
     def should_generate_next(self) -> bool:
         """Check if we need to generate for current nodes."""
