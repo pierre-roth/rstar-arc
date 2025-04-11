@@ -10,13 +10,20 @@ from constants import NET_SCRATCH_PATH
 
 
 def calculate_coverage(round_num: int):
-    sft_path = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{round_num}", "raw.jsonl")
+    sft_path_training = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{round_num}", "raw.jsonl")
+    sft_path_evaluation = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{round_num}", "raw_evaluation.jsonl")
     task_path = os.path.join(NET_SCRATCH_PATH, "task_data")
 
     task_names = set()
 
     # Collect all task names from the task data
-    with open(sft_path, "r", encoding="utf-8") as f:
+    with open(sft_path_training, "r", encoding="utf-8") as f:
+        for line in f:
+            if line.strip():
+                solution = json.loads(line)
+                task_names.add(solution["task_name"] + ".json")
+
+    with open(sft_path_evaluation, "r", encoding="utf-8") as f:
         for line in f:
             if line.strip():
                 solution = json.loads(line)
