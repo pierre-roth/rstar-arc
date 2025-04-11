@@ -226,3 +226,24 @@
     - training: 73/400 = 18.25% coverage
     - training_extended: 1180/8939 = 13.20% coverage
     - Total unique tasks: 1253
+
+
+### Week 6 (07.04.2025)
+
+- **Work planned**:
+  - generating training data using human descriptions of ARC tasks
+  - work on cleaning and augmentation code
+  - do research on fine tuning
+  - work in fine tuning an initial policy model
+
+
+- **Work done**:
+  - 
+
+- **Issues and Questions**:
+  - 
+
+- **Results**: 
+  - Round number: 1
+    - 
+

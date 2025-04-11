@@ -3,7 +3,8 @@ log-level: "INFO"
 
 save-for-visualization: false
 round-number: 1
-solve-only-unsolved: true
+solve-only-unsolved: false
+solutions-per-task: 64
 
 policy-model: "Qwen/Qwen2.5-Coder-32B-Instruct-GPTQ-Int8"
 max-model-len: 32768
@@ -28,7 +29,7 @@ num-rollouts: 32
 hint-rollouts: 24
 
 branching-factor: 8
-max-depth: 20
+max-depth: 18
 
 batch-size: 60
 

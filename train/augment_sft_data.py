@@ -96,6 +96,7 @@ def write_batch_data(filepath: str, data_batch: List[Dict]):
         logger.error(f"Failed to write batch to augmented data file {filepath}: {e}")
 
 
+# TODO: generate more examples using reARC generation code to generate more equal number of augmentations per task
 def process_augmentation_job(job_data: Tuple[str, str, Dict[str, Any], int, str]) -> List[Dict]:
     """Loads reARC, filters, generates, and returns augmented task data."""
     task_name, solution_code, original_task_json, k, rearc_data_dir = job_data
