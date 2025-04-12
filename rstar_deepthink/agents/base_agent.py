@@ -118,7 +118,8 @@ class Agent:
                 else:
                     prompt_token_count = "N/A"
 
-                logger.debug(f"Expanding node at depth {current_node.depth} with {len(request_output.outputs)} children")
+                logger.debug(
+                    f"Expanding node at depth {current_node.depth} with {len(request_output.outputs)} children")
                 logger.debug(f"Prompt token count: {prompt_token_count}")
 
             # Create children from outputs

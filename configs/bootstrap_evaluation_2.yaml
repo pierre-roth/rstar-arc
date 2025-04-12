@@ -30,7 +30,7 @@ num-rollouts: 32
 hint-rollouts: 24
 
 branching-factor: 8
-max-depth: 18
+max-depth: 20
 
 batch-size: 60
 

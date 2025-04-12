@@ -16,6 +16,7 @@ class Bootstrap(Agent):
         This leverages shared functionality while maintaining MCTS-specific selection logic.
         In addition, it does hardcoded task object analysis/captioning.
     """
+
     def __init__(self, config, task):
         super().__init__(config, task)
         self.task_name = task.name
@@ -43,7 +44,8 @@ class Bootstrap(Agent):
 
         # Check if any current node is non-terminal
         need_generate = any(not node.is_terminal() for node in self.current_nodes)
-        already_solved = (len(self.final_answer_nodes) >= self.config.solutions_per_task) if self.config.solutions_per_task is not None else False
+        already_solved = (
+                len(self.final_answer_nodes) >= self.config.solutions_per_task) if self.config.solutions_per_task is not None else False
         logger.debug(f"Need generation: {need_generate} (nodes: {len(self.current_nodes)})")
         return need_generate and not already_solved
 

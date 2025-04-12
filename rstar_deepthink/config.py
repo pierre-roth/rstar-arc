@@ -21,7 +21,7 @@ class Config:
 
     arc_prize: bool = False  # Whether this is a competition submission
 
-    log_level: str = "DEBUG"  # Logging level: DEBUG, INFO, WARNING, ERROR, CRITICAL
+    log_level: str = "INFO"  # Logging level: DEBUG, INFO, WARNING, ERROR, CRITICAL
     save_for_visualization: bool = True  # Whether to visualize the reasoning steps
     solve_only_unsolved: bool = False  # Whether to only solve unsolved tasks
     solutions_per_task: int | None = None  # Bound the number of solutions (that pass training examples) to find for each task (None means as many as possible)
@@ -70,7 +70,7 @@ class Config:
 
     beam_width: int = 3  # Number of top-scoring beams to track
     branching_factor: int = 4  # Number of children to generate if no children exist yet
-    regeneration_probability: float = 1/8  # Probability of regenerating a node if it has no children
+    regeneration_probability: float = 1 / 8  # Probability of regenerating a node if it has no children
 
     variable_temperature: bool = False  # Whether to use variable temperature for sampling
     min_policy_temperature: float = 0.7  # Minimum temperature for variable temperature sampling

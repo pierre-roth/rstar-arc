@@ -115,7 +115,8 @@ class Solver:
                 agent.select_next_step(from_root=True)
                 agent.update(rollout, temperature)
 
-            logger.info(f"----------------- Current Rollout: {rollout} ----------------- ({temperature}, {agents[0].example_name})")
+            logger.info(
+                f"----------------- Current Rollout: {rollout} ----------------- ({temperature}, {agents[0].example_name})")
 
             for step in range(self.config.max_depth):
                 logger.info(f"----------------- Current Step: {step} -----------------")

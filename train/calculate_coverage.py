@@ -60,7 +60,7 @@ if __name__ == "__main__":
     round_number = int(input("Round number: "))
 
     coverages = []
-    for i in range(0, round_number+1):
+    for i in range(0, round_number + 1):
         print(f"Calculating coverage for round {i}: ")
         coverages.append(calculate_coverage(i))
         print("\n")
