@@ -1,7 +1,7 @@
 from random import choice, sample, randint, shuffle
 
 from dsl import *
-from train.utils import unifint
+from train.rearc_utils import unifint
 
 
 def generate_dbc1a6ce(diff_lb: float, diff_ub: float) -> dict:
