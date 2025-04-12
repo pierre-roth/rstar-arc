@@ -30,7 +30,7 @@ class Bootstrap(Agent):
 
         if self.config.hint_rollouts is not None and rollout_idx >= self.config.hint_rollouts:
             self.root.state["hint"] = ""
-        elif self.rollout_idx > 4 and random() > 0.6:
+        elif self.rollout_idx > 4 and random() > 0.7:
             self.root.state["hint"] = ""
         else:
             self.root.state["hint"] = self.hint_backup
