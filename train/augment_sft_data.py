@@ -38,7 +38,7 @@ TARGET_EXAMPLES_PER_TASK = 100  # M value
 MAX_GENERATION_ATTEMPTS = 300  # N value
 VERIFY_GENERATED_EXAMPLES = True  # Boolean flag for additional verification
 BATCH_SIZE = 100
-TIMEOUT = 7200
+TIMEOUT = 10800
 
 
 # --- Helper Functions ---
