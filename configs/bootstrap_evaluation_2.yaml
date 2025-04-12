@@ -13,10 +13,10 @@ dtype: "auto"
 evaluation: true
 data-folder: "/itet-stor/piroth/net_scratch/task_data/evaluation"
 num-tasks: 60
-sort-by-length: false
+sort-by-length: true
 
 num-examples: 1
-example-names: [["08ed6ac7"]]
+example-names: [["045e512c"]]
 
 rotate-example: false
 
