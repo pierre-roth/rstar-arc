@@ -35,9 +35,10 @@ NUM_SOLUTIONS_Q_VALUE = 64
 NUM_SOLUTIONS_LENGTH = 32
 NUM_SOLUTIONS_DIVERSITY = 8
 TARGET_EXAMPLES_PER_TASK = 100  # M value
-MAX_GENERATION_ATTEMPTS = 10  # N value
+MAX_GENERATION_ATTEMPTS = 0  # N value
 VERIFY_GENERATED_EXAMPLES = True  # Boolean flag for additional verification
 BATCH_SIZE = 500
+TIMEOUT = 7200
 
 
 # --- Helper Functions ---
@@ -450,7 +451,7 @@ def main(config: Config):
     if augmentation_jobs:
         num_workers = max(1, config.cpus - 1 if config.cpus > 1 else 1)
         logger.info(f"Starting parallel augmentation using {num_workers} workers...")
-        task_timeout = 1800  # 30 minutes per task
+        task_timeout = TIMEOUT
 
         results_batch_to_write = []
         processed_jobs_count = 0

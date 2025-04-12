@@ -42,9 +42,8 @@ logger.info("Project root added to path and custom modules imported.")
 # --- Configuration ---
 logger.info("--- Configuration ---")
 MODEL_ID = "Qwen/Qwen2.5-Coder-0.5B"
-# TODO: change file name to 'augmented.jsonl'
-TRAINING_DATASET_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{0}", "test_small.jsonl")
-VALIDATION_DATASET_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{0}", "validation.jsonl")
+TRAINING_DATASET_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{1}", "augmented.jsonl")
+VALIDATION_DATASET_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{1}", "validation.jsonl")
 OUTPUT_DIR = os.path.join(NET_SCRATCH_PATH, "models", "fine_tuned", "policy")
 # TODO: set max_seq_length based even higher
 MAX_SEQ_LENGTH = 8192  # Adjust based on your data and GPU memory
