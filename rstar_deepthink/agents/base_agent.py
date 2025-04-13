@@ -50,17 +50,18 @@ class Agent:
         self.rollout_idx = rollout_idx
         self.current_temperature = current_temperature
 
-        if self.config.rotate_example:  # Rotate example
-            self.example_name = self.config.example_names[self.rollout_idx % len(self.config.example_names)]
-            self.root.state["example_prompt"] = get_example_prompt(self.config, self.example_name)
-        else:
-            self.example_name = choice(self.config.example_names)
-            self.root.state["example_prompt"] = get_example_prompt(self.config, self.example_name)
+        if not self.config.fine_tuned:
+            if self.config.rotate_example:  # Rotate example
+                self.example_name = self.config.example_names[self.rollout_idx % len(self.config.example_names)]
+                self.root.state["example_prompt"] = get_example_prompt(self.config, self.example_name)
+            else:
+                self.example_name = choice(self.config.example_names)
+                self.root.state["example_prompt"] = get_example_prompt(self.config, self.example_name)
+            # Set the example name for the root node
+            logger.debug(f"Update root for task {self.task.name} with example: {self.example_name}")
+            logger.debug(f"Current example prompt: \n{self.root.state['example_prompt']}")
 
-        # Set the example name for the root node
-        logger.debug(f"Update root for task {self.task.name} with example: {self.example_name}")
         logger.debug(f"Current temperature: {self.current_temperature}")
-        logger.debug(f"Current example prompt: \n{self.root.state['example_prompt']}")
 
     def get_nodes(self) -> list[Node]:
         nodes = []
