@@ -168,7 +168,7 @@ try:
     tokenized_datasets = dataset.map(
         preprocess_data,
         batched=True,
-        remove_columns=dataset["train"].column_names,  # Remove original columns
+        # remove_columns=dataset["train"].column_names,  # Remove original columns
         num_proc=max(1, os.cpu_count() // 2)  # Use multiple cores if available
     )
     logger.info(f"Dataset preprocessing finished: {tokenized_datasets}")
