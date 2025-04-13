@@ -44,11 +44,11 @@ logger.info("Project root added to path and custom modules imported.")
 
 # --- Configuration ---
 logger.info("--- Configuration ---")
-MODEL_ID = "Qwen/Qwen2.5-Coder-0.5B"
+MODEL_ID = "Qwen/Qwen2.5-Coder-1.5B"
 TRAINING_DATASET_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{1}", "dataset_training.jsonl")
 VALIDATION_DATASET_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{1}", "dataset_validation.jsonl")
 OUTPUT_DIR = os.path.join(NET_SCRATCH_PATH, "models", "fine_tuned", "policy")
-MAX_SEQ_LENGTH = 6 * 1024  # Adjust based on your data and GPU memory
+MAX_SEQ_LENGTH = 7 * 1024  # Adjust based on your data and GPU memory
 WANDB_PROJECT = "deepthink-sft"  # Added wandb project name
 WANDB_ENTITY = None  # Set to your team name or username if needed
 
@@ -61,7 +61,7 @@ logger.info(f"WANDB_PROJECT: {WANDB_PROJECT}")
 
 # --- LoRA Configuration (specify which layers to adapt) ---
 lora_config = LoraConfig(
-    r=64,
+    r=128,
     lora_alpha=16,
     target_modules=[
         "q_proj", "k_proj", "v_proj", "o_proj",

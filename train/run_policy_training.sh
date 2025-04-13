@@ -6,7 +6,7 @@
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=16
 #SBATCH --gres=gpu:1
-#SBATCH --constraint='geforce_rtx_3090'
+#SBATCH --constraint='rtx_a6000'
 
 
 # Default application parameters
