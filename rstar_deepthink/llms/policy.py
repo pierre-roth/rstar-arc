@@ -1,4 +1,5 @@
 import logging
+import os.path
 from datetime import datetime
 
 from vllm import LLM, SamplingParams, RequestOutput
@@ -21,7 +22,8 @@ class PolicyModel:
 
         self.llm = LLM(
             trust_remote_code=True,
-            model=self.config.policy_model,
+            model=self.config.policy_model if not self.config.fine_tuned else os.path.join(self.config.policy_model_dir,
+                                                                                           self.config.policy_model),
             download_dir=self.config.policy_model_dir,
             tensor_parallel_size=self.config.gpus,
             dtype=self.config.dtype,
