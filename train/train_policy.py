@@ -163,6 +163,9 @@ try:
     dataset = load_dataset("json", data_files={"train": TRAINING_DATASET_PATH, "validation": VALIDATION_DATASET_PATH})
     logger.info(f"Dataset loaded: {dataset}")
 
+    dataset["train"] = dataset["train"].shuffle(seed=42)
+    logger.info("Dataset shuffled.")
+
     logger.info("Preprocessing and tokenizing dataset (this may take a while)...")
     tokenized_datasets = dataset.map(
         preprocess_data,
