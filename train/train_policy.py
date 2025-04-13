@@ -79,7 +79,7 @@ run_name = f"{MODEL_ID.split('/')[-1]}-finetune-{os.path.basename(TRAINING_DATAS
 training_arguments = TrainingArguments(
     output_dir=OUTPUT_DIR,
     per_device_train_batch_size=1,  # Keep small for small models/memory
-    gradient_accumulation_steps=8,  # Effective batch size = batch_size * grad_accum_steps
+    gradient_accumulation_steps=16,  # Effective batch size = batch_size * grad_accum_steps
     optim="adamw_torch",  # Changed from paged_adamw_8bit to standard adamw
     learning_rate=2e-5,
     lr_scheduler_type="cosine",
