@@ -43,8 +43,8 @@ class Config:
 
     fine_tuned: bool = False  # Whether the model is fine-tuned
 
-    model_base_path: str = os.path.join(NET_SCRATCH_PATH, "models")  # Base path where models are stored
-    # model_base_path: str = os.path.join(LOCAL_SCRATCH_PATH, "models")  # Base path where models are stored
+    net_scratch_model_base_path: str = os.path.join(NET_SCRATCH_PATH, "models")  # Base path where models are stored
+    local_scratch_model_base_path: str = os.path.join(LOCAL_SCRATCH_PATH, "models")  # Base path where models are stored
 
     max_tokens: int = 512  # Maximum tokens for generation of a single step
     dtype: str = "bfloat16"  # Data type for model (affects precision/speed)
@@ -128,8 +128,13 @@ class Config:
         self._load_from_file()
 
         # Set computed model directories and other derived values
-        self.policy_model_dir = os.path.join(self.model_base_path, "policy")
-        self.reward_model_dir = os.path.join(self.model_base_path, "reward")
+        if self.fine_tuned and not self.max_model_len > 32768:
+            self.policy_model_dir = os.path.join(self.net_scratch_model_base_path, "policy")
+            self.reward_model_dir = os.path.join(self.net_scratch_model_base_path, "reward")
+        else:
+            self.policy_model_dir = os.path.join(self.local_scratch_model_base_path, "policy")
+            self.reward_model_dir = os.path.join(self.local_scratch_model_base_path, "reward")
+
         self.local_job_dir = os.path.join(LOCAL_SCRATCH_PATH, f"job_{self.job_id}")
         self.final_job_dir = os.path.join(self.output_dir, "detailed_logs", f"job_{self.job_id}")
         self.numeric_log_level = getattr(logging, self.log_level.upper(), logging.DEBUG)
