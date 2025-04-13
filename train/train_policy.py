@@ -9,7 +9,7 @@ import wandb
 # Configure wandb to use less resources
 os.environ["WANDB_SILENT"] = "true"  # Reduce console output
 os.environ["WANDB_CONSOLE"] = "off"  # Disable wandb console logging
-from datasets import load_dataset
+from datasets import load_dataset, DatasetDict
 from peft import LoraConfig, get_peft_model
 from transformers import (
     AutoModelForCausalLM,
@@ -130,54 +130,114 @@ logger.info(
 # --- Data Preprocessing Function ---
 def preprocess_data(examples):
     """Formats prompt and solution, then tokenizes for Causal LM."""
-    try:
-        # Combine prompt and completion, adding EOS token for Causal LM training
-        texts = [
-            SFT_SYSTEM_PROMPT + task_to_prompt(
-                ARCTask.from_dict(task_json)) + IN_BETWEEN_PROMPT + solution + tokenizer.eos_token
-            for task_json, solution in zip(examples["task_json"], examples["solution"])
-        ]
-        # Tokenize, ensuring truncation and padding
-        model_inputs = tokenizer(
-            texts,
-            max_length=MAX_SEQ_LENGTH,
-            truncation=True,
-            padding="max_length"  # Pad sequences to max_length for batching
-        )
-        # For Causal LM, labels are the same as input_ids. The model learns to predict the next token.
-        # The loss function in Trainer handles shifting internally.
-        model_inputs["labels"] = model_inputs["input_ids"].copy()
+    model_inputs = {"input_ids": [], "attention_mask": [], "labels": [], "weight": []}
 
-        # weights
-        model_inputs["weight"] = [float(w) for w in examples["weight"]]
+    # Process each example individually to isolate errors
+    for i, (task_json, solution, weight) in enumerate(zip(examples.get("task_json", []),
+                                                          examples.get("solution", []),
+                                                          examples.get("weight", []))):
+        try:
+            # Validate inputs
+            if not task_json or not solution:
+                logger.warning(f"Skipping example {i}: Missing task_json or solution")
+                continue
 
-        return model_inputs
-    except Exception as e:
-        logger.error(f"Error during preprocessing: {e}")
-        # Return empty dict or raise error depending on desired behavior
-        return {}
+            # Create the prompt with safe error handling
+            try:
+                arc_task = ARCTask.from_dict(task_json)
+                task_prompt = task_to_prompt(arc_task)
+            except Exception as e:
+                logger.warning(f"Skipping example {i}: Error creating task prompt: {e}")
+                continue
+
+            # Combine prompt and completion
+            text = SFT_SYSTEM_PROMPT + task_prompt + IN_BETWEEN_PROMPT + solution + tokenizer.eos_token
+
+            # Tokenize the individual example
+            encoded = tokenizer(
+                text,
+                max_length=MAX_SEQ_LENGTH,
+                truncation=True,
+                padding="max_length"
+            )
+
+            # Add to batch
+            model_inputs["input_ids"].append(encoded["input_ids"])
+            model_inputs["attention_mask"].append(encoded["attention_mask"])
+            model_inputs["labels"].append(encoded["input_ids"].copy())
+            model_inputs["weight"].append(float(weight) if weight else 1.0)
+
+        except Exception as e:
+            logger.warning(f"Error processing example {i}: {e}")
+            continue
+
+    # Convert lists to tensors for the model
+    for key in model_inputs:
+        if model_inputs[key]:  # Check if we have any valid examples
+            if key == "weight":
+                model_inputs[key] = [float(w) for w in model_inputs[key]]
+            else:
+                model_inputs[key] = model_inputs[key]
+
+    return model_inputs
 
 
 # --- Load and Prepare Dataset ---
 logger.info("Loading dataset...")
 try:
-    dataset = load_dataset("json", data_files={"train": TRAINING_DATASET_PATH, "validation": VALIDATION_DATASET_PATH})
-    logger.info(f"Dataset loaded: {dataset}")
+    # Load dataset with error handling
+    try:
+        dataset = load_dataset("json", data_files={"train": TRAINING_DATASET_PATH, "validation": VALIDATION_DATASET_PATH})
+        logger.info(f"Dataset loaded: {dataset}")
+    except Exception as e:
+        logger.error(f"Error loading dataset files: {str(e)}")
+        # Try to load each file separately to isolate the issue
+        try:
+            train_dataset = load_dataset("json", data_files={"train": TRAINING_DATASET_PATH})
+            logger.info(f"Training dataset loaded: {train_dataset}")
+            val_dataset = load_dataset("json", data_files={"validation": VALIDATION_DATASET_PATH})
+            logger.info(f"Validation dataset loaded: {val_dataset}")
+            dataset = DatasetDict({
+                "train": train_dataset["train"],
+                "validation": val_dataset["validation"]
+            })
+        except Exception as nested_e:
+            logger.error(f"Failed to load datasets separately: {str(nested_e)}")
+            raise
+
+    # Verify dataset structure before preprocessing
+    required_columns = ["task_json", "solution", "weight"]
+    for split in dataset:
+        missing_columns = [col for col in required_columns if col not in dataset[split].column_names]
+        if missing_columns:
+            logger.error(f"Missing required columns in {split} dataset: {missing_columns}")
+            sample_columns = dataset[split].column_names
+            logger.info(f"Available columns: {sample_columns}")
+            raise ValueError(f"Dataset is missing required columns: {missing_columns}")
 
     logger.info("Preprocessing and tokenizing dataset (this may take a while)...")
+    # Process with better error handling and lower parallelism to avoid memory issues
     tokenized_datasets = dataset.map(
         preprocess_data,
         batched=True,
-        remove_columns=dataset["train"].column_names,  # Remove original columns
-        num_proc=max(1, os.cpu_count() // 2)  # Use multiple cores if available
+        batch_size=100,  # Process in smaller batches
+        # remove_columns=dataset["train"].column_names,
+        num_proc=max(1, min(4, os.cpu_count() // 2))  # Limit parallelism to avoid memory issues
     )
+
+    # Verify the processed datasets have valid lengths
+    for split in tokenized_datasets:
+        if len(tokenized_datasets[split]) == 0:
+            logger.error(f"Processed {split} dataset is empty. Something went wrong during preprocessing.")
+            raise ValueError(f"Empty dataset after preprocessing: {split}")
+
     logger.info(f"Dataset preprocessing finished: {tokenized_datasets}")
 
 except FileNotFoundError as e:
     logger.error(f"Dataset file not found: {e}. Please check paths: {TRAINING_DATASET_PATH}, {VALIDATION_DATASET_PATH}")
     sys.exit(1)  # Exit if data is missing
 except Exception as e:
-    logger.error(f"Error loading or processing dataset: {e}")
+    logger.error(f"Error loading or processing dataset: {e}", exc_info=True)  # Log full traceback
     sys.exit(1)
 
 # --- Load Model ---
@@ -205,7 +265,44 @@ logger.info("LoRA adapter applied to the model.")
 logger.info("Trainable parameters overview:")
 model.print_trainable_parameters()
 
-# --- Initialize wandb (lightweight configuration) ---
+
+# --- Debug Dataset Content ---
+def inspect_json_file(file_path, max_examples=3):
+    """Manually inspect JSON file content to debug issues"""
+    import json
+
+    logger.info(f"Inspecting file: {file_path}")
+    try:
+        with open(file_path, 'r') as f:
+            for i, line in enumerate(f):
+                if i >= max_examples:
+                    break
+                try:
+                    data = json.loads(line.strip())
+                    # Log basic structure without full content
+                    keys = list(data.keys())
+                    logger.info(f"Example {i} keys: {keys}")
+
+                    # Check specific required fields
+                    if 'task_json' not in data:
+                        logger.error(f"Example {i} is missing task_json field")
+                    if 'solution' not in data:
+                        logger.error(f"Example {i} is missing solution field")
+                    if 'weight' not in data:
+                        logger.warning(f"Example {i} is missing weight field")
+
+                except json.JSONDecodeError as e:
+                    logger.error(f"Error decoding JSON at line {i}: {e}")
+                    logger.info(f"Problematic line: {line[:100]}...")
+
+    except Exception as e:
+        logger.error(f"Error inspecting file {file_path}: {e}")
+
+
+# Inspect dataset files before loading
+logger.info("Inspecting dataset files for potential issues...")
+inspect_json_file(TRAINING_DATASET_PATH)
+inspect_json_file(VALIDATION_DATASET_PATH)
 logger.info("Initializing wandb with lightweight configuration...")
 wandb.init(
     project=WANDB_PROJECT,
@@ -213,7 +310,6 @@ wandb.init(
     name=run_name,
     config={
         "model_name": MODEL_ID.split('/')[-1],  # Just log model name without full path
-        "max_seq_length": MAX_SEQ_LENGTH,
         "lora_r": lora_config.r,
         "lora_alpha": lora_config.lora_alpha,
         "learning_rate": training_arguments.learning_rate,
