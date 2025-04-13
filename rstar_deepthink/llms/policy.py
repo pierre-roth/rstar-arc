@@ -24,11 +24,11 @@ class PolicyModel:
             trust_remote_code=True,
             model=self.config.policy_model if not self.config.fine_tuned else os.path.join(self.config.policy_model_dir,
                                                                                            self.config.policy_model),
-            download_dir=self.config.policy_model_dir,
+            download_dir=self.config.policy_model_dir if not self.config.fine_tuned else None,
             tensor_parallel_size=self.config.gpus,
             dtype=self.config.dtype,
             max_model_len=self.config.max_model_len,
-            enforce_eager=True,
+            enforce_eager=self.config.max_model_len > 32768,
             # max_num_seqs=self.config.max_num_seqs,
             # max_num_batched_tokens=self.config.max_num_batched_tokens,
         )
