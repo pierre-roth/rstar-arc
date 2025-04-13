@@ -16,6 +16,7 @@ PROJECT_NAME=rstar-arc
 DIRECTORY=/home/${ETH_USERNAME}/${PROJECT_NAME}
 CONDA_ENVIRONMENT=arc-solver
 CONFIG_FILE="custom_training_14B.yaml"
+NET_SCRATCH_PATH=/itet-stor/${ETH_USERNAME}/net_scratch
 
 # --- Configuration for Minimal Python Subprocess Environment ---
 # Using the details provided by the user (Link validated ~ Mar 28, 2025)
@@ -272,6 +273,8 @@ echo "Conda activated." | tee -a "${local_job_dir}/job_info.log"
 
 echo "Changing to project directory: ${DIRECTORY}" | tee -a "${local_job_dir}/job_info.log"
 cd ${DIRECTORY}
+
+export HF_CACHE_DIR="${NET_SCRATCH_PATH}/.cache/huggingface"
 
 # Execute the Python application with output redirected to local scratch
 echo "Running: python main.py --config-file ${CONFIG_FILE}" | tee -a "${local_job_dir}/job_info.log"

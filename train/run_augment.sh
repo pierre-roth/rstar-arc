@@ -12,6 +12,7 @@ ETH_USERNAME=piroth
 PROJECT_NAME=rstar-arc
 DIRECTORY=/home/${ETH_USERNAME}/${PROJECT_NAME}/train
 CONDA_ENVIRONMENT=arc-solver
+NET_SCRATCH_PATH=/itet-stor/${ETH_USERNAME}/net_scratch
 
 # --- Configuration for Minimal Python Subprocess Environment ---
 # Using the details provided by the user (Link validated ~ Mar 28, 2025)
@@ -256,6 +257,8 @@ echo "Conda activated." | tee -a "${local_job_dir}/job_info.log"
 
 echo "Changing to project directory: ${DIRECTORY}" | tee -a "${local_job_dir}/job_info.log"
 cd ${DIRECTORY}
+
+export HF_CACHE_DIR="${NET_SCRATCH_PATH}/.cache/huggingface"
 
 # Execute the Python application with output redirected to local scratch
 echo "Running: python augment_sft_data.py" | tee -a "${local_job_dir}/job_info.log"
