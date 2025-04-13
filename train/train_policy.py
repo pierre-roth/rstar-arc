@@ -5,8 +5,12 @@ import sys
 
 import torch
 import wandb
+
+# Configure wandb to use less resources
+os.environ["WANDB_SILENT"] = "true"  # Reduce console output
+os.environ["WANDB_CONSOLE"] = "off"  # Disable wandb console logging
 from datasets import load_dataset
-from peft import LoraConfig, get_peft_model, PeftModel
+from peft import LoraConfig, get_peft_model
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
@@ -14,7 +18,6 @@ from transformers import (
     Trainer,
     DataCollatorForLanguageModeling
 )
-
 
 # --- Setup Logging ---
 # Configure logging to output to console and optionally to a file
@@ -39,11 +42,14 @@ from constants import NET_SCRATCH_PATH  # Example import
 
 logger.info("Project root added to path and custom modules imported.")
 
+SFT_SYSTEM_PROMPT = """Generate Python code step-by-step to solve the ARC task presented below. Implement the solution within a `solve(I)` function using the required markers."""
+IN_BETWEEN_PROMPT = """Solution Code:"""
+
 # --- Configuration ---
 logger.info("--- Configuration ---")
 MODEL_ID = "Qwen/Qwen2.5-Coder-0.5B"
-TRAINING_DATASET_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{0}", "augmented.jsonl")
-VALIDATION_DATASET_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{0}", "raw_evaluation.jsonl")
+TRAINING_DATASET_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{1}", "dataset_training.jsonl")
+VALIDATION_DATASET_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{1}", "dataset_validation.jsonl")
 OUTPUT_DIR = os.path.join(NET_SCRATCH_PATH, "models", "fine_tuned", "policy")
 MAX_SEQ_LENGTH = 10240  # Adjust based on your data and GPU memory
 WANDB_PROJECT = "deepthink-sft"  # Added wandb project name
@@ -80,17 +86,18 @@ training_arguments = TrainingArguments(
     optim="adamw_torch",  # Changed from paged_adamw_8bit to standard adamw
     learning_rate=5e-5,
     lr_scheduler_type="cosine",
-    num_train_epochs=4,
+    num_train_epochs=2,
     warmup_ratio=0.03,
     logging_strategy="steps",  # Log metrics every logging_steps
-    logging_steps=10,  # Log training loss frequently
+    logging_steps=100,  # Reduced frequency to minimize IO
     logging_first_step=True,  # Log metrics for the very first step
     save_strategy="steps",  # Save checkpoints every save_steps
     save_steps=100,  # Save checkpoint frequency
     save_total_limit=2,  # Keep only the last 2 checkpoints
     fp16=False,  # Enable fp16 for memory efficiency
     bf16=True,  # Disable bf16 if using fp16
-    report_to="wandb",  # Use Weights & Biases
+    report_to="wandb",  # Use Weights & Biases with limited metrics
+    log_level="warning",  # Reduce logging verbosity
     gradient_checkpointing=True,  # Save memory during training
     gradient_checkpointing_kwargs={'use_reentrant': False},  # Recommended setting
 
@@ -126,7 +133,8 @@ def preprocess_data(examples):
     try:
         # Combine prompt and completion, adding EOS token for Causal LM training
         texts = [
-            task_to_prompt(ARCTask.from_dict(task_json)) + solution + tokenizer.eos_token
+            SFT_SYSTEM_PROMPT + task_to_prompt(
+                ARCTask.from_dict(task_json)) + IN_BETWEEN_PROMPT + solution + tokenizer.eos_token
             for task_json, solution in zip(examples["task_json"], examples["solution"])
         ]
         # Tokenize, ensuring truncation and padding
@@ -139,6 +147,10 @@ def preprocess_data(examples):
         # For Causal LM, labels are the same as input_ids. The model learns to predict the next token.
         # The loss function in Trainer handles shifting internally.
         model_inputs["labels"] = model_inputs["input_ids"].copy()
+
+        # weights
+        model_inputs["weight"] = [float(w) for w in examples["weight"]]
+
         return model_inputs
     except Exception as e:
         logger.error(f"Error during preprocessing: {e}")
@@ -193,60 +205,109 @@ logger.info("LoRA adapter applied to the model.")
 logger.info("Trainable parameters overview:")
 model.print_trainable_parameters()
 
-# --- Initialize wandb ---
-logger.info("Initializing wandb...")
+# --- Initialize wandb (lightweight configuration) ---
+logger.info("Initializing wandb with lightweight configuration...")
 wandb.init(
     project=WANDB_PROJECT,
     entity=WANDB_ENTITY,
     name=run_name,
     config={
-        "model_name": MODEL_ID,
-        "training_dataset": TRAINING_DATASET_PATH,
-        "validation_dataset": VALIDATION_DATASET_PATH,
+        "model_name": MODEL_ID.split('/')[-1],  # Just log model name without full path
         "max_seq_length": MAX_SEQ_LENGTH,
         "lora_r": lora_config.r,
         "lora_alpha": lora_config.lora_alpha,
-        "lora_dropout": lora_config.lora_dropout,
-        "lora_target_modules": lora_config.target_modules,
         "learning_rate": training_arguments.learning_rate,
         "effective_batch_size": training_arguments.per_device_train_batch_size * training_arguments.gradient_accumulation_steps,
         "epochs": training_arguments.num_train_epochs,
-        "warmup_ratio": training_arguments.warmup_ratio,
         "train_samples": len(tokenized_datasets["train"]),
         "validation_samples": len(tokenized_datasets["validation"]),
     }
 )
 
-# Log model architecture
+# Log only essential model info
 model_info = {
-    "model_config": model.config.to_dict(),
-    "trainable_params": model.print_trainable_parameters(),
-    "total_params": sum(p.numel() for p in model.parameters()),
+    "trainable_params_pct": model.print_trainable_parameters(),  # Just log percentage, not full details
 }
 wandb.log({"model_info": model_info})
 
-# Log a sample prompt/completion pair for reference
-if len(dataset["train"]) > 0:
-    sample_idx = 0
-    sample = dataset["train"][sample_idx]
-    sample_task = ARCTask.from_dict(sample["task_json"])
-    sample_prompt = task_to_prompt(sample_task)
-    sample_completion = sample["solution"]
-    wandb.log({
-        "sample_data": {
-            "prompt": sample_prompt,
-            "completion": sample_completion
-        }
-    })
-
-logger.info("wandb initialized successfully.")
+logger.info("wandb initialized successfully with lightweight logging.")
 
 # --- Initialize Trainer ---
 # Data Collator for Causal LM. mlm=False ensures standard next-token prediction.
 data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
 
-logger.info("Initializing Trainer...")
-trainer = Trainer(
+logger_trainer = logging.getLogger("WeightedTrainer")  # Use a specific logger if desired
+
+
+class WeightedTrainer(Trainer):  # Inherit from the Hugging Face Trainer
+    def compute_loss(self, model, inputs, return_outputs=False):
+        """
+        Computes the weighted loss for causal language modeling.
+        """
+        sample_weights = inputs.pop("weight", None)  # Pop weights from inputs
+
+        if sample_weights is None:
+            logger_trainer.warning("Sample weights ('weight' key) not found in batch inputs. Using uniform weighting.")
+            if 'input_ids' in inputs:
+                sample_weights = torch.ones(inputs['input_ids'].size(0), device=inputs['input_ids'].device)
+            else:
+                # Cannot determine batch size, handle appropriately
+                # This case should ideally not happen with standard datasets
+                logger_trainer.error("Cannot determine batch size for default weights.")
+                # Fallback or raise error
+                outputs = model(**inputs)  # Try to get loss directly
+                loss = outputs.loss if hasattr(outputs, "loss") else torch.tensor(0.0)
+                return (loss, outputs) if return_outputs else loss
+        else:
+            # Ensure weights are on the correct device and are float
+            sample_weights = torch.tensor(sample_weights, dtype=torch.float32).to(inputs['input_ids'].device)
+
+        # Get standard model outputs
+        outputs = model(**inputs)
+        logits = outputs.get("logits")
+        labels = inputs.get("labels")  # Get labels from the original inputs dict
+
+        if logits is not None and labels is not None:
+            loss_fct = torch.nn.CrossEntropyLoss(reduction="none")
+            shift_logits = logits[..., :-1, :].contiguous()
+            shift_labels = labels[..., 1:].contiguous()
+
+            flat_logits = shift_logits.view(-1, shift_logits.size(-1))
+            flat_labels = shift_labels.view(-1)
+
+            active_loss = shift_labels.view(-1) != -100
+            active_logits = flat_logits[active_loss]
+            active_labels = flat_labels[active_loss]
+
+            if active_logits.numel() > 0:
+                per_token_loss = loss_fct(active_logits, active_labels)
+
+                loss_unflattened = torch.zeros_like(shift_labels, dtype=logits.dtype)
+                loss_unflattened.view(-1)[active_loss] = per_token_loss
+
+                loss_per_sequence = loss_unflattened.sum(dim=1)
+                active_tokens_per_sequence = (shift_labels != -100).sum(dim=1)
+                active_tokens_per_sequence = torch.max(active_tokens_per_sequence,
+                                                       torch.tensor(1.0, device=active_tokens_per_sequence.device))
+                mean_loss_per_sequence = loss_per_sequence / active_tokens_per_sequence
+
+                weighted_loss_per_sequence = mean_loss_per_sequence * sample_weights
+                loss = weighted_loss_per_sequence.mean()
+            else:
+                loss = torch.tensor(0.0, device=logits.device, requires_grad=True)
+
+        elif hasattr(outputs, "loss"):
+            logger_trainer.warning("Using model's pre-computed loss. Weighting will be approximate.")
+            loss = outputs.loss * sample_weights.mean()  # Approximate weighting
+        else:
+            logger_trainer.error("Cannot compute loss: Logits/Labels needed, or model must provide 'loss'.")
+            loss = torch.tensor(0.0, device=model.device, requires_grad=True)
+
+        return (loss, outputs) if return_outputs else loss
+
+
+logger.info("Initializing WeightedTrainer...")
+trainer = WeightedTrainer(
     model=model,
     args=training_arguments,
     train_dataset=tokenized_datasets["train"],
@@ -284,99 +345,15 @@ try:
     trainer.log_metrics("final_eval", final_eval_results)
     trainer.save_metrics("final_eval", final_eval_results)
 
-    # Log final results to wandb
+    # Log only the key final metric to wandb
     wandb.log({
-        "final_eval/loss": final_eval_results.get("eval_loss"),
-        "final_eval/perplexity": final_eval_results.get("perplexity", math.exp(final_eval_results.get("eval_loss", 0)))
+        "final_eval/loss": final_eval_results.get("eval_loss")
     })
 
 except Exception as e:
     logger.error(f"An error occurred during training: {e}", exc_info=True)  # Log traceback
     wandb.finish()  # Make sure to close wandb run even on error
     sys.exit(1)
-
-# --- Qualitative Evaluation ---
-logger.info("Performing qualitative evaluation on a few validation samples...")
-GENERATION_PREFIX = "<beginning_of_code>\ndef solve(I):"
-
-try:
-    # Ensure the best model checkpoint is loaded if load_best_model_at_end=True
-    # If not using load_best_model_at_end, the model variable holds the last state.
-    # For robust qualitative eval, explicitly load the saved adapter.
-    logger.info(f"Loading base model {MODEL_ID} again for inference...")
-    base_model_for_eval = AutoModelForCausalLM.from_pretrained(
-        MODEL_ID,
-        device_map="auto",
-        trust_remote_code=True,
-        torch_dtype=torch.bfloat16
-    )
-    logger.info(f"Loading fine-tuned LoRA adapter from {OUTPUT_DIR}...")
-    model_for_inference = PeftModel.from_pretrained(base_model_for_eval, OUTPUT_DIR)
-    model_for_inference = model_for_inference.merge_and_unload()  # Optional: Merge adapter for faster inference if memory allows
-    model_for_inference.eval()  # Set to evaluation mode
-    logger.info("Model and adapter loaded for inference.")
-
-    # Reload tokenizer with left padding for generation
-    tokenizer_for_eval = AutoTokenizer.from_pretrained(MODEL_ID, trust_remote_code=True)
-    if tokenizer_for_eval.pad_token is None:
-        tokenizer_for_eval.pad_token = tokenizer_for_eval.eos_token
-    tokenizer_for_eval.padding_side = "left"  # Crucial for generation
-
-    # Load a few raw validation examples
-    raw_validation_dataset = load_dataset("json", data_files={"validation": VALIDATION_DATASET_PATH})["validation"]
-    num_samples_to_check = 2  # Number of samples to generate for
-
-    # Create a table to log sample predictions
-    prediction_table = wandb.Table(columns=["sample_id", "prompt", "actual_solution", "generated_solution"])
-
-    for i in range(min(num_samples_to_check, len(raw_validation_dataset))):
-        example = raw_validation_dataset[i]
-        prompt_text = task_to_prompt(ARCTask.from_dict(example["task_json"])) + "\n" + GENERATION_PREFIX
-        actual_solution = example["solution"]
-
-        logger.info(f"\n--- Qualitative Sample {i + 1} ---")
-        logger.info(f"Prompt:\n{prompt_text}")
-        logger.info(f"\nActual Solution:\n{actual_solution}")
-
-        # Ensure prompt is not too long before encoding
-        # Simple truncation here, more sophisticated handling might be needed
-        max_prompt_len = MAX_SEQ_LENGTH - 150  # Reserve space for generation
-        if len(tokenizer_for_eval.encode(prompt_text)) > max_prompt_len:
-            logger.warning(f"Prompt for sample {i + 1} is too long, truncating.")
-            # A simple way to truncate (might cut mid-word)
-            prompt_text = tokenizer_for_eval.decode(tokenizer_for_eval.encode(prompt_text)[:max_prompt_len])
-
-        inputs = tokenizer_for_eval(prompt_text, return_tensors="pt", padding=True, truncation=True,
-                                    max_length=max_prompt_len).to(model_for_inference.device)
-
-        # Generate output
-        with torch.no_grad():
-            outputs = model_for_inference.generate(
-                **inputs,
-                max_new_tokens=MAX_SEQ_LENGTH // 4,  # Max tokens to generate
-                temperature=0.8,  # Control randomness (lower = more focused)
-                top_p=0.95,  # Nucleus sampling
-                do_sample=True,  # Use sampling
-                pad_token_id=tokenizer_for_eval.pad_token_id,
-                eos_token_id=tokenizer_for_eval.eos_token_id
-            )
-
-        # Decode only the newly generated part
-        generated_text = tokenizer_for_eval.decode(outputs[0, inputs['input_ids'].shape[1]:], skip_special_tokens=True)
-        logger.info(f"\nGenerated Solution:\n{generated_text}")
-        logger.info("-" * 30)
-
-        # Add row to the wandb Table
-        prediction_table.add_data(i, prompt_text, actual_solution, generated_text)
-
-    # Log the table to wandb
-    wandb.log({"sample_predictions": prediction_table})
-
-except FileNotFoundError:
-    logger.error(
-        f"Could not load adapter from {OUTPUT_DIR} for qualitative evaluation. Ensure training saved the model correctly.")
-except Exception as e:
-    logger.error(f"An error occurred during qualitative evaluation: {e}", exc_info=True)
 
 # Finish wandb run
 wandb.finish()
