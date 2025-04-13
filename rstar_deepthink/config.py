@@ -43,8 +43,8 @@ class Config:
 
     fine_tuned: bool = False  # Whether the model is fine-tuned
 
-    # model_base_path: str = os.path.join(NET_SCRATCH_PATH, "models")  # Base path where models are stored
-    model_base_path: str = os.path.join(LOCAL_SCRATCH_PATH, "models")  # Base path where models are stored
+    model_base_path: str = os.path.join(NET_SCRATCH_PATH, "models")  # Base path where models are stored
+    # model_base_path: str = os.path.join(LOCAL_SCRATCH_PATH, "models")  # Base path where models are stored
 
     max_tokens: int = 512  # Maximum tokens for generation of a single step
     dtype: str = "bfloat16"  # Data type for model (affects precision/speed)
