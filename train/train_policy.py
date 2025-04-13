@@ -223,12 +223,12 @@ wandb.init(
     }
 )
 
-# 1. Calculate the trainable parameters percentage
+# Calculate the trainable parameters percentage
 total_params = sum(p.numel() for p in model.parameters())
 trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
 trainable_params_pct = (trainable_params / total_params) * 100 if total_params > 0 else 0
 
-# 2. Log the calculated percentage directly
+# Log the calculated percentage directly
 wandb.log({"trainable_params_pct": trainable_params_pct})
 
 logger.info("wandb initialized successfully with lightweight logging.")
