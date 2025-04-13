@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 BASE_MODEL_ID = "Qwen/Qwen2.5-Coder-0.5B"  # The Hugging Face model ID of the base model used for training
 
 # Path to the directory containing the saved LoRA adapter files (adapter_model.bin/safetensors and adapter_config.json)
-LORA_ADAPTER_PATH = f"{NET_SCRATCH_PATH}/models/fine_tuned/policy/checkpoint-600"
+LORA_ADAPTER_PATH = f"{NET_SCRATCH_PATH}/models/fine_tuned/policy/checkpoint-500"
 
 # Directory where the final merged model and tokenizer will be saved
 MERGED_MODEL_OUTPUT_DIR = f"{NET_SCRATCH_PATH}/models/policy/fine_tuned_0.5B"
