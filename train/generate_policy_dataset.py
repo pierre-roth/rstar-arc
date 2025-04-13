@@ -23,10 +23,6 @@ WRITE_BACK_BATCH_SIZE = 100
 DEFAULT_N_TRAIN = 3  # Default if original task JSON is missing/malformed
 DEFAULT_N_TEST = 1  # Default if original task JSON is missing/malformed
 
-# SFT prompts are not used in this script's logic
-SFT_SYSTEM_PROMPT = """Generate Python code step-by-step to solve the ARC task presented below. Implement the solution within a `solve(I)` function using the required markers."""
-IN_BETWEEN_PROMPT = """Solution Code:"""
-
 
 def load_task_info(base_dir: str) -> Tuple[Dict[str, str], Dict[str, Set[str]]]:
     """Scans the base directory for ARC task JSON files."""
@@ -93,7 +89,7 @@ def main(config: Config):
     sft_data_dir = os.path.join(config.sft_data_dir, f"round_{config.round_number}")
     os.makedirs(sft_data_dir, exist_ok=True)
     augmented_file_path = os.path.join(sft_data_dir, "augmented.jsonl")
-    dataset_file_path = os.path.join(sft_data_dir, "dataset.jsonl")
+    dataset_file_path = os.path.join(sft_data_dir, "dataset_training.jsonl")
     arc_tasks_base_dir = NET_SCRATCH_TASK_DATA_DIR_PATH
 
     # --- Scan Task Directory (Needed for Pass 1) ---
