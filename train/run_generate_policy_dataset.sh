@@ -109,11 +109,11 @@ echo "Changing to project directory: ${DIRECTORY}" | tee -a "${local_job_dir}/jo
 cd ${DIRECTORY}
 
 # Execute the Python application with output redirected to local scratch
-echo "Running: python generate_policy_dataset.py" | tee -a "${local_job_dir}/job_info.log"
+echo "Running: python generate_policy_training_dataset.py" | tee -a "${local_job_dir}/job_info.log"
 
 # Run the program with output going to local scratch
 # The main program will use the SUBPROCESS_PYTHON_EXEC environment variable internally
-python generate_policy_dataset.py > "${local_job_dir}/program_output.log" 2> "${local_job_dir}/program_error.log"
+python generate_policy_trianing_dataset.py > "${local_job_dir}/program_output.log" 2> "${local_job_dir}/program_error.log"
 EXIT_CODE=$?
 
 # Send completion information to both SLURM log and our detailed log
