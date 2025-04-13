@@ -101,7 +101,7 @@ training_arguments = TrainingArguments(
     gradient_checkpointing_kwargs={'use_reentrant': False},  # Recommended setting
 
     evaluation_strategy="steps",  # Evaluate every eval_steps
-    eval_steps=25,  # Evaluation frequency (match save_steps is common)
+    eval_steps=10,  # Evaluation frequency (match save_steps is common)
     per_device_eval_batch_size=1,  # Can often be larger than train batch size
     load_best_model_at_end=True,  # Load the best model based on metric_for_best_model
     metric_for_best_model="eval_loss",  # Primary metric to determine the best model (lower is better)
