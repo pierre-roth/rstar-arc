@@ -41,14 +41,13 @@ from constants import NET_SCRATCH_PATH, SFT_SYSTEM_PROMPT, SFT_IN_BETWEEN_PROMPT
 
 logger.info("Project root added to path and custom modules imported.")
 
-
 # --- Configuration ---
 logger.info("--- Configuration ---")
 MODEL_ID = "Qwen/Qwen2.5-Coder-1.5B"
 TRAINING_DATASET_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{1}", "dataset_training.jsonl")
 VALIDATION_DATASET_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{1}", "dataset_validation.jsonl")
-OUTPUT_DIR = os.path.join(NET_SCRATCH_PATH, "models", "fine_tuned", "policy")
-MAX_SEQ_LENGTH = 8 * 1024  # Adjust based on your data and GPU memory
+OUTPUT_DIR = os.path.join(NET_SCRATCH_PATH, "models", "fine_tuned", "policy", f"fine-tuned-{MODEL_ID.split('/')[1]}")
+MAX_SEQ_LENGTH = 8192  # Adjust based on your data and GPU memory
 WANDB_PROJECT = "deepthink-sft"  # Added wandb project name
 WANDB_ENTITY = None  # Set to your team name or username if needed
 
