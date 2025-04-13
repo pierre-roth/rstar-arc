@@ -5,7 +5,13 @@ import sys
 import torch
 from peft import PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer
+
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
 from constants import NET_SCRATCH_PATH
+
 
 # --- Setup Logging ---
 logging.basicConfig(
