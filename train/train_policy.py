@@ -1,11 +1,15 @@
-import json  # Import the json library
 import logging
+import math
 import os
 import sys
 
 import torch
 import wandb
-from datasets import load_dataset, Features, Value  # Import Features and Value
+
+# Configure wandb to use less resources
+os.environ["WANDB_SILENT"] = "true"  # Reduce console output
+os.environ["WANDB_CONSOLE"] = "off"  # Disable wandb console logging
+from datasets import load_dataset
 from peft import LoraConfig, get_peft_model
 from transformers import (
     AutoModelForCausalLM,
@@ -16,30 +20,28 @@ from transformers import (
 )
 
 # --- Setup Logging ---
-# Configure logging to output to console
+# Configure logging to output to console and optionally to a file
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.INFO,  # Log INFO level messages and above
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
     handlers=[
-        logging.StreamHandler(sys.stdout),
+        logging.StreamHandler(sys.stdout),  # Log to console
     ]
 )
-logger = logging.getLogger(__name__)
+
+logger = logging.getLogger(__name__)  # Get logger for this module
 
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
-logger.info(f"Project root '{project_root}' added to sys.path.")
 
-# Import custom modules after adding project root to path
-from rstar_deepthink.arc_task import ARCTask
-from rstar_deepthink.arc_task.task_utils import task_to_prompt
-from constants import NET_SCRATCH_PATH
+from rstar_deepthink.arc_task import ARCTask  # Example import
+from rstar_deepthink.arc_task.task_utils import task_to_prompt  # Example import
+from constants import NET_SCRATCH_PATH  # Example import
 
-logger.info("Custom modules (ARCTask, task_to_prompt, NET_SCRATCH_PATH) imported successfully.")
+logger.info("Project root added to path and custom modules imported.")
 
-# --- Prompts ---
 SFT_SYSTEM_PROMPT = """Generate Python code step-by-step to solve the ARC task presented below. Implement the solution within a `solve(I)` function using the required markers."""
 IN_BETWEEN_PROMPT = """Solution Code:"""
 
@@ -49,9 +51,8 @@ MODEL_ID = "Qwen/Qwen2.5-Coder-0.5B"
 TRAINING_DATASET_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{1}", "dataset_training.jsonl")
 VALIDATION_DATASET_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{1}", "dataset_validation.jsonl")
 OUTPUT_DIR = os.path.join(NET_SCRATCH_PATH, "models", "fine_tuned", "policy")
-
-MAX_SEQ_LENGTH = 4096
-WANDB_PROJECT = "deepthink-sft"
+MAX_SEQ_LENGTH = 10240  # Adjust based on your data and GPU memory
+WANDB_PROJECT = "deepthink-sft"  # Added wandb project name
 WANDB_ENTITY = None  # Set to your team name or username if needed
 
 logger.info(f"MODEL_ID: {MODEL_ID}")
@@ -61,7 +62,7 @@ logger.info(f"OUTPUT_DIR: {OUTPUT_DIR}")
 logger.info(f"MAX_SEQ_LENGTH: {MAX_SEQ_LENGTH}")
 logger.info(f"WANDB_PROJECT: {WANDB_PROJECT}")
 
-# --- LoRA Configuration ---
+# --- LoRA Configuration (specify which layers to adapt) ---
 lora_config = LoraConfig(
     r=128,
     lora_alpha=16,
@@ -80,43 +81,47 @@ logger.info(
 run_name = f"{MODEL_ID.split('/')[-1]}-finetune-{os.path.basename(TRAINING_DATASET_PATH).split('.')[0]}"
 training_arguments = TrainingArguments(
     output_dir=OUTPUT_DIR,
-    per_device_train_batch_size=1,
-    gradient_accumulation_steps=8,
-    optim="adamw_torch",
+    per_device_train_batch_size=1,  # Keep small for small models/memory
+    gradient_accumulation_steps=8,  # Effective batch size = batch_size * grad_accum_steps
+    optim="adamw_torch",  # Changed from paged_adamw_8bit to standard adamw
     learning_rate=5e-5,
     lr_scheduler_type="cosine",
     num_train_epochs=2,
     warmup_ratio=0.03,
-    logging_strategy="steps",
-    logging_steps=100,
-    logging_first_step=True,
-    save_strategy="steps",
-    save_steps=100,
-    save_total_limit=2,
-    fp16=False,  # Prefer bf16 if available
-    bf16=True if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else False,  # Check bf16 support
-    report_to="wandb",
-    log_level="warning",  # Keep log level reasonable
-    gradient_checkpointing=True,
-    gradient_checkpointing_kwargs={'use_reentrant': False},
-    evaluation_strategy="steps",
-    eval_steps=100,
-    per_device_eval_batch_size=1,
-    load_best_model_at_end=True,
-    metric_for_best_model="eval_loss",
-    greater_is_better=False,
-    run_name=run_name,
-    remove_unused_columns=False,  # *** IMPORTANT: Keep 'weight' column for WeightedTrainer ***
+    logging_strategy="steps",  # Log metrics every logging_steps
+    logging_steps=100,  # Reduced frequency to minimize IO
+    logging_first_step=True,  # Log metrics for the very first step
+    save_strategy="steps",  # Save checkpoints every save_steps
+    save_steps=100,  # Save checkpoint frequency
+    save_total_limit=2,  # Keep only the last 2 checkpoints
+    fp16=False,  # Enable fp16 for memory efficiency
+    bf16=True,  # Disable bf16 if using fp16
+    report_to="wandb",  # Use Weights & Biases with limited metrics
+    log_level="warning",  # Reduce logging verbosity
+    gradient_checkpointing=True,  # Save memory during training
+    gradient_checkpointing_kwargs={'use_reentrant': False},  # Recommended setting
+
+    evaluation_strategy="steps",  # Evaluate every eval_steps
+    eval_steps=100,  # Evaluation frequency (match save_steps is common)
+    per_device_eval_batch_size=1,  # Can often be larger than train batch size
+    load_best_model_at_end=True,  # Load the best model based on metric_for_best_model
+    metric_for_best_model="eval_loss",  # Primary metric to determine the best model (lower is better)
+    greater_is_better=False,  # False for loss and perplexity
+    run_name=run_name,  # Descriptive run name for tracking
 )
-logger.info(f"TrainingArguments: {training_arguments.to_dict()}")  # Log the dict representation
+# Log the arguments dictionary for detailed records
+logger.info(f"TrainingArguments: {training_arguments.to_dict()}")
 
 # --- Load Tokenizer ---
 logger.info(f"Loading tokenizer: {MODEL_ID}")
 tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, trust_remote_code=True)
 
+# Set padding token if it's not already set
 if tokenizer.pad_token is None:
     logger.warning("Tokenizer does not have a pad token. Setting pad_token to eos_token.")
     tokenizer.pad_token = tokenizer.eos_token
+
+# Set padding side to 'right' for training Causal LMs
 tokenizer.padding_side = "right"
 logger.info(
     f"Tokenizer loaded. Pad token: '{tokenizer.pad_token}', ID: {tokenizer.pad_token_id}. Padding side set to '{tokenizer.padding_side}'.")
@@ -125,266 +130,177 @@ logger.info(
 # --- Data Preprocessing Function ---
 def preprocess_data(examples):
     """Formats prompt and solution, then tokenizes for Causal LM."""
-    model_inputs = {"input_ids": [], "attention_mask": [], "labels": [], "weight": []}
+    try:
+        # Combine prompt and completion, adding EOS token for Causal LM training
+        texts = [
+            SFT_SYSTEM_PROMPT + task_to_prompt(
+                ARCTask.from_dict(task_json)) + IN_BETWEEN_PROMPT + solution + tokenizer.eos_token
+            for task_json, solution in zip(examples["task_json"], examples["solution"])
+        ]
+        # Tokenize, ensuring truncation and padding
+        model_inputs = tokenizer(
+            texts,
+            max_length=MAX_SEQ_LENGTH,
+            truncation=True,
+            padding="max_length"  # Pad sequences to max_length for batching
+        )
+        # For Causal LM, labels are the same as input_ids. The model learns to predict the next token.
+        # The loss function in Trainer handles shifting internally.
+        model_inputs["labels"] = model_inputs["input_ids"].copy()
 
-    # Get data from examples dictionary
-    task_json_strings = examples.get("task_json", [])
-    solutions = examples.get("solution", [])
-    weights = examples.get("weight", [])
+        # weights
+        model_inputs["weight"] = [float(w) for w in examples["weight"]]
 
-    # Process each example individually
-    for i, (task_json_str, solution, weight) in enumerate(zip(task_json_strings, solutions, weights)):
-        try:
-            # Validate inputs
-            if not task_json_str or not solution:
-                logger.warning(f"Skipping example {i}: Missing task_json string or solution")
-                continue
-
-            # *** FIX: Parse the task_json string into a dictionary ***
-            try:
-                task_json_dict = json.loads(task_json_str)
-            except json.JSONDecodeError as e:
-                logger.warning(
-                    f"Skipping example {i}: Error decoding task_json string: {e}. Content: {task_json_str[:100]}...")
-                continue
-
-            # Create the prompt using the parsed dictionary
-            try:
-                arc_task = ARCTask.from_dict(task_json_dict)  # Use the parsed dict
-                task_prompt = task_to_prompt(arc_task)
-            except Exception as e:
-                logger.warning(f"Skipping example {i}: Error creating task prompt from parsed JSON: {e}")
-                continue
-
-            # Combine prompt and completion
-            text = SFT_SYSTEM_PROMPT + task_prompt + IN_BETWEEN_PROMPT + solution + tokenizer.eos_token
-
-            # Tokenize the individual example
-            encoded = tokenizer(
-                text,
-                max_length=MAX_SEQ_LENGTH,
-                truncation=True,
-                padding="max_length"  # Pad to max_length for consistent tensor shapes
-            )
-
-            # Add to batch lists
-            model_inputs["input_ids"].append(encoded["input_ids"])
-            model_inputs["attention_mask"].append(encoded["attention_mask"])
-            # For Causal LM, labels are typically the same as input_ids
-            model_inputs["labels"].append(encoded["input_ids"].copy())
-            # Ensure weight is float, default to 1.0 if missing/invalid
-            try:
-                model_inputs["weight"].append(float(weight) if weight is not None else 1.0)
-            except (ValueError, TypeError):
-                logger.warning(f"Invalid weight '{weight}' for example {i}. Using default 1.0.")
-                model_inputs["weight"].append(1.0)
-
-
-        except Exception as e:
-            # Catch any other unexpected error during processing of a single example
-            logger.error(f"Unexpected error processing example {i}: {e}", exc_info=True)
-            continue  # Skip this example
-
-    # Note: Conversion to tensors is handled by the Trainer/DataCollator
-    return model_inputs
+        return model_inputs
+    except Exception as e:
+        logger.error(f"Error during preprocessing: {e}")
+        # Return empty dict or raise error depending on desired behavior
+        return {}
 
 
 # --- Load and Prepare Dataset ---
 logger.info("Loading dataset...")
-
-# *** FIX: Define the features explicitly to load task_json as a string ***
-data_features = Features({
-    'task_name': Value('string'),
-    'task_json': Value('string'),  # Load task_json as a string
-    'solution': Value('string'),
-    'weight': Value('float32')  # Load weight as float
-})
-
 try:
-    dataset = load_dataset(
-        "json",
-        data_files={"train": TRAINING_DATASET_PATH, "validation": VALIDATION_DATASET_PATH},
-        features=data_features  # Apply the defined features
-    )
-    logger.info(f"Dataset loaded successfully using explicit features: {dataset}")
+    dataset = load_dataset("json", data_files={"train": TRAINING_DATASET_PATH, "validation": VALIDATION_DATASET_PATH})
+    logger.info(f"Dataset loaded: {dataset}")
 
-    # Basic validation after loading
-    if not dataset:
-        raise ValueError("Dataset loaded is empty or invalid.")
-    if "train" not in dataset or len(dataset["train"]) == 0:
-        raise ValueError("Training split is missing or empty.")
-    if "validation" not in dataset or len(dataset["validation"]) == 0:
-        logger.warning("Validation split is missing or empty.")
-
-    logger.info("Preprocessing and tokenizing dataset...")
-    # Use num_proc=1 initially for safer debugging, increase later if needed and stable
+    logger.info("Preprocessing and tokenizing dataset (this may take a while)...")
     tokenized_datasets = dataset.map(
         preprocess_data,
         batched=True,
-        batch_size=100,  # Adjust batch size based on memory
-        num_proc=1,  # Start with 1 for stability, increase later
-        # remove_columns=dataset["train"].column_names # Keep columns like 'weight'
+        remove_columns=dataset["train"].column_names,  # Remove original columns
+        num_proc=max(1, os.cpu_count() // 2)  # Use multiple cores if available
     )
-
-    # Verify the processed datasets have valid lengths
-    for split in tokenized_datasets:
-        if len(tokenized_datasets[split]) == 0:
-            logger.error(f"Processed {split} dataset is empty. Check preprocessing logic and source data.")
-            raise ValueError(f"Empty dataset after preprocessing: {split}")
-        # Log a sample from the tokenized data for verification
-        logger.info(f"Sample tokenized {split} entry keys: {tokenized_datasets[split][0].keys()}")
-
     logger.info(f"Dataset preprocessing finished: {tokenized_datasets}")
 
 except FileNotFoundError as e:
     logger.error(f"Dataset file not found: {e}. Please check paths: {TRAINING_DATASET_PATH}, {VALIDATION_DATASET_PATH}")
-    sys.exit(1)
+    sys.exit(1)  # Exit if data is missing
 except Exception as e:
-    logger.error(f"Error loading or processing dataset: {e}", exc_info=True)
+    logger.error(f"Error loading or processing dataset: {e}")
     sys.exit(1)
 
 # --- Load Model ---
-logger.info(f"Loading base model: {MODEL_ID}...")
-# Determine torch_dtype based on training arguments
-model_dtype = torch.bfloat16 if training_arguments.bf16 else (
-    torch.float16 if training_arguments.fp16 else torch.float32)
-logger.info(f"Using torch_dtype: {model_dtype}")
-
+logger.info(f"Loading base model: {MODEL_ID} for LoRA fine-tuning...")
 model = AutoModelForCausalLM.from_pretrained(
     MODEL_ID,
-    device_map="auto",
+    device_map="auto",  # Automatically distribute across available GPUs/CPU
     trust_remote_code=True,
-    torch_dtype=model_dtype  # Use determined dtype
+    torch_dtype=torch.bfloat16
 )
 logger.info("Base model loaded.")
 
-model.config.use_cache = False  # Important for training with gradient checkpointing
-model.config.pretraining_tp = 1  # Usually 1 for most models
+# Configure model for training
+model.config.use_cache = False  # Disable cache for efficiency with gradient checkpointing
+model.config.pretraining_tp = 1  # Usually 1, adjust if model requires different tensor parallelism
 
 # --- Prepare Model for PEFT (LoRA) ---
 logger.info("Applying LoRA configuration...")
+
+# Apply LoRA configuration
 model = get_peft_model(model, lora_config)
 logger.info("LoRA adapter applied to the model.")
-logger.info("Trainable parameters overview:")
-model.print_trainable_parameters()  # Prints to console
 
-# --- Initialize Wandb ---
-if training_arguments.report_to and "wandb" in training_arguments.report_to:
-    logger.info("Initializing wandb...")
-    try:
-        wandb.init(
-            project=WANDB_PROJECT,
-            entity=WANDB_ENTITY,
-            name=run_name,
-            config=training_arguments.to_sanitized_dict()  # Log training args
-        )
-        # Log additional config
-        wandb.config.update({
-            "model_id": MODEL_ID,
-            "max_seq_length": MAX_SEQ_LENGTH,
-            "lora_r": lora_config.r,
-            "lora_alpha": lora_config.lora_alpha,
-            "lora_dropout": lora_config.lora_dropout,
-            "lora_target_modules": list(lora_config.target_modules),
-            "effective_batch_size": training_arguments.per_device_train_batch_size * training_arguments.gradient_accumulation_steps * training_arguments.world_size,
-            # Consider world_size for multi-GPU
-            "train_samples": len(tokenized_datasets["train"]),
-            "validation_samples": len(tokenized_datasets.get("validation", []))  # Handle missing validation
-        })
-        logger.info("wandb initialized successfully.")
-    except Exception as e:
-        logger.error(f"Failed to initialize wandb: {e}", exc_info=True)
-        # Optionally disable wandb reporting if init fails
-        training_arguments.report_to = [r for r in training_arguments.report_to if r != "wandb"]
-        logger.warning("Proceeding without wandb reporting.")
+# Print trainable parameters to verify LoRA setup
+logger.info("Trainable parameters overview:")
+model.print_trainable_parameters()
+
+# --- Initialize wandb (lightweight configuration) ---
+logger.info("Initializing wandb with lightweight configuration...")
+wandb.init(
+    project=WANDB_PROJECT,
+    entity=WANDB_ENTITY,
+    name=run_name,
+    config={
+        "model_name": MODEL_ID.split('/')[-1],  # Just log model name without full path
+        "lora_r": lora_config.r,
+        "lora_alpha": lora_config.lora_alpha,
+        "learning_rate": training_arguments.learning_rate,
+        "effective_batch_size": training_arguments.per_device_train_batch_size * training_arguments.gradient_accumulation_steps,
+        "epochs": training_arguments.num_train_epochs,
+        "train_samples": len(tokenized_datasets["train"]),
+        "validation_samples": len(tokenized_datasets["validation"]),
+    }
+)
+
+# Log only essential model info
+model_info = {
+    "trainable_params_pct": model.print_trainable_parameters(),  # Just log percentage, not full details
+}
+wandb.log({"model_info": model_info})
+
+logger.info("wandb initialized successfully with lightweight logging.")
 
 # --- Initialize Trainer ---
-# Data Collator for Causal LM
+# Data Collator for Causal LM. mlm=False ensures standard next-token prediction.
 data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
 
-logger_trainer = logging.getLogger("WeightedTrainer")
+logger_trainer = logging.getLogger("WeightedTrainer")  # Use a specific logger if desired
 
 
-class WeightedTrainer(Trainer):
+class WeightedTrainer(Trainer):  # Inherit from the Hugging Face Trainer
     def compute_loss(self, model, inputs, return_outputs=False):
         """
         Computes the weighted loss for causal language modeling.
-        Assumes 'weight' is present in the inputs dictionary.
         """
-        # Pop 'weight' from inputs. Ensure it's handled correctly by the data loading
-        # and `remove_unused_columns=False` in TrainingArguments.
-        sample_weights = inputs.pop("weight", None)
+        sample_weights = inputs.pop("weight", None)  # Pop weights from inputs
 
-        # Get standard model outputs (logits, loss)
-        outputs = model(**inputs)
-        # Hugging Face models typically return loss directly when labels are provided
-        loss = outputs.get("loss")
-        logits = outputs.get("logits")
-        labels = inputs.get("labels")  # Labels should still be in inputs if not popped
-
-        if loss is not None and sample_weights is not None:
-            # If loss is pre-computed by the model, we need to recompute it per-sequence
-            # to apply weights correctly. This requires logits and labels.
-            if logits is not None and labels is not None:
-                loss_fct = torch.nn.CrossEntropyLoss(reduction="none")
-                # Shift so that tokens < n predict n
-                shift_logits = logits[..., :-1, :].contiguous()
-                shift_labels = labels[..., 1:].contiguous()
-
-                # Flatten the tokens and compute per-token loss
-                flat_logits = shift_logits.view(-1, shift_logits.size(-1))
-                flat_labels = shift_labels.view(-1)
-
-                # Filter out padding tokens (-100)
-                active_loss_mask = flat_labels != -100
-                active_logits = flat_logits[active_loss_mask]
-                active_labels = flat_labels[active_loss_mask]
-
-                if active_logits.numel() > 0:
-                    per_token_loss = loss_fct(active_logits, active_labels)
-
-                    # Reshape per-token loss back to sequence shape to sum per sequence
-                    loss_unflattened = torch.zeros_like(shift_labels, dtype=logits.dtype)
-                    loss_unflattened.view(-1)[active_loss_mask] = per_token_loss
-
-                    # Calculate loss per sequence (sum over sequence length)
-                    loss_per_sequence = loss_unflattened.sum(dim=1)
-
-                    # Normalize loss by the number of non-padding tokens in each sequence
-                    active_tokens_per_sequence = (shift_labels != -100).sum(dim=1)
-                    # Avoid division by zero for sequences with only padding/special tokens
-                    active_tokens_per_sequence = torch.max(
-                        active_tokens_per_sequence,
-                        torch.tensor(1.0, device=active_tokens_per_sequence.device)
-                    )
-                    mean_loss_per_sequence = loss_per_sequence / active_tokens_per_sequence
-
-                    # Ensure weights are on the correct device and apply them
-                    sample_weights = sample_weights.to(mean_loss_per_sequence.device)
-                    weighted_loss_per_sequence = mean_loss_per_sequence * sample_weights
-
-                    # Final loss is the mean of weighted per-sequence losses
-                    loss = weighted_loss_per_sequence.mean()
-                else:
-                    # Handle case where the batch contains only padding tokens after shifting
-                    loss = torch.tensor(0.0, device=logits.device, requires_grad=True)
-                    logger_trainer.warning("Batch contained no active tokens after shifting/masking.")
-
+        if sample_weights is None:
+            logger_trainer.warning("Sample weights ('weight' key) not found in batch inputs. Using uniform weighting.")
+            if 'input_ids' in inputs:
+                sample_weights = torch.ones(inputs['input_ids'].size(0), device=inputs['input_ids'].device)
             else:
-                # Cannot recompute loss, use approximate weighting on the model's loss
-                logger_trainer.warning(
-                    "Logits or labels missing, cannot compute exact weighted loss. Using approximate weighting on model's loss.")
-                sample_weights = sample_weights.to(loss.device)
-                loss = loss * sample_weights.mean()  # Approximate weighting
+                # Cannot determine batch size, handle appropriately
+                # This case should ideally not happen with standard datasets
+                logger_trainer.error("Cannot determine batch size for default weights.")
+                # Fallback or raise error
+                outputs = model(**inputs)  # Try to get loss directly
+                loss = outputs.loss if hasattr(outputs, "loss") else torch.tensor(0.0)
+                return (loss, outputs) if return_outputs else loss
+        else:
+            # Ensure weights are on the correct device and are float
+            sample_weights = torch.tensor(sample_weights, dtype=torch.float32).to(inputs['input_ids'].device)
 
-        elif loss is None:
-            logger_trainer.error("Model did not return 'loss'. Cannot compute loss.")
-            # Return 0 loss or raise error depending on desired behavior
+        # Get standard model outputs
+        outputs = model(**inputs)
+        logits = outputs.get("logits")
+        labels = inputs.get("labels")  # Get labels from the original inputs dict
+
+        if logits is not None and labels is not None:
+            loss_fct = torch.nn.CrossEntropyLoss(reduction="none")
+            shift_logits = logits[..., :-1, :].contiguous()
+            shift_labels = labels[..., 1:].contiguous()
+
+            flat_logits = shift_logits.view(-1, shift_logits.size(-1))
+            flat_labels = shift_labels.view(-1)
+
+            active_loss = shift_labels.view(-1) != -100
+            active_logits = flat_logits[active_loss]
+            active_labels = flat_labels[active_loss]
+
+            if active_logits.numel() > 0:
+                per_token_loss = loss_fct(active_logits, active_labels)
+
+                loss_unflattened = torch.zeros_like(shift_labels, dtype=logits.dtype)
+                loss_unflattened.view(-1)[active_loss] = per_token_loss
+
+                loss_per_sequence = loss_unflattened.sum(dim=1)
+                active_tokens_per_sequence = (shift_labels != -100).sum(dim=1)
+                active_tokens_per_sequence = torch.max(active_tokens_per_sequence,
+                                                       torch.tensor(1.0, device=active_tokens_per_sequence.device))
+                mean_loss_per_sequence = loss_per_sequence / active_tokens_per_sequence
+
+                weighted_loss_per_sequence = mean_loss_per_sequence * sample_weights
+                loss = weighted_loss_per_sequence.mean()
+            else:
+                loss = torch.tensor(0.0, device=logits.device, requires_grad=True)
+
+        elif hasattr(outputs, "loss"):
+            logger_trainer.warning("Using model's pre-computed loss. Weighting will be approximate.")
+            loss = outputs.loss * sample_weights.mean()  # Approximate weighting
+        else:
+            logger_trainer.error("Cannot compute loss: Logits/Labels needed, or model must provide 'loss'.")
             loss = torch.tensor(0.0, device=model.device, requires_grad=True)
-
-        elif sample_weights is None:
-            logger_trainer.warning("Sample weights ('weight' key) not found in batch inputs. Using unweighted loss.")
-            # Loss is already computed by the model, just return it
 
         return (loss, outputs) if return_outputs else loss
 
@@ -394,7 +310,7 @@ trainer = WeightedTrainer(
     model=model,
     args=training_arguments,
     train_dataset=tokenized_datasets["train"],
-    eval_dataset=tokenized_datasets.get("validation"),  # Use .get for optional validation set
+    eval_dataset=tokenized_datasets["validation"],
     tokenizer=tokenizer,
     data_collator=data_collator,
 )
@@ -407,42 +323,37 @@ try:
 
     # --- Save Training Statistics and Final Model ---
     metrics = train_result.metrics
-    # Ensure train_samples metric exists before trying to access/add
-    if "train_samples" not in metrics:
-        metrics["train_samples"] = len(tokenized_datasets["train"])
+    metrics["train_samples"] = len(tokenized_datasets["train"])  # Add number of train samples
 
     trainer.log_metrics("train", metrics)
     trainer.save_metrics("train", metrics)
-    trainer.save_state()
+    trainer.save_state()  # Save optimizer, scheduler, etc.
 
     logger.info(f"Training finished. Saving final LoRA adapter weights to {OUTPUT_DIR}")
-    trainer.save_model(OUTPUT_DIR)  # Saves only the adapter weights by default with PEFT
+    # Saves only the trained LoRA adapter weights + config
+    trainer.save_model(OUTPUT_DIR)
     logger.info(f"LoRA adapter saved to {OUTPUT_DIR}")
 
-    # --- Final Evaluation (if validation set exists) ---
-    if tokenized_datasets.get("validation"):
-        logger.info("Running final evaluation on the validation set...")
-        final_eval_results = trainer.evaluate(eval_dataset=tokenized_datasets["validation"])
-        logger.info(f"Final Evaluation Results: {final_eval_results}")
-        trainer.log_metrics("final_eval", final_eval_results)
-        trainer.save_metrics("final_eval", final_eval_results)
+    # --- Explicit Final Evaluation ---
+    # If load_best_model_at_end=True, the trainer already evaluated the best checkpoint.
+    # This provides metrics for the *final* state, which might differ slightly.
+    logger.info("Running final evaluation on the validation set using the *last* checkpoint state...")
+    final_eval_results = trainer.evaluate(eval_dataset=tokenized_datasets["validation"])
+    logger.info(f"Final Evaluation Results (last checkpoint): {final_eval_results}")
+    # Log and save these final metrics separately if needed
+    trainer.log_metrics("final_eval", final_eval_results)
+    trainer.save_metrics("final_eval", final_eval_results)
 
-        # Log key final metric to wandb if enabled
-        if training_arguments.report_to and "wandb" in training_arguments.report_to:
-            final_loss = final_eval_results.get("eval_loss")
-            if final_loss is not None:
-                wandb.log({"final_eval/loss": final_loss})
-            else:
-                logger.warning("Could not find 'eval_loss' in final evaluation results to log to wandb.")
+    # Log only the key final metric to wandb
+    wandb.log({
+        "final_eval/loss": final_eval_results.get("eval_loss")
+    })
 
 except Exception as e:
-    logger.error(f"An error occurred during training or evaluation: {e}", exc_info=True)
-    if training_arguments.report_to and "wandb" in training_arguments.report_to:
-        wandb.finish(exit_code=1)  # Ensure wandb run is marked as failed
+    logger.error(f"An error occurred during training: {e}", exc_info=True)  # Log traceback
+    wandb.finish()  # Make sure to close wandb run even on error
     sys.exit(1)
 
-# Finish wandb run if successful
-if training_arguments.report_to and "wandb" in training_arguments.report_to:
-    wandb.finish()
-
+# Finish wandb run
+wandb.finish()
 logger.info("Script finished successfully!")
