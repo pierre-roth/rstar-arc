@@ -23,19 +23,22 @@ from rstar_deepthink.config import Config
 from rstar_deepthink.tools import execute_code_with_task
 # remove_markers is specific to rstar_deepthink, keep it if solutions have markers
 from rstar_deepthink.tools.python_tool import remove_markers
+import rstar_deepthink.tools.python_tool
 from utils import setup_logging
 # Import reARC generators and verifiers
 import generators
 import verifiers
 
 logger = logging.getLogger(__name__)
+# Disable subprocess execution to verify examples a lot faster!
+rstar_deepthink.tools.python_tool.use_subprocess = False  # Disable subprocess for this script
 
 # --- Constants ---
 NUM_SOLUTIONS_Q_VALUE = 64
 NUM_SOLUTIONS_LENGTH = 32
 NUM_SOLUTIONS_DIVERSITY = 8
-TARGET_EXAMPLES_PER_TASK = 100  # M value
-MAX_GENERATION_ATTEMPTS = 10  # N value
+TARGET_EXAMPLES_PER_TASK = 300  # M value
+MAX_GENERATION_ATTEMPTS = 9000  # N value
 VERIFY_GENERATED_EXAMPLES = True  # Boolean flag for additional verification
 BATCH_SIZE = 100
 TIMEOUT = 10800

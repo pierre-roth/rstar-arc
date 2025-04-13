@@ -20,7 +20,7 @@ class Bootstrap(Agent):
     def __init__(self, config, task):
         super().__init__(config, task)
         self.task_name = task.name
-        hint = ("Here is a hint on how to solve the task: \n" + get_description(self.task_name)
+        hint = ("Here is a hint on how to solve the task: \n" + get_description(self.config, self.task_name)
                 + f"\n\nMake sure to write the code in steps with the step end marker {STEP_END} and write detailed comments for each step!\n\n")
         self.root.state["hint"] = hint
         self.hint_backup = hint

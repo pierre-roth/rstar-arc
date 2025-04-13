@@ -6,15 +6,15 @@ import sys
 import torch
 import wandb
 from datasets import load_dataset
-from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training, PeftModel
+from peft import LoraConfig, get_peft_model, PeftModel
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
-    BitsAndBytesConfig,
     TrainingArguments,
     Trainer,
     DataCollatorForLanguageModeling
 )
+
 
 # --- Setup Logging ---
 # Configure logging to output to console and optionally to a file
@@ -42,11 +42,10 @@ logger.info("Project root added to path and custom modules imported.")
 # --- Configuration ---
 logger.info("--- Configuration ---")
 MODEL_ID = "Qwen/Qwen2.5-Coder-0.5B"
-TRAINING_DATASET_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{1}", "augmented.jsonl")
-VALIDATION_DATASET_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{1}", "validation.jsonl")
+TRAINING_DATASET_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{0}", "augmented.jsonl")
+VALIDATION_DATASET_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{0}", "raw_evaluation.jsonl")
 OUTPUT_DIR = os.path.join(NET_SCRATCH_PATH, "models", "fine_tuned", "policy")
-# TODO: set max_seq_length based even higher
-MAX_SEQ_LENGTH = 8192  # Adjust based on your data and GPU memory
+MAX_SEQ_LENGTH = 10240  # Adjust based on your data and GPU memory
 WANDB_PROJECT = "deepthink-sft"  # Added wandb project name
 WANDB_ENTITY = None  # Set to your team name or username if needed
 
@@ -57,20 +56,10 @@ logger.info(f"OUTPUT_DIR: {OUTPUT_DIR}")
 logger.info(f"MAX_SEQ_LENGTH: {MAX_SEQ_LENGTH}")
 logger.info(f"WANDB_PROJECT: {WANDB_PROJECT}")
 
-# --- QLoRA Configuration (for efficiency) ---
-bnb_config = BitsAndBytesConfig(
-    load_in_4bit=True,
-    bnb_4bit_quant_type="nf4",
-    bnb_4bit_compute_dtype=torch.bfloat16,
-    bnb_4bit_use_double_quant=True,
-)
-logger.info(
-    f"BitsAndBytesConfig: load_in_4bit={bnb_config.load_in_4bit}, quant_type={bnb_config.bnb_4bit_quant_type}, compute_dtype={bnb_config.bnb_4bit_compute_dtype}")
-
 # --- LoRA Configuration (specify which layers to adapt) ---
 lora_config = LoraConfig(
-    r=16,
-    lora_alpha=32,
+    r=128,
+    lora_alpha=16,
     target_modules=[
         "q_proj", "k_proj", "v_proj", "o_proj",
         "gate_proj", "up_proj", "down_proj",
@@ -88,10 +77,10 @@ training_arguments = TrainingArguments(
     output_dir=OUTPUT_DIR,
     per_device_train_batch_size=1,  # Keep small for small models/memory
     gradient_accumulation_steps=8,  # Effective batch size = batch_size * grad_accum_steps
-    optim="paged_adamw_8bit",
-    learning_rate=2e-4,
+    optim="adamw_torch",  # Changed from paged_adamw_8bit to standard adamw
+    learning_rate=5e-5,
     lr_scheduler_type="cosine",
-    num_train_epochs=1,  # Start with 1, increase if needed
+    num_train_epochs=4,
     warmup_ratio=0.03,
     logging_strategy="steps",  # Log metrics every logging_steps
     logging_steps=10,  # Log training loss frequently
@@ -99,8 +88,8 @@ training_arguments = TrainingArguments(
     save_strategy="steps",  # Save checkpoints every save_steps
     save_steps=100,  # Save checkpoint frequency
     save_total_limit=2,  # Keep only the last 2 checkpoints
-    fp16=False,  # Disable fp16 if using bf16
-    bf16=True,  # Enable bf16 for Ampere+ GPUs (preferred)
+    fp16=False,  # Enable fp16 for memory efficiency
+    bf16=True,  # Disable bf16 if using fp16
     report_to="wandb",  # Use Weights & Biases
     gradient_checkpointing=True,  # Save memory during training
     gradient_checkpointing_kwargs={'use_reentrant': False},  # Recommended setting
@@ -179,14 +168,13 @@ except Exception as e:
     logger.error(f"Error loading or processing dataset: {e}")
     sys.exit(1)
 
-# --- Load Model with Quantization ---
-logger.info(f"Loading base model: {MODEL_ID} with QLoRA config...")
+# --- Load Model ---
+logger.info(f"Loading base model: {MODEL_ID} for LoRA fine-tuning...")
 model = AutoModelForCausalLM.from_pretrained(
     MODEL_ID,
-    quantization_config=bnb_config,
     device_map="auto",  # Automatically distribute across available GPUs/CPU
     trust_remote_code=True,
-    torch_dtype=torch.bfloat16  # Match compute dtype in bnb_config
+    torch_dtype=torch.bfloat16
 )
 logger.info("Base model loaded.")
 
@@ -195,10 +183,7 @@ model.config.use_cache = False  # Disable cache for efficiency with gradient che
 model.config.pretraining_tp = 1  # Usually 1, adjust if model requires different tensor parallelism
 
 # --- Prepare Model for PEFT (LoRA) ---
-logger.info("Preparing model for k-bit training (if applicable) and applying LoRA...")
-# Prepare model for k-bit training (required for QLoRA)
-model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=training_arguments.gradient_checkpointing)
-logger.info("Model prepared for k-bit training.")
+logger.info("Applying LoRA configuration...")
 
 # Apply LoRA configuration
 model = get_peft_model(model, lora_config)
@@ -229,11 +214,6 @@ wandb.init(
         "warmup_ratio": training_arguments.warmup_ratio,
         "train_samples": len(tokenized_datasets["train"]),
         "validation_samples": len(tokenized_datasets["validation"]),
-        "quantization": {
-            "load_in_4bit": bnb_config.load_in_4bit,
-            "quant_type": bnb_config.bnb_4bit_quant_type,
-            "use_double_quant": bnb_config.bnb_4bit_use_double_quant,
-        }
     }
 )
 
@@ -326,7 +306,6 @@ try:
     logger.info(f"Loading base model {MODEL_ID} again for inference...")
     base_model_for_eval = AutoModelForCausalLM.from_pretrained(
         MODEL_ID,
-        quantization_config=bnb_config,  # Use the same quantization
         device_map="auto",
         trust_remote_code=True,
         torch_dtype=torch.bfloat16

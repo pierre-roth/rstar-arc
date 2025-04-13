@@ -12,11 +12,11 @@ dtype: "auto"
 
 evaluation: true
 data-folder: "/itet-stor/piroth/net_scratch/task_data/evaluation"
-num-tasks: 60
+num-tasks: 120
 sort-by-length: true
 
 num-examples: 1
-example-names: [["045e512c"]]
+example-names: [["3e980e27"]]
 
 rotate-example: false
 
