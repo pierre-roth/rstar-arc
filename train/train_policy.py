@@ -1,5 +1,4 @@
 import logging
-import math
 import os
 import sys
 
@@ -239,68 +238,149 @@ logger_trainer = logging.getLogger("WeightedTrainer")  # Use a specific logger i
 
 
 class WeightedTrainer(Trainer):  # Inherit from the Hugging Face Trainer
-    def compute_loss(self, model, inputs, return_outputs=False):
+    # Match the specified signature, explicitly including num_items_in_batch
+    def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
         """
         Computes the weighted loss for causal language modeling.
+
+        Overrides the default Trainer.compute_loss to incorporate sample weights.
+        Matches the expected signature including `num_items_in_batch`, although
+        this specific parameter is not used in the weighted loss calculation itself.
+
+        Args:
+            model: The model to train.
+            inputs (dict): The inputs and targets of the model. Needs to contain
+                           a 'weight' key with sample weights in addition to standard
+                           model inputs like 'input_ids', 'attention_mask', 'labels'.
+            return_outputs (bool): Whether to return model outputs in addition to the loss.
+            num_items_in_batch (int, optional): The number of items in the batch, passed
+                                                by the Trainer's training_step. Ignored here.
+
+
+        Returns:
+            Union[float, Tuple[float, Any]]: The computed weighted loss, or a tuple of
+                                             (loss, model_outputs) if return_outputs=True.
         """
-        sample_weights = inputs.pop("weight", None)  # Pop weights from inputs
+        logger_trainer.debug(f"Received inputs keys in compute_loss: {list(inputs.keys())}")
+        # Log if num_items_in_batch is provided (optional)
+        # if num_items_in_batch is not None:
+        #     logger_trainer.debug(f"Received num_items_in_batch: {num_items_in_batch}")
+
+        # Pop weights BEFORE passing inputs to the model if they aren't model inputs
+        sample_weights = inputs.pop("weight", None)  # Pop weights from inputs dict
 
         if sample_weights is None:
             logger_trainer.warning("Sample weights ('weight' key) not found in batch inputs. Using uniform weighting.")
+            # Use the batch size derived from a known input key
             if 'input_ids' in inputs:
-                sample_weights = torch.ones(inputs['input_ids'].size(0), device=inputs['input_ids'].device)
+                batch_size = inputs['input_ids'].size(0)
+                device = inputs['input_ids'].device
+                sample_weights = torch.ones(batch_size, device=device)
+                logger_trainer.debug(f"Defaulting to uniform weights of size {batch_size} on device {device}")
             else:
                 # Cannot determine batch size, handle appropriately
-                # This case should ideally not happen with standard datasets
-                logger_trainer.error("Cannot determine batch size for default weights.")
-                # Fallback or raise error
-                outputs = model(**inputs)  # Try to get loss directly
+                logger_trainer.error("Cannot determine batch size for default weights as 'input_ids' not found.")
+                # Fallback: Try getting loss directly from model without weighting
+                outputs = model(**inputs)  # Pass remaining inputs
                 loss = outputs.loss if hasattr(outputs, "loss") else torch.tensor(0.0)
                 return (loss, outputs) if return_outputs else loss
         else:
-            # Ensure weights are on the correct device and are float
-            sample_weights = torch.tensor(sample_weights, dtype=torch.float32).to(inputs['input_ids'].device)
+            # Ensure weights are a tensor and on the correct device
+            if not isinstance(sample_weights, torch.Tensor):
+                sample_weights = torch.tensor(sample_weights, dtype=torch.float32)
+            # Move weights to the same device as inputs (assuming input_ids exists)
+            if 'input_ids' in inputs:
+                target_device = inputs['input_ids'].device
+                if sample_weights.device != target_device:
+                    sample_weights = sample_weights.to(target_device)
+                logger_trainer.debug(
+                    f"Using provided weights of size {sample_weights.size(0)} on device {sample_weights.device}")
+            else:
+                logger_trainer.error("Cannot determine target device for weights as 'input_ids' not found.")
+                # Fallback: move to model's device if possible
+                try:
+                    target_device = next(model.parameters()).device
+                    if sample_weights.device != target_device:
+                        sample_weights = sample_weights.to(target_device)
+                except StopIteration:  # Handle case where model has no parameters
+                    logger_trainer.error("Cannot determine model device.")
+                    # Handle error appropriately, maybe raise or use CPU?
+                    pass
 
-        # Get standard model outputs
-        outputs = model(**inputs)
+        # Prepare inputs for the model (filter out non-model keys like the original 'weight')
+        # Identify expected model input keys (common ones listed, adapt if your model needs others)
+        model_input_keys = ['input_ids', 'attention_mask', 'labels', 'position_ids']  # Add any other relevant keys
+        model_inputs = {k: v for k, v in inputs.items() if k in model_input_keys}
+
+        # Get standard model outputs using the filtered inputs
+        outputs = model(**model_inputs)
+
         logits = outputs.get("logits")
-        labels = inputs.get("labels")  # Get labels from the original inputs dict
+        # Get labels from the original inputs dict (needed for loss calculation)
+        labels = inputs.get("labels")
 
         if logits is not None and labels is not None:
-            loss_fct = torch.nn.CrossEntropyLoss(reduction="none")
+            # --- Standard Causal LM Loss Calculation ---
+            loss_fct = torch.nn.CrossEntropyLoss(reduction="none")  # Compute loss per token
+            # Shift so that tokens < n predict n
             shift_logits = logits[..., :-1, :].contiguous()
             shift_labels = labels[..., 1:].contiguous()
 
+            # Flatten the tokens
             flat_logits = shift_logits.view(-1, shift_logits.size(-1))
             flat_labels = shift_labels.view(-1)
 
+            # Filter out ignored indices (-100)
             active_loss = shift_labels.view(-1) != -100
             active_logits = flat_logits[active_loss]
             active_labels = flat_labels[active_loss]
 
-            if active_logits.numel() > 0:
+            if active_logits.numel() > 0:  # Ensure there are active tokens
+                # Calculate loss per token for active tokens
                 per_token_loss = loss_fct(active_logits, active_labels)
 
+                # --- Weighted Loss Calculation ---
+                # Reshape per-token loss back to sequence shape (batch_size, seq_len-1), filling inactive spots with 0
                 loss_unflattened = torch.zeros_like(shift_labels, dtype=logits.dtype)
-                loss_unflattened.view(-1)[active_loss] = per_token_loss
+                loss_unflattened.view(-1)[active_loss] = per_token_loss  # Place calculated losses back
 
+                # Calculate mean loss per sequence (sum loss / number of active tokens in sequence)
                 loss_per_sequence = loss_unflattened.sum(dim=1)
                 active_tokens_per_sequence = (shift_labels != -100).sum(dim=1)
+                # Avoid division by zero for sequences with no active tokens (edge case)
                 active_tokens_per_sequence = torch.max(active_tokens_per_sequence,
                                                        torch.tensor(1.0, device=active_tokens_per_sequence.device))
                 mean_loss_per_sequence = loss_per_sequence / active_tokens_per_sequence
 
-                weighted_loss_per_sequence = mean_loss_per_sequence * sample_weights
-                loss = weighted_loss_per_sequence.mean()
+                # Apply sample weights (element-wise multiplication)
+                # Ensure sample_weights has the correct shape (batch_size,)
+                if sample_weights.dim() == 0:  # Handle scalar weight if batch size is 1
+                    sample_weights = sample_weights.unsqueeze(0)
+                if sample_weights.size(0) != mean_loss_per_sequence.size(0):
+                    logger_trainer.error(
+                        f"Weight dimension mismatch: weights ({sample_weights.size(0)}) vs sequences ({mean_loss_per_sequence.size(0)})")
+                    # Fallback or error handling needed
+                    loss = mean_loss_per_sequence.mean()  # Fallback to unweighted mean
+                else:
+                    weighted_loss_per_sequence = mean_loss_per_sequence * sample_weights
+                    # Final loss is the mean of weighted sequence losses
+                    loss = weighted_loss_per_sequence.mean()
+                    logger_trainer.debug(f"Computed weighted loss: {loss.item()}")
             else:
-                loss = torch.tensor(0.0, device=logits.device, requires_grad=True)
+                # Handle cases where there are no active labels in the batch after shifting/masking
+                logger_trainer.warning("No active labels found in batch after shifting/masking.")
+                loss = torch.tensor(0.0, device=logits.device, requires_grad=True)  # Return zero loss
 
         elif hasattr(outputs, "loss"):
-            logger_trainer.warning("Using model's pre-computed loss. Weighting will be approximate.")
+            # Fallback if model directly computes loss (e.g., some T5 variants)
+            # Weighting might be approximate here, as we only have the final loss scalar
+            logger_trainer.warning("Using model's pre-computed loss. Weighting by mean sample weight.")
             loss = outputs.loss * sample_weights.mean()  # Approximate weighting
         else:
-            logger_trainer.error("Cannot compute loss: Logits/Labels needed, or model must provide 'loss'.")
-            loss = torch.tensor(0.0, device=model.device, requires_grad=True)
+            # If loss cannot be computed by either method
+            logger_trainer.error(
+                "Cannot compute loss: Logits/Labels missing, or model does not provide 'loss' attribute.")
+            loss = torch.tensor(0.0, device=model.device, requires_grad=True)  # Return zero loss with grad requirement
 
         return (loss, outputs) if return_outputs else loss
 
