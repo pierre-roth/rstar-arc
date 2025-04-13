@@ -12,7 +12,7 @@
 # Default application parameters
 ETH_USERNAME=piroth
 PROJECT_NAME=rstar-arc
-DIRECTORY=/home/${ETH_USERNAME}/${PROJECT_NAME}/train
+DIRECTORY=/home/${ETH_USERNAME}/${PROJECT_NAME}/test
 CONDA_ENVIRONMENT=arc-solver
 NET_SCRATCH_PATH=/itet-stor/${ETH_USERNAME}/net_scratch
 
