@@ -50,7 +50,7 @@ MODEL_ID = "Qwen/Qwen2.5-Coder-0.5B"
 TRAINING_DATASET_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{1}", "dataset_training.jsonl")
 VALIDATION_DATASET_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{1}", "dataset_validation.jsonl")
 OUTPUT_DIR = os.path.join(NET_SCRATCH_PATH, "models", "fine_tuned", "policy")
-MAX_SEQ_LENGTH = 10240  # Adjust based on your data and GPU memory
+MAX_SEQ_LENGTH = 8*1024  # Adjust based on your data and GPU memory
 WANDB_PROJECT = "deepthink-sft"  # Added wandb project name
 WANDB_ENTITY = None  # Set to your team name or username if needed
 
@@ -63,7 +63,7 @@ logger.info(f"WANDB_PROJECT: {WANDB_PROJECT}")
 
 # --- LoRA Configuration (specify which layers to adapt) ---
 lora_config = LoraConfig(
-    r=128,
+    r=64,
     lora_alpha=16,
     target_modules=[
         "q_proj", "k_proj", "v_proj", "o_proj",
@@ -83,7 +83,7 @@ training_arguments = TrainingArguments(
     per_device_train_batch_size=1,  # Keep small for small models/memory
     gradient_accumulation_steps=8,  # Effective batch size = batch_size * grad_accum_steps
     optim="adamw_torch",  # Changed from paged_adamw_8bit to standard adamw
-    learning_rate=5e-5,
+    learning_rate=7e-5,
     lr_scheduler_type="cosine",
     num_train_epochs=2,
     warmup_ratio=0.03,
