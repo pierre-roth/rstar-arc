@@ -37,12 +37,10 @@ if project_root not in sys.path:
 
 from rstar_deepthink.arc_task import ARCTask  # Example import
 from rstar_deepthink.arc_task.task_utils import task_to_prompt  # Example import
-from constants import NET_SCRATCH_PATH  # Example import
+from constants import NET_SCRATCH_PATH, SFT_SYSTEM_PROMPT, SFT_IN_BETWEEN_PROMPT
 
 logger.info("Project root added to path and custom modules imported.")
 
-SFT_SYSTEM_PROMPT = """Generate Python code step-by-step to solve the ARC task presented below. Implement the solution within a `solve(I)` function using the required markers."""
-IN_BETWEEN_PROMPT = """Solution Code:"""
 
 # --- Configuration ---
 logger.info("--- Configuration ---")
@@ -50,7 +48,7 @@ MODEL_ID = "Qwen/Qwen2.5-Coder-0.5B"
 TRAINING_DATASET_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{1}", "dataset_training.jsonl")
 VALIDATION_DATASET_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{1}", "dataset_validation.jsonl")
 OUTPUT_DIR = os.path.join(NET_SCRATCH_PATH, "models", "fine_tuned", "policy")
-MAX_SEQ_LENGTH = 6*1024  # Adjust based on your data and GPU memory
+MAX_SEQ_LENGTH = 6 * 1024  # Adjust based on your data and GPU memory
 WANDB_PROJECT = "deepthink-sft"  # Added wandb project name
 WANDB_ENTITY = None  # Set to your team name or username if needed
 
@@ -133,7 +131,7 @@ def preprocess_data(examples):
         # Combine prompt and completion, adding EOS token for Causal LM training
         texts = [
             SFT_SYSTEM_PROMPT + task_to_prompt(
-                ARCTask.from_dict(task_json)) + IN_BETWEEN_PROMPT + solution + tokenizer.eos_token
+                ARCTask.from_dict(task_json)) + SFT_IN_BETWEEN_PROMPT + solution + tokenizer.eos_token
             for task_json, solution in zip(examples["task_json"], examples["solution"])
         ]
         # Tokenize, ensuring truncation and padding
@@ -170,7 +168,8 @@ try:
     tokenized_datasets = dataset.map(
         preprocess_data,
         batched=True,
-        remove_columns=[col for col in dataset["train"].column_names if col != "weight"],  # Keep 'weight' for loss calculation
+        remove_columns=[col for col in dataset["train"].column_names if col != "weight"],
+        # Keep 'weight' for loss calculation
         num_proc=max(1, os.cpu_count() // 2)  # Use multiple cores if available
     )
     logger.info(f"Dataset preprocessing finished: {tokenized_datasets}")
@@ -225,11 +224,13 @@ wandb.init(
     }
 )
 
-# Log only essential model info
-model_info = {
-    "trainable_params_pct": model.print_trainable_parameters(),  # Just log percentage, not full details
-}
-wandb.log({"model_info": model_info})
+# 1. Calculate the trainable parameters percentage
+total_params = sum(p.numel() for p in model.parameters())
+trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+trainable_params_pct = (trainable_params / total_params) * 100 if total_params > 0 else 0
+
+# 2. Log the calculated percentage directly
+wandb.log({"trainable_params_pct": trainable_params_pct})
 
 logger.info("wandb initialized successfully with lightweight logging.")
 

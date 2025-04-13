@@ -29,3 +29,7 @@ TERMINAL_SUBTREE_TERMINAL = "Subtree terminal"  # Terminal marker for subtree te
 STEP_END = "<end_of_step>"  # Marks the end of a reasoning step
 CODE = "<beginning_of_code>"  # Begins a code section
 CODE_END = "<end_of_code>"  # Ends a code section
+
+SFT_SYSTEM_PROMPT = """Generate Python code step-by-step to solve the ARC task presented below. Implement the solution within a `solve(I)` function using the required markers. \n\n"""
+SFT_IN_BETWEEN_PROMPT = """\n\nSolution Code: \n\n"""
+

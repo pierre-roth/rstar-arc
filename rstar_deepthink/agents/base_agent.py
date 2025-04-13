@@ -3,7 +3,7 @@ from random import choice
 
 from vllm.outputs import RequestOutput
 
-from constants import CODE
+from constants import CODE, SFT_SYSTEM_PROMPT, SFT_IN_BETWEEN_PROMPT
 from rstar_deepthink.arc_task import ARCTask
 from rstar_deepthink.config import Config
 from rstar_deepthink.node import Node
@@ -26,7 +26,10 @@ class Agent:
         self.current_temperature: float = self.config.policy_temperature
         self.example_name: str | None = None
 
-        self.create_root(get_base_prompt(config, task), f"{CODE}\ndef solve(I):\n    ", task)
+        if not self.config.fine_tuned:
+            self.create_root(get_base_prompt(config, task), f"{CODE}\ndef solve(I):\n    ", task)
+        else:
+            self.create_root((SFT_SYSTEM_PROMPT, SFT_IN_BETWEEN_PROMPT), f"{CODE}\ndef solve(I):\n    ", task)
 
     def create_root(self, base_prompt: (str, str), code: str, task: ARCTask):
         """Initialize the root node with the given state."""
