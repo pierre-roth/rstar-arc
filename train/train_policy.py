@@ -81,7 +81,7 @@ training_arguments = TrainingArguments(
     per_device_train_batch_size=1,  # Keep small for small models/memory
     gradient_accumulation_steps=16,  # Effective batch size = batch_size * grad_accum_steps
     optim="adamw_torch",  # Changed from paged_adamw_8bit to standard adamw
-    learning_rate=2e-5,
+    learning_rate=4e-5,
     lr_scheduler_type="cosine",
     num_train_epochs=2,
     warmup_ratio=0.03,
