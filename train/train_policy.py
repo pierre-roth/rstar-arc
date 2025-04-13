@@ -50,7 +50,7 @@ MODEL_ID = "Qwen/Qwen2.5-Coder-0.5B"
 TRAINING_DATASET_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{1}", "dataset_training.jsonl")
 VALIDATION_DATASET_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{1}", "dataset_validation.jsonl")
 OUTPUT_DIR = os.path.join(NET_SCRATCH_PATH, "models", "fine_tuned", "policy")
-MAX_SEQ_LENGTH = 8*1024  # Adjust based on your data and GPU memory
+MAX_SEQ_LENGTH = 6*1024  # Adjust based on your data and GPU memory
 WANDB_PROJECT = "deepthink-sft"  # Added wandb project name
 WANDB_ENTITY = None  # Set to your team name or username if needed
 
@@ -88,7 +88,7 @@ training_arguments = TrainingArguments(
     num_train_epochs=2,
     warmup_ratio=0.03,
     logging_strategy="steps",  # Log metrics every logging_steps
-    logging_steps=100,  # Reduced frequency to minimize IO
+    logging_steps=10,  # Reduced frequency to minimize IO
     logging_first_step=True,  # Log metrics for the very first step
     save_strategy="steps",  # Save checkpoints every save_steps
     save_steps=100,  # Save checkpoint frequency
@@ -101,7 +101,7 @@ training_arguments = TrainingArguments(
     gradient_checkpointing_kwargs={'use_reentrant': False},  # Recommended setting
 
     evaluation_strategy="steps",  # Evaluate every eval_steps
-    eval_steps=100,  # Evaluation frequency (match save_steps is common)
+    eval_steps=25,  # Evaluation frequency (match save_steps is common)
     per_device_eval_batch_size=1,  # Can often be larger than train batch size
     load_best_model_at_end=True,  # Load the best model based on metric_for_best_model
     metric_for_best_model="eval_loss",  # Primary metric to determine the best model (lower is better)
