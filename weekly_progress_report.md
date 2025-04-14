@@ -238,6 +238,8 @@
 
 - **Work done**:
   - compiled human descriptions for both the training and test set (HARC and LARC datasets)
+    - these descriptions will only be used for the bootstrapping phase
+    - most of this code is untracked, as it was written quick and dirty to achieve the goal as quickly as possible
   - "translated and augmented" these human descriptions into a better format: 
     - the human descriptions contain colors and the model gets values
     - there are a multiple human descriptions (some more detailed/accurate and others incomplete/wrong)
@@ -249,10 +251,20 @@
   - wrote code for preference pair sft data saving
   - created custom "Bootstrap" agent that uses the human descriptions to generate training data and validation data
     - I later modified this agent to have hint and no-hint rollouts to efficiently generate preference pair data (first few rollouts are hint rollouts, then probabilistic and in the end no-hint rollouts)
-  - worked on augmentation code: added weight calculation to account for uneven augmentation of tasks (some tasks have don't generalize well to the re-ARC tasks)
+  - worked on augmentation code: 
+    - added weight calculation to account for uneven augmentation of tasks (some tasks have don't generalize well to the re-ARC tasks)
+    - "best" solutions are selected as follows: 
+      - the 64 best average q value solution are chose
+      - out of those the 32 shortest solutions are chosen
+      - out of those the 8 most diverse solutions are chosen (greedily using non-comment diff)
+        - this is done to increase the chance of one of the solutions solving the re-arc tasks
+        - re-ARC tasks are them tested against the 8 "best" solutions (in random order) and assigned to the first solution that solves them
+    
 
   - collected (imo) enough training data to start an initial round of policy fine-tuning
+  - About 100MB of data (+- 13000 task-solution pairs using re-arc data)
   - worked a lot (too much, it was very frustrating) on the fine-tuning code
+    - it took me a while to figure out that "unused columns" were automatically being deleted and sadly my weight column was one of them  
     - custom data collator and custom trainer for weighted data
     - played around with different hyperparameters and tested feasibility on A6000
   - wrote code to fuse and save a fine-tuned model
