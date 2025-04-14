@@ -107,8 +107,11 @@ training_arguments = TrainingArguments(
     greater_is_better=False,  # False for loss and perplexity
     run_name=run_name,  # Descriptive run name for tracking
 
-    dataloader_num_workers=4  # Number of subprocesses to use for data loading
+    dataloader_num_workers=8,  # Number of subprocesses to use for data loading
+
+    remove_unused_columns=False  # Keep all columns in the dataset, including 'weight'
 )
+
 # Log the arguments dictionary for detailed records
 logger.info(f"TrainingArguments: {training_arguments.to_dict()}")
 
@@ -173,8 +176,6 @@ try:
         preprocess_data,
         batched=True,
         remove_columns=[col for col in dataset["train"].column_names if col != "weight"],
-        # remove_columns=dataset["train"].column_names,
-        # Keep 'weight' for loss calculation
         num_proc=max(1, os.cpu_count() // 2)  # Use multiple cores if available
     )
 
@@ -253,27 +254,6 @@ class WeightedDataCollator(DataCollatorForLanguageModeling):
     # unless you add more custom parameters.
 
     def __call__(self, examples, **kwargs) -> Dict[str, Any]:
-
-        logger.info(f"{kwargs}")
-
-        logger.info(f"[DEBUG] Received batch with type: {type(examples)}")
-        if isinstance(examples, dict):
-            logger.info(f"[DEBUG] Batch keys: {list(examples.keys())}")
-            # Optionally, log the shape/size of each tensor if values are tensors.
-            for key, value in examples.items():
-                try:
-                    logger.info(
-                        f"[DEBUG] Key '{key}' type: {type(value)}; size: {value.size() if hasattr(value, 'size') else 'N/A'}")
-                except Exception as e:
-                    logger.info(f"[DEBUG] Key '{key}' encountered an error when checking size: {e}")
-        elif isinstance(examples, list):
-            if len(examples) > 0 and isinstance(examples[0], dict):
-                logger.info(f"[DEBUG] First example keys: {list(examples[0].keys())}")
-            else:
-                logger.info("[DEBUG] Received a list, but first item is not a dict!")
-        else:
-            logger.info("[DEBUG] Received examples are of an unexpected type!")
-
         # Ensure examples are actually dictionaries as expected by the logic below
         if not isinstance(examples[0], Mapping):
             raise ValueError("WeightedDataCollator expected a list of dictionaries, but received other types.")
@@ -458,7 +438,6 @@ trainer = WeightedTrainer(
     eval_dataset=tokenized_datasets["validation"],
     tokenizer=tokenizer,
     data_collator=data_collator,
-    # remove_unused_columns=False
 )
 logger.info("Trainer initialized.")
 
