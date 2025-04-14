@@ -60,8 +60,8 @@ logger.info(f"WANDB_PROJECT: {WANDB_PROJECT}")
 
 # --- LoRA Configuration (specify which layers to adapt) ---
 lora_config = LoraConfig(
-    r=128,
-    lora_alpha=16,
+    r=64,
+    lora_alpha=64,
     target_modules=[
         "q_proj", "k_proj", "v_proj", "o_proj",
         "gate_proj", "up_proj", "down_proj",
@@ -85,10 +85,10 @@ training_arguments = TrainingArguments(
     num_train_epochs=2,
     warmup_ratio=0.03,
     logging_strategy="steps",  # Log metrics every logging_steps
-    logging_steps=10,  # Reduced frequency to minimize IO
+    logging_steps=20,  # Reduced frequency to minimize IO
     logging_first_step=True,  # Log metrics for the very first step
     save_strategy="steps",  # Save checkpoints every save_steps
-    save_steps=100,  # Save checkpoint frequency
+    save_steps=50,  # Save checkpoint frequency
     save_total_limit=2,  # Keep only the last 2 checkpoints
     fp16=False,  # Enable fp16 for memory efficiency
     bf16=True,  # Disable bf16 if using fp16
@@ -98,7 +98,7 @@ training_arguments = TrainingArguments(
     gradient_checkpointing_kwargs={'use_reentrant': False},  # Recommended setting
 
     evaluation_strategy="steps",  # Evaluate every eval_steps
-    eval_steps=10,  # Evaluation frequency (match save_steps is common)
+    eval_steps=50,  # Evaluation frequency (match save_steps is common)
     per_device_eval_batch_size=1,  # Can often be larger than train batch size
     load_best_model_at_end=True,  # Load the best model based on metric_for_best_model
     metric_for_best_model="eval_loss",  # Primary metric to determine the best model (lower is better)
@@ -157,7 +157,7 @@ def preprocess_data(examples):
 # --- Load and Prepare Dataset ---
 logger.info("Loading dataset...")
 try:
-    dataset = load_dataset("json", data_files={"train": TRAINING_DATASET_PATH, "validation": VALIDATION_DATASET_PATH})
+    dataset = load_dataset("json", data_files={"train": TRAINING_DATASET_PATH, "validation": VALIDATION_DATASET_PATH}, keep_in_memory=True)
     logger.info(f"Dataset loaded: {dataset}")
 
     dataset["train"] = dataset["train"].shuffle(seed=42)
