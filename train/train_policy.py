@@ -172,11 +172,17 @@ try:
     tokenized_datasets = dataset.map(
         preprocess_data,
         batched=True,
-        # remove_columns=[col for col in dataset["train"].column_names if col != "weight"],
-        remove_columns=dataset["train"].column_names,
+        remove_columns=[col for col in dataset["train"].column_names if col != "weight"],
+        # remove_columns=dataset["train"].column_names,
         # Keep 'weight' for loss calculation
         num_proc=max(1, os.cpu_count() // 2)  # Use multiple cores if available
     )
+
+    print(tokenized_datasets["train"][0])
+    print(tokenized_datasets["validation"][0])
+    print(tokenized_datasets["train"].column_names)
+    print(tokenized_datasets["validation"].column_names)
+
     logger.info(f"Dataset preprocessing finished: {tokenized_datasets}")
 
 except FileNotFoundError as e:
