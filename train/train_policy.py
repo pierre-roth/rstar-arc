@@ -48,15 +48,15 @@ logger.info("--- Configuration ---")
 MODEL_ID = "Qwen/Qwen2.5-Coder-1.5B"
 TRAINING_DATASET_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{1}", "dataset_training.jsonl")
 VALIDATION_DATASET_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{1}", "dataset_validation.jsonl")
-OUTPUT_DIR = os.path.join(NET_SCRATCH_PATH, "models", "fine_tuned", "policy", f"fine-tuned-{MODEL_ID.split('/')[1]}")
 MAX_SEQ_LENGTH = 9*1024  # Adjust based on your data and GPU memory
+LEARNING_RATE = 2e-5
 WANDB_PROJECT = "deepthink-sft"  # Added wandb project name
 WANDB_ENTITY = None  # Set to your team name or username if needed
 
 logger.info(f"MODEL_ID: {MODEL_ID}")
 logger.info(f"TRAINING_DATASET_PATH: {TRAINING_DATASET_PATH}")
 logger.info(f"VALIDATION_DATASET_PATH: {VALIDATION_DATASET_PATH}")
-logger.info(f"OUTPUT_DIR: {OUTPUT_DIR}")
+
 logger.info(f"MAX_SEQ_LENGTH: {MAX_SEQ_LENGTH}")
 logger.info(f"WANDB_PROJECT: {WANDB_PROJECT}")
 
@@ -74,6 +74,9 @@ lora_config = LoraConfig(
 )
 logger.info(
     f"LoraConfig: r={lora_config.r}, alpha={lora_config.lora_alpha}, dropout={lora_config.lora_dropout}, target_modules={lora_config.target_modules}")
+
+OUTPUT_DIR = os.path.join(NET_SCRATCH_PATH, "models", "fine_tuned", "policy", f"fine-tuned-{MODEL_ID.split('/')[1]}-{MAX_SEQ_LENGTH}-{LEARNING_RATE}-{lora_config.r}-{lora_config.lora_alpha}")
+logger.info(f"OUTPUT_DIR: {OUTPUT_DIR}")
 
 # --- Training Arguments ---
 run_name = f"{MODEL_ID.split('/')[-1]}-finetune-{os.path.basename(TRAINING_DATASET_PATH).split('.')[0]}"
