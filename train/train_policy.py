@@ -19,6 +19,15 @@ from transformers import (
     DataCollatorForLanguageModeling
 )
 
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+from rstar_deepthink.arc_task import ARCTask  # Example import
+from rstar_deepthink.arc_task.task_utils import task_to_prompt  # Example import
+from constants import NET_SCRATCH_PATH, SFT_SYSTEM_PROMPT, SFT_IN_BETWEEN_PROMPT, LOCAL_SCRATCH_PATH
+
+
 # --- Setup Logging ---
 # Configure logging to output to console and optionally to a file
 logging.basicConfig(
@@ -31,14 +40,6 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)  # Get logger for this module
-
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
-
-from rstar_deepthink.arc_task import ARCTask  # Example import
-from rstar_deepthink.arc_task.task_utils import task_to_prompt  # Example import
-from constants import NET_SCRATCH_PATH, SFT_SYSTEM_PROMPT, SFT_IN_BETWEEN_PROMPT, LOCAL_SCRATCH_PATH
 
 logger.info("Project root added to path and custom modules imported.")
 
@@ -94,7 +95,7 @@ training_arguments = TrainingArguments(
     fp16=False,  # Enable fp16 for memory efficiency
     bf16=True,  # Disable bf16 if using fp16
     report_to="wandb",  # Use Weights & Biases with limited metrics
-    log_level="warning",  # Reduce logging verbosity
+    log_level="info",  # Reduce logging verbosity
     gradient_checkpointing=True,  # Save memory during training
     gradient_checkpointing_kwargs={'use_reentrant': False},  # Recommended setting
 
@@ -148,7 +149,7 @@ def preprocess_data(examples):
         model_inputs["labels"] = model_inputs["input_ids"].copy()
 
         # weights
-        model_inputs["weight"] = [float(example["weight"]) for example in examples]
+        model_inputs["weight"] = [float(w) for w in examples["weight"]]
 
         return model_inputs
     except Exception as e:
@@ -252,6 +253,8 @@ class WeightedDataCollator(DataCollatorForLanguageModeling):
     # unless you add more custom parameters.
 
     def __call__(self, examples, **kwargs) -> Dict[str, Any]:
+
+        logger.info(f"{kwargs}")
 
         logger.info(f"[DEBUG] Received batch with type: {type(examples)}")
         if isinstance(examples, dict):
