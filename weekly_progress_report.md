@@ -244,7 +244,7 @@
     - I gave the human descriptions along with the "color translation" to:
       - Gemini 2.0 Flash: told it to translate and piece together the descriptions
       - o3-mini: told it to translate, curate and verify the descriptions and then come up with correct instructions mean for a programmer with the goal of coding the transformation function
-      - o3-mini descriptions unsurprisingly performed way better, but also, I have to use up about 100 million o3-mini tokens ...
+      - o3-mini descriptions unsurprisingly performed way better, but also, I had to use up about 100 million o3-mini tokens ...
       - Don't worry, I didn't spend 400+$ on API credits. I did it for free. Don't ask how.
   - wrote code for preference pair sft data saving
   - created custom "Bootstrap" agent that uses the human descriptions to generate training data and validation data
