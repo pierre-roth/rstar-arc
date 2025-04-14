@@ -87,7 +87,7 @@ training_arguments = TrainingArguments(
     num_train_epochs=1,
     warmup_ratio=0.03,
     logging_strategy="steps",  # Log metrics every logging_steps
-    logging_steps=20,  # Reduced frequency to minimize IO
+    logging_steps=10,  # Reduced frequency to minimize IO
     logging_first_step=True,  # Log metrics for the very first step
     save_strategy="steps",  # Save checkpoints every save_steps
     save_steps=50,  # Save checkpoint frequency
@@ -100,7 +100,7 @@ training_arguments = TrainingArguments(
     gradient_checkpointing_kwargs={'use_reentrant': False},  # Recommended setting
 
     eval_strategy="steps",  # Evaluate every eval_steps
-    eval_steps=50,  # Evaluation frequency (match save_steps is common)
+    eval_steps=10,  # Evaluation frequency (match save_steps is common)
     per_device_eval_batch_size=1,  # Can often be larger than train batch size
     load_best_model_at_end=True,  # Load the best model based on metric_for_best_model
     metric_for_best_model="eval_loss",  # Primary metric to determine the best model (lower is better)
