@@ -110,6 +110,8 @@ echo "Changing to project directory: ${DIRECTORY}" | tee -a "${local_job_dir}/jo
 cd ${DIRECTORY}
 
 export HF_CACHE_DIR="${NET_SCRATCH_PATH}/.cache/huggingface"
+export HF_HOME="${NET_SCRATCH_PATH}/.cache/huggingface"
+export HF_DATASETS_CACHE="${NET_SCRATCH_PATH}/.cache/huggingface/datasets"
 
 # Execute the Python application with output redirected to local scratch
 echo "Running: python generate_policy_training_dataset.py" | tee -a "${local_job_dir}/job_info.log"
