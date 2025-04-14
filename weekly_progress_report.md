@@ -269,6 +269,9 @@
   - I tried installing flash attention 2, but it didn't work
     - I even reinstalled my conda env (twice!!) etc. (I was close to teaching my laptop how to fly ...)
     - I gave up.
+  - I also was in a vicious fight with the huggingface and pip caching systems
+    - they called in help from the quota-guard
+    - eventually, I came out on top once I had redirected all the cache directories to the net scratch space
 
 - **Results**: 
   - Round number: 1
