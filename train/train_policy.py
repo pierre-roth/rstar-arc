@@ -62,8 +62,8 @@ logger.info(f"WANDB_PROJECT: {WANDB_PROJECT}")
 
 # --- LoRA Configuration (specify which layers to adapt) ---
 lora_config = LoraConfig(
-    r=64,
-    lora_alpha=64,
+    r=32,
+    lora_alpha=32,
     target_modules=[
         "q_proj", "k_proj", "v_proj", "o_proj",
         "gate_proj", "up_proj", "down_proj",
@@ -99,7 +99,7 @@ training_arguments = TrainingArguments(
     bf16=True,  # Disable bf16 if using fp16
     report_to="wandb",  # Use Weights & Biases with limited metrics
     log_level="info",  # Reduce logging verbosity
-    gradient_checkpointing=False,  # Save memory during training
+    gradient_checkpointing=True,  # Save memory during training
     gradient_checkpointing_kwargs={'use_reentrant': False},  # Recommended setting
 
     eval_strategy="steps",  # Evaluate every eval_steps
