@@ -148,13 +148,12 @@ def preprocess_data(examples):
         model_inputs["labels"] = model_inputs["input_ids"].copy()
 
         # weights
-        model_inputs["weight"] = [float(w) for w in examples["weight"]]
+        model_inputs["weight"] = [float(example["weight"]) for example in examples]
 
         return model_inputs
     except Exception as e:
         logger.error(f"Error during preprocessing: {e}")
-        # Return empty dict or raise error depending on desired behavior
-        return {}
+        raise e
 
 
 # --- Load and Prepare Dataset ---
