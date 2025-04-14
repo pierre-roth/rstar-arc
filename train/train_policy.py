@@ -192,7 +192,7 @@ model = AutoModelForCausalLM.from_pretrained(
     device_map="auto",  # Automatically distribute across available GPUs/CPU
     trust_remote_code=True,
     torch_dtype=torch.bfloat16,
-    attn_implementation="flash_attention_2"  # Add this argument
+    # attn_implementation="flash_attention_2"  # Add this argument
 )
 logger.info("Base model loaded.")
 
