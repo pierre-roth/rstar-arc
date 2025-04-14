@@ -222,7 +222,7 @@
   - 
 
 - **Results**: 
-  - Round number: 0 (with more handwritten examples and more compute)
+  - Round number: 0 (with more handwritten examples and more compute and larger models (14B and 32B))
     - training: 73/400 = 18.25% coverage
     - training_extended: 1180/8939 = 13.20% coverage
     - Total unique tasks: 1253
@@ -236,14 +236,72 @@
   - do research on fine-tuning
   - work in fine-tuning an initial policy model
 
+- **Work done**:
+  - compiled human descriptions for both the training and test set (HARC and LARC datasets)
+  - "translated and augmented" these human descriptions into a better format: 
+    - the human descriptions contain colors and the model gets values
+    - there are a multiple human descriptions (some more detailed/accurate and others incomplete/wrong)
+    - I gave the human descriptions along with the "color translation" to:
+      - Gemini 2.0 Flash: told it to translate and piece together the descriptions
+      - o3-mini: told it to translate, curate and verify the descriptions and then come up with correct instructions mean for a programmer with the goal of coding the transformation function
+      - o3-mini descriptions unsurprisingly performed way better, but also, I have to use up about 100 million o3-mini tokens ...
+      - Don't worry, I didn't spend 400+$ on API credits. I did it for free. Don't ask how.
+  - wrote code for preference pair sft data saving
+  - created custom "Bootstrap" agent that uses the human descriptions to generate training data and validation data
+    - I later modified this agent to have hint and no-hint rollouts to efficiently generate preference pair data (first few rollouts are hint rollouts, then probabilistic and in the end no-hint rollouts)
+  - worked on augmentation code: added weight calculation to account for uneven augmentation of tasks (some tasks have don't generalize well to the re-ARC tasks)
+
+  - collected (imo) enough training data to start an initial round of policy fine-tuning
+  - worked a lot (too much, it was very frustrating) on the fine-tuning code
+    - custom data collator and custom trainer for weighted data
+    - played around with different hyperparameters and tested feasibility on A6000
+  - wrote code to fuse and save a fine-tuned model
+  - modified tree search code to be able to use fine-tuned models (I.e. use SFT prompt, different loading etc.)
+  - did one initial test of an early 0.5B checkpoint (merged) and tried tree search
+    - it worked, but likely, due to small model size and little training, performance was underwhelming (1 out of 10 very easy tasks solved and limited format following)
+    - started training 1.5B model (one with 8192 context length and one with 10240 context length)
+
+- **Issues and Questions**:
+  - How to choose fine-tuning hyperparameters
+    - gradient accumulation steps
+    - learning rate
+    - lora rank, alpha and dropout
+  - I tried installing flash attention 2, but it didn't work
+    - I even reinstalled my conda env (twice!!) etc. (I was close to teaching my laptop how to fly ...)
+    - I gave up.
+
+- **Results**: 
+  - Round number: 1
+    - training: 226/400 = 56.50% coverage
+    - evaluation: 10/400 = 2.50% coverage
+
+
+### Week 7 (14.04.2025)
+
+- **Work planned**:
+  - Continue working on fine-tuning
+    - experiment more with hyperparameters and different models
+      - find out what works best i.e. rigorously compare performance
+    - read thoroughly through Guillermo Barbadillo's Omni-ARC blog posts (possibly the best documented ARC solution journey ever)
+  - Add all the non-official tasks that are already solved to the training data
+  - solve some more evaluation tasks to have a better validation set
+  - write reward model code
+    - the reward model itself (value head etc.)
+    - the code to integrate it correctly into the existing deepthink (tree search) system
+    - the code for dataset generation (and possible augmentation)
+    - the code for training the reward model
+  - try collecting enough preference pair data to train a reward model
+  - potentially train a very small first version of the reward model to test the code and the integration and 
+    see if it works
 
 - **Work done**:
   - 
+
 
 - **Issues and Questions**:
   - 
 
 - **Results**: 
-  - Round number: 1
-    - 
+  - ??
+
 
