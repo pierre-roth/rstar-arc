@@ -178,12 +178,11 @@ try:
         num_proc=max(1, os.cpu_count() // 2)  # Use multiple cores if available
     )
 
-    print(tokenized_datasets["train"][0])
-    print(tokenized_datasets["validation"][0])
-    print(tokenized_datasets["train"].column_names)
-    print(tokenized_datasets["validation"].column_names)
-
     logger.info(f"Dataset preprocessing finished: {tokenized_datasets}")
+
+    for i, sample in enumerate(tokenized_datasets["train"]):
+        if not sample or "weight" not in sample:
+            logger.error(f"Sample at index {i} is missing the 'weight' key or is empty: {sample}")
 
 except FileNotFoundError as e:
     logger.error(f"Dataset file not found: {e}. Please check paths: {TRAINING_DATASET_PATH}, {VALIDATION_DATASET_PATH}")
@@ -442,6 +441,7 @@ trainer = WeightedTrainer(
     eval_dataset=tokenized_datasets["validation"],
     tokenizer=tokenizer,
     data_collator=data_collator,
+    remove_unused_columns=False
 )
 logger.info("Trainer initialized.")
 
