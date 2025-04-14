@@ -441,7 +441,7 @@ trainer = WeightedTrainer(
     eval_dataset=tokenized_datasets["validation"],
     tokenizer=tokenizer,
     data_collator=data_collator,
-    remove_unused_columns=False
+    # remove_unused_columns=False
 )
 logger.info("Trainer initialized.")
 
