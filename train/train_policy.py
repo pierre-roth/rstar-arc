@@ -49,7 +49,7 @@ MODEL_ID = "Qwen/Qwen2.5-Coder-1.5B"
 TRAINING_DATASET_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{1}", "dataset_training.jsonl")
 VALIDATION_DATASET_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{1}", "dataset_validation.jsonl")
 OUTPUT_DIR = os.path.join(NET_SCRATCH_PATH, "models", "fine_tuned", "policy", f"fine-tuned-{MODEL_ID.split('/')[1]}")
-MAX_SEQ_LENGTH = 10240  # Adjust based on your data and GPU memory
+MAX_SEQ_LENGTH = 9*1024  # Adjust based on your data and GPU memory
 WANDB_PROJECT = "deepthink-sft"  # Added wandb project name
 WANDB_ENTITY = None  # Set to your team name or username if needed
 
@@ -82,7 +82,7 @@ training_arguments = TrainingArguments(
     per_device_train_batch_size=1,  # Keep small for small models/memory
     gradient_accumulation_steps=32,  # Effective batch size = batch_size * grad_accum_steps
     optim="adamw_torch",  # Changed from paged_adamw_8bit to standard adamw
-    learning_rate=4e-5,
+    learning_rate=2e-5,
     lr_scheduler_type="cosine",
     num_train_epochs=1,
     warmup_ratio=0.03,
@@ -96,11 +96,11 @@ training_arguments = TrainingArguments(
     bf16=True,  # Disable bf16 if using fp16
     report_to="wandb",  # Use Weights & Biases with limited metrics
     log_level="info",  # Reduce logging verbosity
-    gradient_checkpointing=True,  # Save memory during training
+    gradient_checkpointing=False,  # Save memory during training
     gradient_checkpointing_kwargs={'use_reentrant': False},  # Recommended setting
 
     eval_strategy="steps",  # Evaluate every eval_steps
-    eval_steps=10,  # Evaluation frequency (match save_steps is common)
+    eval_steps=50,  # Evaluation frequency (match save_steps is common)
     per_device_eval_batch_size=1,  # Can often be larger than train batch size
     load_best_model_at_end=True,  # Load the best model based on metric_for_best_model
     metric_for_best_model="eval_loss",  # Primary metric to determine the best model (lower is better)
