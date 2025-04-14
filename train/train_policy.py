@@ -1,6 +1,7 @@
 import logging
 import os
 import sys
+from typing import Any, Dict, Tuple, Union, Mapping
 
 import torch
 import wandb
@@ -37,7 +38,7 @@ if project_root not in sys.path:
 
 from rstar_deepthink.arc_task import ARCTask  # Example import
 from rstar_deepthink.arc_task.task_utils import task_to_prompt  # Example import
-from constants import NET_SCRATCH_PATH, SFT_SYSTEM_PROMPT, SFT_IN_BETWEEN_PROMPT
+from constants import NET_SCRATCH_PATH, SFT_SYSTEM_PROMPT, SFT_IN_BETWEEN_PROMPT, LOCAL_SCRATCH_PATH
 
 logger.info("Project root added to path and custom modules imported.")
 
@@ -78,7 +79,7 @@ run_name = f"{MODEL_ID.split('/')[-1]}-finetune-{os.path.basename(TRAINING_DATAS
 training_arguments = TrainingArguments(
     output_dir=OUTPUT_DIR,
     per_device_train_batch_size=1,  # Keep small for small models/memory
-    gradient_accumulation_steps=16,  # Effective batch size = batch_size * grad_accum_steps
+    gradient_accumulation_steps=32,  # Effective batch size = batch_size * grad_accum_steps
     optim="adamw_torch",  # Changed from paged_adamw_8bit to standard adamw
     learning_rate=4e-5,
     lr_scheduler_type="cosine",
@@ -97,13 +98,15 @@ training_arguments = TrainingArguments(
     gradient_checkpointing=True,  # Save memory during training
     gradient_checkpointing_kwargs={'use_reentrant': False},  # Recommended setting
 
-    evaluation_strategy="steps",  # Evaluate every eval_steps
+    eval_strategy="steps",  # Evaluate every eval_steps
     eval_steps=50,  # Evaluation frequency (match save_steps is common)
     per_device_eval_batch_size=1,  # Can often be larger than train batch size
     load_best_model_at_end=True,  # Load the best model based on metric_for_best_model
     metric_for_best_model="eval_loss",  # Primary metric to determine the best model (lower is better)
     greater_is_better=False,  # False for loss and perplexity
     run_name=run_name,  # Descriptive run name for tracking
+
+    dataloader_num_workers=4  # Number of subprocesses to use for data loading
 )
 # Log the arguments dictionary for detailed records
 logger.info(f"TrainingArguments: {training_arguments.to_dict()}")
@@ -157,7 +160,9 @@ def preprocess_data(examples):
 # --- Load and Prepare Dataset ---
 logger.info("Loading dataset...")
 try:
-    dataset = load_dataset("json", data_files={"train": TRAINING_DATASET_PATH, "validation": VALIDATION_DATASET_PATH}, keep_in_memory=True)
+    dataset = load_dataset("json", data_files={"train": TRAINING_DATASET_PATH, "validation": VALIDATION_DATASET_PATH},
+                           keep_in_memory=True,
+                           cache_dir=os.path.join(LOCAL_SCRATCH_PATH, ".cache/huggingface/datasets"))
     logger.info(f"Dataset loaded: {dataset}")
 
     dataset["train"] = dataset["train"].shuffle(seed=42)
@@ -186,7 +191,8 @@ model = AutoModelForCausalLM.from_pretrained(
     MODEL_ID,
     device_map="auto",  # Automatically distribute across available GPUs/CPU
     trust_remote_code=True,
-    torch_dtype=torch.bfloat16
+    torch_dtype=torch.bfloat16,
+    attn_implementation="flash_attention_2"  # Add this argument
 )
 logger.info("Base model loaded.")
 
@@ -233,9 +239,42 @@ wandb.log({"trainable_params_pct": trainable_params_pct})
 
 logger.info("wandb initialized successfully with lightweight logging.")
 
+
+class WeightedDataCollator(DataCollatorForLanguageModeling):
+    """
+    A Data Collator that handles standard LM collation but also preserves
+    and batches a 'weight' column present in the input examples.
+    Uses a more compatible type hint for the __call__ method.
+    """
+
+    # If using default mlm=False as in your script, __init__ override isn't strictly needed
+    # unless you add more custom parameters.
+
+    def __call__(self, examples, **kwargs) -> Dict[str, Any]:
+        # Ensure examples are actually dictionaries as expected by the logic below
+        if not isinstance(examples[0], Mapping):
+            raise ValueError("WeightedDataCollator expected a list of dictionaries, but received other types.")
+
+        # Check if weights are actually present in the first example dict
+        if "weight" not in examples[0]:
+            raise KeyError("Expected 'weight' key in examples passed to WeightedDataCollator, but it was missing.")
+
+        # Extract weights before standard collation.
+        weights = [example["weight"] for example in examples]
+        # Create copies without the 'weight' key
+        examples_without_weight = [{k: v for k, v in example.items() if k != "weight"} for example in examples]
+
+        # Perform standard collation using the base class's internal logic (e.g., torch_call)
+        batch = super().__call__(examples_without_weight)
+
+        # Add the weights back to the final batch dictionary as a tensor
+        batch["weight"] = torch.tensor(weights, dtype=torch.float32)
+        return batch
+
+
 # --- Initialize Trainer ---
 # Data Collator for Causal LM. mlm=False ensures standard next-token prediction.
-data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
+data_collator = WeightedDataCollator(tokenizer=tokenizer, mlm=False)
 
 logger_trainer = logging.getLogger("WeightedTrainer")  # Use a specific logger if desired
 
