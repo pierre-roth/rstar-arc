@@ -180,10 +180,6 @@ try:
 
     logger.info(f"Dataset preprocessing finished: {tokenized_datasets}")
 
-    for i, sample in enumerate(tokenized_datasets["train"]):
-        if not sample or "weight" not in sample:
-            logger.error(f"Sample at index {i} is missing the 'weight' key or is empty: {sample}")
-
 except FileNotFoundError as e:
     logger.error(f"Dataset file not found: {e}. Please check paths: {TRAINING_DATASET_PATH}, {VALIDATION_DATASET_PATH}")
     sys.exit(1)  # Exit if data is missing
@@ -257,6 +253,25 @@ class WeightedDataCollator(DataCollatorForLanguageModeling):
     # unless you add more custom parameters.
 
     def __call__(self, examples, **kwargs) -> Dict[str, Any]:
+
+        logger.info(f"[DEBUG] Received batch with type: {type(examples)}")
+        if isinstance(examples, dict):
+            logger.info(f"[DEBUG] Batch keys: {list(examples.keys())}")
+            # Optionally, log the shape/size of each tensor if values are tensors.
+            for key, value in examples.items():
+                try:
+                    logger.info(
+                        f"[DEBUG] Key '{key}' type: {type(value)}; size: {value.size() if hasattr(value, 'size') else 'N/A'}")
+                except Exception as e:
+                    logger.info(f"[DEBUG] Key '{key}' encountered an error when checking size: {e}")
+        elif isinstance(examples, list):
+            if len(examples) > 0 and isinstance(examples[0], dict):
+                logger.info(f"[DEBUG] First example keys: {list(examples[0].keys())}")
+            else:
+                logger.info("[DEBUG] Received a list, but first item is not a dict!")
+        else:
+            logger.info("[DEBUG] Received examples are of an unexpected type!")
+
         # Ensure examples are actually dictionaries as expected by the logic below
         if not isinstance(examples[0], Mapping):
             raise ValueError("WeightedDataCollator expected a list of dictionaries, but received other types.")
