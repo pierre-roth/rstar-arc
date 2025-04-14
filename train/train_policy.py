@@ -79,7 +79,7 @@ OUTPUT_DIR = os.path.join(NET_SCRATCH_PATH, "models", "fine_tuned", "policy", f"
 logger.info(f"OUTPUT_DIR: {OUTPUT_DIR}")
 
 # --- Training Arguments ---
-run_name = f"{MODEL_ID.split('/')[-1]}-finetune-{os.path.basename(TRAINING_DATASET_PATH).split('.')[0]}"
+run_name = f"{MODEL_ID.split('/')[-1]}-finetune-{MAX_SEQ_LENGTH}-{LEARNING_RATE}-{lora_config.r}-{lora_config.lora_alpha}"
 training_arguments = TrainingArguments(
     output_dir=OUTPUT_DIR,
     per_device_train_batch_size=1,  # Keep small for small models/memory
