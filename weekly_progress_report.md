@@ -296,10 +296,13 @@
 - **Work planned**:
   - Continue working on fine-tuning
     - experiment more with hyperparameters and different models
-      - find out what works best i.e. rigorously compare performance
-    - read thoroughly through Guillermo Barbadillo's Omni-ARC blog posts (possibly the best documented ARC solution journey ever)
+      - find out what works best i.e. compare eval losses and performance on ARC tasks
+    - read thoroughly through Guillermo Barbadillo's Omni-ARC blog posts (possibly the best documented ARC solution journey on the internet)
+      - https://ironbar.github.io/arc24/05_Solution_Summary/#abstraction-and-reasoning-challenge
+      - https://ironbar.github.io/arc24/modeling/
   - Add all the non-official tasks that are already solved to the training data
   - solve some more evaluation tasks to have a better validation set
+    - this is most definitely easier said than done and I will likely not be able to do this easily, because o3-mini generated descriptions seem not to help much (see week 6 results)
   - write reward model code
     - the reward model itself (value head etc.)
     - the code to integrate it correctly into the existing deepthink (tree search) system
