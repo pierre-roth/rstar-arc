@@ -11,11 +11,11 @@ max-model-len: 32768
 dtype: "auto"
 
 data-folder: "/itet-stor/piroth/net_scratch/task_data/training"
-num-tasks: 60
+num-tasks: 120
 sort-by-length: false
 
 num-examples: 1
-example-names: [["ddf7fa4f"]]
+example-names: [["e73095fd"]]
 
 rotate-example: false
 
