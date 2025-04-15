@@ -8,8 +8,8 @@ round-number: 2
 solve-only-unsolved: false
 solutions-per-task: 16
 
-policy-model: "fine_tuned_0.5B"
-max-model-len: 6144
+policy-model: "fine_tuned_1.5B"
+max-model-len: 16384
 
 
 data-folder: "/home/piroth/rstar-arc/data_sample/very_easy"
