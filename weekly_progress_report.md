@@ -306,6 +306,8 @@
   - solve some more evaluation tasks to have a better validation set
     - this is most definitely easier said than done and I will likely not be able to do this easily, because o3-mini generated descriptions seem not to help much (see week 6 results)
   - write reward model code
+    - validate and potentially fix the preference pair saving code
+    - write code to efficiently work with preference pairs (for augmentation etc.)
     - the reward model itself (value head etc.)
     - the code to integrate it correctly into the existing deepthink (tree search) system
     - the code for dataset generation (and possible augmentation)
