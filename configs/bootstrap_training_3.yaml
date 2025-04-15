@@ -9,6 +9,7 @@ solutions-per-task: 64
 policy-model: "Qwen/Qwen2.5-Coder-32B-Instruct-GPTQ-Int8"
 max-model-len: 32768
 dtype: "auto"
+enforce-eager: true
 
 data-folder: "/itet-stor/piroth/net_scratch/task_data/training"
 num-tasks: 120

@@ -32,7 +32,7 @@ class PolicyModel:
             tensor_parallel_size=self.config.gpus,
             dtype=self.config.dtype,
             max_model_len=self.config.max_model_len,
-            enforce_eager=True if self.config.max_model_len > 32768 else None,
+            enforce_eager=self.config.enforce_eager,
             # max_num_seqs=self.config.max_num_seqs,
             # max_num_batched_tokens=self.config.max_num_batched_tokens,
         )
