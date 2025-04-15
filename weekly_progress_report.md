@@ -294,8 +294,10 @@
 ### Week 7 (14.04.2025)
 
 - **Work planned**:
+  - refactor code (again) to make it more manageable
+  - create token count histogram to get a better estimate of context length requirements
   - Continue working on fine-tuning
-    - experiment more with hyperparameters and different models
+    - experiment more with hyperparameters, different models, different methods
       - find out what works best i.e. compare eval losses and performance on ARC tasks
     - read thoroughly through Guillermo Barbadillo's Omni-ARC blog posts (possibly the best documented ARC solution journey on the internet)
       - https://ironbar.github.io/arc24/05_Solution_Summary/#abstraction-and-reasoning-challenge
