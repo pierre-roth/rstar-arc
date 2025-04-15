@@ -110,7 +110,7 @@ training_arguments = TrainingArguments(
     greater_is_better=False,  # False for loss and perplexity
     run_name=run_name,  # Descriptive run name for tracking
 
-    dataloader_num_workers=8,  # Number of subprocesses to use for data loading
+    dataloader_num_workers=2,  # Number of subprocesses to use for data loading
 
     remove_unused_columns=False  # Keep all columns in the dataset, including 'weight'
 )
