@@ -1,0 +1,30 @@
+search-mode: "mcts"
+log-level: "INFO"
+
+fine-tuned: true
+
+save-for-visualization: true
+round-number: 2
+solve-only-unsolved: false
+solutions-per-task: 16
+
+policy-model: "fine_tuned_1.5B"
+max-model-len: 32768
+
+
+data-folder: "/itet-stor/piroth/net_scratch/task_data/training"
+sort-by-length: false
+
+rotate-example: false
+
+variable-temperature: true
+min-policy-temperature: 0.6
+max-policy-temperature: 0.9
+
+save-sft-data: false
+
+num-rollouts: 16
+
+branching-factor: 8
+max-depth: 16
+
