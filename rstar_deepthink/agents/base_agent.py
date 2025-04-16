@@ -3,11 +3,12 @@ from random import choice
 
 from vllm.outputs import RequestOutput
 
-from constants import CODE, SFT_SYSTEM_PROMPT, SFT_IN_BETWEEN_PROMPT
+from constants import CODE, SFT_SYSTEM_PROMPT, SFT_IN_BETWEEN_PROMPT, CODE_PREFIX, BOOTSTRAP_SYSTEM_PROMPT, \
+    BOOTSTRAP_TASK_PROMPT
 from rstar_deepthink.arc_task import ARCTask
 from rstar_deepthink.config import Config
 from rstar_deepthink.node import Node
-from rstar_deepthink.prompt import get_base_prompt, get_example_prompt
+from rstar_deepthink.prompt import task_to_prompt, get_example_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -26,26 +27,26 @@ class Agent:
         self.current_temperature: float = self.config.policy_temperature
         self.example_name: str | None = None
 
-        if not self.config.fine_tuned:
-            self.create_root(get_base_prompt(config, task), f"{CODE}\ndef solve(I):\n    ", task)
-        else:
-            self.create_root((SFT_SYSTEM_PROMPT, SFT_IN_BETWEEN_PROMPT), f"{CODE}\ndef solve(I):\n    ", task)
+        self.create_root()
 
         logger.debug(self.root.collect_prompt_and_code())
 
-    def create_root(self, base_prompt: (str, str), code: str, task: ARCTask):
+    def create_root(self):
         """Initialize the root node with the given state."""
         self.root = Node(self.config)
-        self.root.state["prompt_prefix"] = base_prompt[0]
-        self.root.state["prompt_suffix"] = base_prompt[1]
-        self.root.state["code"] = code
-        self.root.task = task
+
+        if not self.config.fine_tuned:
+            self.root.state["system_prompt"] = BOOTSTRAP_SYSTEM_PROMPT
+            self.root.state["task_prompt"] = BOOTSTRAP_TASK_PROMPT + task_to_prompt(self.task)
+        else:
+            self.root.state["system_prompt"] = SFT_SYSTEM_PROMPT
+            self.root.state["task_prompt"] = task_to_prompt(self.task) + SFT_IN_BETWEEN_PROMPT
+
+        self.root.state["code"] = CODE_PREFIX
+        self.root.task = self.task
         self.root.valid = True
 
         self.candidate_nodes.append(self.root)
-
-        logger.debug(
-            f"Created root for task {task.name} with prompt: \n{base_prompt[0]}\n<example_will_be_added_later>\n{base_prompt[1]}\n{code}")
 
     def update(self, rollout_idx: int, current_temperature: float) -> None:
         """Set the example for the root node."""

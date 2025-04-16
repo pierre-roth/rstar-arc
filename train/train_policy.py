@@ -23,9 +23,9 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
+from constants import NET_SCRATCH_PATH, SFT_SYSTEM_PROMPT, SFT_IN_BETWEEN_PROMPT, LOCAL_SCRATCH_PATH
 from rstar_deepthink.arc_task import ARCTask  # Example import
 from rstar_deepthink.arc_task.task_utils import task_to_prompt  # Example import
-from constants import NET_SCRATCH_PATH, SFT_SYSTEM_PROMPT, SFT_IN_BETWEEN_PROMPT, LOCAL_SCRATCH_PATH
 
 
 # --- Setup Logging ---

@@ -15,7 +15,7 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if project_root not in sys.path:
     sys.path.append(project_root)
 
-from constants import NET_SCRATCH_TASK_DATA_DIR_PATH
+from constants import NET_SCRATCH_TASK_DATA_DIR
 from rstar_deepthink.config import Config
 # remove_markers is specific to rstar_deepthink, keep it if solutions have markers
 # from rstar_deepthink.tools.python_tool import remove_markers
@@ -184,7 +184,7 @@ def main(config: Config):
     os.makedirs(sft_data_dir, exist_ok=True)
     raw_eval_file_path = os.path.join(sft_data_dir, "raw_evaluation.jsonl")  # Input file
     dataset_file_path = os.path.join(sft_data_dir, "dataset_validation.jsonl")  # Output file
-    arc_tasks_base_dir = NET_SCRATCH_TASK_DATA_DIR_PATH
+    arc_tasks_base_dir = NET_SCRATCH_TASK_DATA_DIR
 
     # --- Scan Task Directory ---
     task_name_to_path, directory_structure = load_task_info(arc_tasks_base_dir)

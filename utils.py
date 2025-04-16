@@ -23,8 +23,8 @@ def batch(iterable, n=-1):
         # Stop iteration after yielding the single batch (or nothing if empty)
         return
 
-        # --- Standard iterator batching for n > 0 ---
-        # Ensure we have an iterator
+    # --- Standard iterator batching for n > 0 ---
+    # Ensure we have an iterator
     it = iter(iterable)
     while True:
         # Read n items using islice (doesn't need len)
@@ -32,7 +32,7 @@ def batch(iterable, n=-1):
         if not chunk:
             # Iterator is exhausted
             return
-        # Yield the n-sized chunk
+        # Yield the 0 < sized <= n chunk
         yield chunk
 
 
@@ -151,7 +151,7 @@ def load_nodes(filename):
     return list(nodes_by_tag.values())
 
 
-def save_summary(config, node_lists: list[list[Node]], batch_number: int):
+def save_summary(config: Config, node_lists: list[list[Node]], batch_number: int):
     result = []
     num_solved = 0
     for nodelist in node_lists:

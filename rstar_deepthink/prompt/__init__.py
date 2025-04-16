@@ -1,3 +1,3 @@
-from .prompt_utils import get_base_prompt, get_example_prompt
+from .prompt_utils import task_to_prompt, get_example_prompt
 
-__all__ = ["get_base_prompt", "get_example_prompt"]
+__all__ = ["task_to_prompt", "get_example_prompt"]

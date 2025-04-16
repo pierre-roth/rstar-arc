@@ -2,20 +2,20 @@ search-mode: "mcts"
 log-level: "DEBUG"
 
 policy-model: "Qwen/Qwen2.5-Coder-7B-Instruct"
-max-model-len: 49152
+max-model-len: 32768
 
 save-for-visualization: true
 
-round-number: 0
+round-number: 2
 
-policy-temperature: 0.9
+policy-temperature: 0.8
 
 save-sft-data: false
 solve-only-unsolved: false
 
 num-simulations: 16
 branching-factor: 8
-max-depth: 16
+max-depth: 12
 
 
 

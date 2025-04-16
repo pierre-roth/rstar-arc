@@ -12,7 +12,7 @@ if project_root not in sys.path:
     sys.path.append(project_root)
 
 # Assuming these imports work in the target environment
-from constants import NET_SCRATCH_TASK_DATA_DIR_PATH
+from constants import NET_SCRATCH_TASK_DATA_DIR
 from rstar_deepthink.config import Config
 from utils import setup_logging
 
@@ -90,7 +90,7 @@ def main(config: Config):
     os.makedirs(sft_data_dir, exist_ok=True)
     augmented_file_path = os.path.join(sft_data_dir, "augmented.jsonl")
     dataset_file_path = os.path.join(sft_data_dir, "dataset_training.jsonl")
-    arc_tasks_base_dir = NET_SCRATCH_TASK_DATA_DIR_PATH
+    arc_tasks_base_dir = NET_SCRATCH_TASK_DATA_DIR
 
     # --- Scan Task Directory (Needed for Pass 1) ---
     task_name_to_path, directory_structure = load_task_info(arc_tasks_base_dir)

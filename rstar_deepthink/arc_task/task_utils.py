@@ -4,7 +4,7 @@ import os
 import sys
 from random import shuffle
 
-from constants import DEFAULT_EXAMPLE_DATA_PATH
+from constants import EXAMPLE_DATA_FOLDER
 from rstar_deepthink.arc_task import ARCTask
 from rstar_deepthink.config import Config
 from rstar_deepthink.prompt.prompt_utils import task_to_prompt

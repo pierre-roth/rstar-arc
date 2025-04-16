@@ -11,9 +11,6 @@ from constants import CPU_TIMEOUT_SECONDS, WALL_TIMEOUT_SECONDS, CODE, CODE_END,
 
 logger = logging.getLogger(__name__)
 
-# --- Global Flag ---
-# If False, execute code directly in the current process (faster, less isolation/safety)
-# If True (default), execute code in a separate subprocess (slower, more isolation/safety)
 use_subprocess = True
 logger.info(f"Code execution method: {'Subprocess' if use_subprocess else 'Direct'}")
 
@@ -30,9 +27,6 @@ else:
     )
 
 
-# ---------------------------------------------
-
-
 def remove_markers(code):
     """Remove STEP_END and CODE_END markers from the code."""
     clean_code = code.replace(f"{CODE}\n", "").replace(f"{STEP_END}", "").replace(f"{CODE_END}", "")
@@ -41,7 +35,7 @@ def remove_markers(code):
 
 def comment_out_markers(code):
     """Comment out STEP_END and CODE_END markers in the code."""
-    commented_code = code.replace(f"{CODE}\n", "").replace(f"{STEP_END}", f"# {STEP_END}").replace(f"{CODE_END}", "")
+    commented_code = code.replace(f"{CODE}\n", "").replace(f"{STEP_END}", f"# {STEP_END}\n").replace(f"{CODE_END}", "")
     return commented_code
 
 
@@ -221,11 +215,6 @@ def execute_code_directly(code_str, input_grids, expected_outputs):
         # Ensure expected_outputs has the same length as input_grids
         if expected_outputs is None:
             expected_outputs = [None] * len(input_grids)
-        elif len(expected_outputs) != len(input_grids):
-            logger.warning(
-                "Direct execution: Mismatch between input_grids and expected_outputs length. Comparison might fail.")
-            # Pad expected_outputs if shorter, or truncate if longer (or handle as error)
-            expected_outputs = (expected_outputs + [None] * len(input_grids))[:len(input_grids)]
 
         # Run solve on each input grid
         for i, grid in enumerate(input_grids):
@@ -275,17 +264,13 @@ def execute_code_with_task(code: str, input_grids: list[list[list[int]]],
         logger.debug("Cannot execute empty code!")
         return True, False, []
 
-    # --- CHOOSE EXECUTION METHOD ---
     if use_subprocess:
         logger.debug("Executing code via subprocess.")
         return execute_code_in_subprocess(code, input_grids, expected_outputs)
     else:
         logger.debug("Executing code directly.")
         return execute_code_directly(code, input_grids, expected_outputs)
-    # --------------------------------
 
-
-# --- The rest of your functions remain unchanged ---
 
 def run_examples(task, code: str) -> (bool, bool, list[list[list[int]]]):
     """Run code against all examples in a single process."""

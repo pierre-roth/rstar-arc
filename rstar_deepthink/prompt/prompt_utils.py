@@ -1,7 +1,7 @@
 import json
 import os
 
-from constants import CODE, CODE_END, STEP_END, DEFAULT_EXAMPLE_DATA_PATH
+from constants import CODE, CODE_END, STEP_END, EXAMPLE_DATA_FOLDER, BOOTSTRAP_SYSTEM_PROMPT
 from rstar_deepthink.arc_task import ARCTask
 from rstar_deepthink.config import Config
 
@@ -33,56 +33,16 @@ def task_to_prompt(task: ARCTask) -> str:
     return "\n".join(prompt)
 
 
-# noinspection PyUnusedLocal
-def get_base_prompt(config: Config, task: ARCTask) -> (str, str):
-    ### PROMPT PREFIX ###
-    prompt_prefix = f"""You are a powerful agent with broad problem solving skills, pattern matching abilities and great python programming expertise. You need to write Python code to solve an ARC (Abstraction and Reasoning Corpus) task, or more specifically implement the transformation function that can transform the input grids into their corresponding output grids.
-
-ARC Task Description:
-    - ARC tasks are composed of a set of training input-output examples and a set of test input grids.
-    - Each grid is a 2D list of integers and is given to you as a list of lists. (parameter I of the function "solve")
-    - Each integer represents a "color" and there is a total of 10 color values: the value 0 to 9.
-    - Your task is to write Python code that can transform the input grids into their corresponding output grids.
-    - You will get access to the training input-output examples to learn the transformation function.
-    - The transformation function "solve" must be able to correctly transform the training input grids into their corresponding output grids.
-    - The transformation function "solve" must also be able to correctly transform the test input grids into their corresponding hidden output grids.
-    
-Remember:
-    - Write code that implements the transformation function step by step. The solution must include {CODE}, {CODE_END} and {STEP_END} markers appropriately.
-    - The final code block must be valid Python code and implement the function `solve(I: list[list[int]]) -> list[list[int]]`. This function transforms input grids into their corresponding output grids.
-    - You may use Python built-in functions and the standard libraries.
-    - You are allowed to use all python standard library libraries such as collections, itertools, etc. after import them.
-    - Additionally, you can use numpy after importing it.
-    - Each step must be valid Python code (except {STEP_END}). Steps can be as simple as a single line of code or as complex as a multi-line function.
-    - Every step must be valid Python code when combined with the previous steps! This means no "open" loops, if statements, or other incomplete code.
-    - If you generate a {CODE_END} marker instead of a {STEP_END} marker, this signals the end of the code block, and thus the end of the transformation function.
-    - It is important to accurately analyze the input-output examples to infer the transformation function "solve".
-    - The transformation function "solve" might be completely different from the given example solution.
-    - Look to the example for ideas and for guidance on how to correctly format your solution!
-
-"""
-
-    ### PROMPT SUFFIX ###
-    prompt_suffix = f"""Now it's your turn! Carefully analyze the input-output examples to infer the transformation function.
-Then write Python code to implement the transformation function.
-
-{task_to_prompt(task)}
-
-"""
-
-    return prompt_prefix, prompt_suffix
-
-
 def get_example_prompt(config: Config, task_names: list[str]) -> str:
     """Generate the initial prompt for the task to feed into the LLM."""
     tasks = []
     for task_name in task_names:
-        path = os.path.join(DEFAULT_EXAMPLE_DATA_PATH, f"{task_name}.json")
+        path = os.path.join(EXAMPLE_DATA_FOLDER, f"{task_name}.json")
         tasks.append(ARCTask(config, path))
 
     # open "solution.jsonl" file and scan through it line by line until we find the task name
     solution_codes = {name: "" for name in task_names}
-    with open(os.path.join(DEFAULT_EXAMPLE_DATA_PATH, "solutions.jsonl"), "r") as f:
+    with open(os.path.join(EXAMPLE_DATA_FOLDER, "solutions.jsonl"), "r") as f:
         for line in f:
             if not line.strip():
                 continue

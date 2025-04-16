@@ -18,7 +18,7 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if project_root not in sys.path:
     sys.path.append(project_root)
 
-from constants import NET_SCRATCH_TASK_DATA_DIR_PATH, NET_SCRATCH_RE_ARC_DATA_PATH
+from constants import NET_SCRATCH_TASK_DATA_DIR, NET_SCRATCH_RE_ARC_DATA
 from rstar_deepthink.config import Config
 from rstar_deepthink.tools import execute_code_with_task
 # remove_markers is specific to rstar_deepthink, keep it if solutions have markers
@@ -367,8 +367,8 @@ def main(config: Config):
     cleaned_file = os.path.join(sft_data_dir, "cleaned.jsonl")
     augmented_file = os.path.join(sft_data_dir, "augmented.jsonl")
     # Paths below might not be in Config, using constants/defaults
-    arc_tasks_base_dir = NET_SCRATCH_TASK_DATA_DIR_PATH
-    rearc_data_dir = NET_SCRATCH_RE_ARC_DATA_PATH
+    arc_tasks_base_dir = NET_SCRATCH_TASK_DATA_DIR
+    rearc_data_dir = NET_SCRATCH_RE_ARC_DATA
 
     # --- Scan Task Directory ---
     task_name_to_path, directory_structure = load_task_info(arc_tasks_base_dir)

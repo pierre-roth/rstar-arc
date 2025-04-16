@@ -84,7 +84,36 @@ def _compute_final_outcomes(nodes: list[Node]):
         dfs(root)
 
 
-# --- Preference Pair Extraction (Modified) ---
+def _extract_solutions(nodes: list[Node], config: Config) -> list[dict]:
+    """
+    Extracts valid solutions from the MCTS tree nodes.
+
+    Args:
+        nodes: A flat list of all nodes in the MCTS tree for a single task.
+        config: The configuration object.
+
+    Returns:
+        A list of dictionaries, each representing a valid solution.
+    """
+    task_name = nodes[0].task.name
+    solutions = []
+
+    # Iterate through nodes to find valid final answer nodes
+    for node in nodes:
+        if _is_correct_final_solution(node):
+            solution_code = node.collect_code()
+            metadata = node.collect_metadata()  # Collects Q-values, examples, temps along path
+            solution_data = {
+                "task_name": task_name,
+                "solution_code": solution_code,
+                "metadata": metadata
+            }
+            solutions.append(solution_data)
+
+    return solutions
+
+
+# --- Preference Pair Extraction ---
 def _extract_preference_pairs(nodes: list[Node], config: Config) -> list[dict]:
     """
     Extracts preference pairs (chosen, rejected) from the MCTS tree nodes.
@@ -97,6 +126,7 @@ def _extract_preference_pairs(nodes: list[Node], config: Config) -> list[dict]:
     Returns:
         A list of dictionaries, each representing a preference pair.
     """
+    task_name = nodes[0].task.name
     preference_pairs = []
 
     # Iterate through nodes to find decision points
@@ -122,7 +152,7 @@ def _extract_preference_pairs(nodes: list[Node], config: Config) -> list[dict]:
         chosen_nodes = chosen_candidates[:num_pairs_to_select]
         rejected_nodes = rejected_candidates[:num_pairs_to_select]
 
-        # Reconstruct the prefix (prompt + code leading up to this decision point)
+        # Reconstruct the prefix (only code up to the split point)
         prefix_code = node.collect_code()
 
         # Create pairs
@@ -130,8 +160,8 @@ def _extract_preference_pairs(nodes: list[Node], config: Config) -> list[dict]:
             for rejected_node in rejected_nodes:
                 # Basic check: ensure chosen Q > rejected Q
                 if chosen_node.q_value() > rejected_node.q_value():
-                    pair_data = {
-                        "task_name": node.task.name,
+                    preference_pair_data = {
+                        "task_name": task_name,
                         "prefix": prefix_code,  # Prompt + code up to the split point
                         "chosen": chosen_node.state['code'],  # The chosen step's code
                         "rejected": rejected_node.state['code'],  # The rejected step's code
@@ -150,15 +180,15 @@ def _extract_preference_pairs(nodes: list[Node], config: Config) -> list[dict]:
                             "rejected_temperature": rejected_node.temperature
                         }
                     }
-                    preference_pairs.append(pair_data)
+                    preference_pairs.append(preference_pair_data)
 
     return preference_pairs
 
 
-# --- Main Saving Function (Modified) ---
-def save_sft(config: Config, nodes: list[Node]):
+# --- Main Saving Function ---
+def save_sft_data(config: Config, nodes: list[Node]):
     """
-    Save successful task solutions (SFT data) and preference pairs (RM data)
+    Save successful task solutions (policy SFT data) and preference pairs (reward model sft data)
     to JSONL files. Computes final outcomes before extracting pairs.
 
     Args:
@@ -166,7 +196,7 @@ def save_sft(config: Config, nodes: list[Node]):
         nodes: List of all nodes in the MCTS tree for a single task.
     """
     if not nodes:
-        logger.warning("Received empty node list in save_sft. Skipping.")
+        logger.warning("Received empty node list in save_sft. This should NOT happen! Skipping.")
         return
 
     # --- Setup Directories and Paths ---
@@ -174,55 +204,51 @@ def save_sft(config: Config, nodes: list[Node]):
     os.makedirs(output_dir, exist_ok=True)
 
     if not config.evaluation:
-        sft_file_path = os.path.join(output_dir, "raw.jsonl")  # File for SFT data
-        pref_file_path = os.path.join(output_dir, "preference.jsonl")  # File for RM preference data
+        solutions_file_path = os.path.join(output_dir, "solutions_training.jsonl")  # File for SFT data
+        preference_pairs_file_path = os.path.join(output_dir,
+                                                  "preference_pairs_training.jsonl")  # File for RM preference data
     else:
-        sft_file_path = os.path.join(output_dir, "raw_evaluation.jsonl")  # File for SFT data
-        pref_file_path = os.path.join(output_dir, "preference_evaluation.jsonl")  # File for RM preference data
+        solutions_file_path = os.path.join(output_dir, "solutions_evaluation.jsonl")  # File for SFT data
+        preference_pairs_file_path = os.path.join(output_dir,
+                                                  "preference_pairs_evaluation.jsonl")  # File for RM preference data
 
     task_name = nodes[0].task.name
-    logger.info(f"Processing save_sft for task: {task_name}")
+    logger.debug(f"Processing save_sft for task: {task_name}")
 
     # --- 1. Compute Final Outcomes (Correct/Wrong Counts) ---
     logger.debug(f"Computing final outcomes for {len(nodes)} nodes for task {task_name}...")
     _compute_final_outcomes(nodes)
     logger.debug(f"Finished computing final outcomes for task {task_name}.")
 
-    # --- 2. Save SFT Data (Successful Solutions) ---
-    sft_data_to_save = []
-    for node in nodes:
-        # Check if it's a valid final node that passed training examples AND test examples
-        if _is_correct_final_solution(node):  # Use the helper function
-            solution_code = node.collect_code()
-            metadata = node.collect_metadata()  # Collects Q-values, examples, temps along path
-            sft_data_to_save.append((solution_code, metadata))
+    # --- 2. Save Solutions ---
+    solutions_to_save = _extract_solutions(nodes, config)
 
     # Append SFT data to raw.jsonl
-    if sft_data_to_save:
+    if solutions_to_save:
         try:
-            with open(sft_file_path, 'a', encoding="utf-8") as f:
-                for solution_code, metadata in sft_data_to_save:
-                    entry = json.dumps({"task_name": task_name, "solution_code": solution_code, "metadata": metadata})
+            with open(solutions_file_path, 'a', encoding="utf-8") as f:
+                for solution in solutions_to_save:
+                    entry = json.dumps(solution)
                     f.write(entry + '\n')
-            logger.info(f"Saved {len(sft_data_to_save)} SFT entries for task {task_name} to {sft_file_path}")
+            logger.info(f"Saved {len(solutions_to_save)} SFT entries for task {task_name} to {solutions_file_path}")
         except IOError as e:
-            logger.error(f"Failed to write SFT data for task {task_name} to {sft_file_path}: {e}")
+            logger.error(f"Failed to write SFT data for task {task_name} to {solutions_file_path}: {e}")
     else:
         logger.info(f"No SFT entries to save for task {task_name}.")
 
-    # --- 3. Save Preference Pair Data (for RM Training) ---
+    # --- 3. Save Preference Pairs ---
     preference_pairs_to_save = _extract_preference_pairs(nodes, config)
 
     # Append preference data to preference.jsonl
     if preference_pairs_to_save:
         try:
-            with open(pref_file_path, 'a', encoding="utf-8") as f:
-                for pair_data in preference_pairs_to_save:
-                    entry = json.dumps(pair_data)
+            with open(preference_pairs_file_path, 'a', encoding="utf-8") as f:
+                for preference_pair in preference_pairs_to_save:
+                    entry = json.dumps(preference_pair)
                     f.write(entry + '\n')
             logger.info(
-                f"Saved {len(preference_pairs_to_save)} preference pairs for task {task_name} to {pref_file_path}")
+                f"Saved {len(preference_pairs_to_save)} preference pairs for task {task_name} to {preference_pairs_file_path}")
         except IOError as e:
-            logger.error(f"Failed to write preference data for task {task_name} to {pref_file_path}: {e}")
+            logger.error(f"Failed to write preference data for task {task_name} to {preference_pairs_file_path}: {e}")
     else:
         logger.info(f"No preference pairs to save for task {task_name}.")

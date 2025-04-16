@@ -21,7 +21,7 @@ class Node:
     def __init__(self, config: Config):
         self.config: Config = config
 
-        self.state = {"prompt_prefix": "", "example_prompt": "", "prompt_suffix": "", "hint": "", "code": ""}
+        self.state = {"system_prompt": "", "example_prompt": "", "task_prompt": "", "hint": "", "code": ""}
         self.parent: Node | None = None
         self.children: list[Node] = []
         self.example_name: str | None = None  # Name of the example used to generate this node
@@ -187,7 +187,7 @@ class Node:
         trajectory = []
         while node:
             trajectory.append(
-                node.state["prompt_prefix"] + node.state["example_prompt"] + node.state["prompt_suffix"]
+                node.state["system_prompt"] + node.state["example_prompt"] + node.state["task_prompt"]
                 + node.state["hint"] + node.state["code"])
             node = node.parent
 

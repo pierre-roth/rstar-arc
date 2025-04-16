@@ -5,7 +5,7 @@ from rstar_deepthink import Solver
 from rstar_deepthink.agents import BS, MCTS, Custom, Bootstrap
 from rstar_deepthink.arc_task import load_tasks
 from rstar_deepthink.config import Config
-from train.save_sft_data import save_sft
+from train.save_sft_data import save_sft_data
 from utils import setup_logging, batch, save_nodes, save_summary
 
 logger = logging.getLogger(__name__)
@@ -48,7 +48,7 @@ if __name__ == '__main__':
 
         if config.save_sft_data:
             for nodelist in outputs:
-                save_sft(config, nodelist)
+                save_sft_data(config, nodelist)
 
         # save summary of the batch
         save_summary(config, outputs, i)

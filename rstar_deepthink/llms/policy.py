@@ -20,10 +20,8 @@ class PolicyModel:
 
         start = datetime.now()
 
-        logger.info("Initializing Policy Model ...")
-        model = self.config.policy_model if not self.config.fine_tuned else os.path.join(self.config.policy_model_dir, self.config.policy_model)
-        logger.info(f"Loading policy model from {model} ...")
-        logger.info(f"Downloading to {self.config.policy_model_dir} ...")
+        model = self.config.policy_model if not self.config.fine_tuned else os.path.join(self.config.policy_model_dir,
+                                                                                         self.config.policy_model)
 
         self.llm = LLM(
             trust_remote_code=True,
@@ -55,7 +53,7 @@ class PolicyModel:
         sampling_parameters = SamplingParams(
             temperature=temperature,
             top_p=self.config.top_p,
-            repetition_penalty=1.05,
+            repetition_penalty=self.config.repetition_penalty,
             max_tokens=self.config.max_tokens,
             n=self.config.branching_factor,
             stop=[STEP_END, CODE_END],

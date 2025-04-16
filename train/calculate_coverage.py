@@ -6,13 +6,13 @@ import sys
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.append(project_root)
 
-from constants import NET_SCRATCH_PATH
+from constants import NET_SCRATCH_SFT_DATA_DIR, NET_SCRATCH_TASK_DATA_DIR
 
 
 def calculate_coverage(round_num: int):
-    sft_path_training = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{round_num}", "raw.jsonl")
-    sft_path_evaluation = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{round_num}", "raw_evaluation.jsonl")
-    task_path = os.path.join(NET_SCRATCH_PATH, "task_data")
+    sft_path_training = os.path.join(NET_SCRATCH_SFT_DATA_DIR, f"round_{round_num}", "solutions_training.jsonl")
+    sft_path_evaluation = os.path.join(NET_SCRATCH_SFT_DATA_DIR, f"round_{round_num}", "solutions_evaluation.jsonl")
+    task_path = NET_SCRATCH_TASK_DATA_DIR
 
     task_names = set()
 

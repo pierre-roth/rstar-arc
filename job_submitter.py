@@ -17,7 +17,7 @@ from time import sleep
 
 import yaml
 
-from constants import HOME_PATH, DEFAULT_DATA_FOLDER
+from constants import HOME_PATH, DATA_SAMPLE_DIR
 
 # Create tmp_configs directory if it doesn't exist
 TMP_CONFIGS_DIR = os.path.join(HOME_PATH, "tmp_configs")
@@ -33,7 +33,7 @@ PARAMETER_SWEEPS = [
         "batch-size": [50],
         "policy-temperature": [0.8, 0.9, 1.0, 1.1],
         "examples-mask": [[True, True, False], [False, True, True]],
-        "data-folder": [os.path.join(DEFAULT_DATA_FOLDER, "easy")]
+        "data-folder": [os.path.join(DATA_SAMPLE_DIR, "easy")]
     }
 ]
 

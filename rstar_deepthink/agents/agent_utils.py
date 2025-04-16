@@ -4,14 +4,14 @@ import os.path
 import scipy.stats
 
 from rstar_deepthink.arc_task import Grid
-from constants import DEFAULT_DATA_FOLDER
+from constants import DATA_SAMPLE_DIR
 
 
 def get_description(config, task_name: str) -> str:
     if config.evaluation:
-        path = os.path.join(DEFAULT_DATA_FOLDER, "bootstrap", f"evaluation_descriptions_1.json")
+        path = os.path.join(DATA_SAMPLE_DIR, "bootstrap", f"evaluation_descriptions_1.json")
     else:
-        path = os.path.join(DEFAULT_DATA_FOLDER, "bootstrap", f"training_descriptions_4.json")
+        path = os.path.join(DATA_SAMPLE_DIR, "bootstrap", f"training_descriptions_4.json")
 
     key = f"{task_name}.json"
 
