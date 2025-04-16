@@ -1,5 +1,5 @@
 search-mode: "mcts"
-log-level: "INFO"
+log-level: "DEBUG"
 
 fine-tuned: true
 
