@@ -2,7 +2,7 @@ search-mode: "bootstrap"
 log-level: "DEBUG"
 
 save-for-visualization: true
-round-number: 1
+round-number: 2
 solve-only-unsolved: false
 
 policy-model: "Qwen/Qwen2.5-Coder-7B-Instruct"
