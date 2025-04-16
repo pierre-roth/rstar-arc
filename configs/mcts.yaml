@@ -16,6 +16,3 @@ solve-only-unsolved: false
 num-simulations: 8
 branching-factor: 8
 max-depth: 12
-
-
-
