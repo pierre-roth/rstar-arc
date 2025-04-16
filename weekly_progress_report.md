@@ -323,7 +323,12 @@
 - **Issues and Questions**:
   - 
 
-- **Results**: 
+- **Results**:
   - ??
 
-
+- **Visuals**:
+  - here are 2 histograms of task representation token counts:
+    - ARC-AGI-1 tasks
+![arc_1.png](images/arc_1.png)
+    - ARC-AGI-1 and ARC-AGI-2 tasks
+![arc_1_and_2.png](images/arc_1_and_2.png)
