@@ -6,7 +6,7 @@ round-number: 1
 solve-only-unsolved: false
 
 policy-model: "Qwen/Qwen2.5-Coder-7B-Instruct"
-max-model-len: 16384
+max-model-len: 12288
 
 num-examples: 1
 example-names: [["6b9890af"]]

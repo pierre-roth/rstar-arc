@@ -2,7 +2,7 @@ search-mode: "mcts"
 log-level: "DEBUG"
 
 policy-model: "Qwen/Qwen2.5-Coder-7B-Instruct"
-max-model-len: 16384
+max-model-len: 12288
 
 save-for-visualization: true
 

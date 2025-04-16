@@ -9,7 +9,7 @@ solve-only-unsolved: false
 solutions-per-task: 16
 
 policy-model: "fine_tuned_1.5B"
-max-model-len: 16384
+max-model-len: 12288
 
 sort-by-length: false
 
