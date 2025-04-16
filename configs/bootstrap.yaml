@@ -8,8 +8,6 @@ solve-only-unsolved: false
 policy-model: "Qwen/Qwen2.5-Coder-7B-Instruct"
 max-model-len: 16384
 
-data-folder: "/home/piroth/rstar-arc/data_sample/very_easy"
-
 num-examples: 1
 example-names: [["6b9890af"]]
 
