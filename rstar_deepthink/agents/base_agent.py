@@ -31,6 +31,8 @@ class Agent:
         else:
             self.create_root((SFT_SYSTEM_PROMPT, SFT_IN_BETWEEN_PROMPT), f"{CODE}\ndef solve(I):\n    ", task)
 
+        logger.debug(self.root.collect_prompt_and_code())
+
     def create_root(self, base_prompt: (str, str), code: str, task: ARCTask):
         """Initialize the root node with the given state."""
         self.root = Node(self.config)

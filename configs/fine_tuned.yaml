@@ -1,0 +1,26 @@
+search-mode: "mcts"
+log-level: "INFO"
+
+fine-tuned: true
+
+save-for-visualization: true
+round-number: 2
+solve-only-unsolved: false
+solutions-per-task: 16
+
+policy-model: "fine_tuned_1.5B"
+max-model-len: 16384
+
+sort-by-length: false
+
+rotate-example: false
+
+policy-temperature: 0.7
+
+save-sft-data: false
+
+num-rollouts: 8
+
+branching-factor: 8
+max-depth: 12
+
