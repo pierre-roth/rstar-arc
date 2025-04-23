@@ -170,7 +170,7 @@ class Config:
         """
         try:
             # Read and parse the YAML file
-            with open(self.config_file, 'r') as f:
+            with open(os.path.join(PROJECT_PATH, self.config_file), 'r') as f:
                 config_data = yaml.safe_load(f) or {}
 
             # Convert kebab-case keys to snake_case for Python compatibility
