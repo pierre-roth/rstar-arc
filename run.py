@@ -30,13 +30,11 @@ SCRIPTS = [
 DEFAULT_SLURM_CONFIG = {
     "cpus_per_task": 16,
     "mem": "62G",
-    "partition": "tikgpu.all",  # Default partition
     "gpu_type": "geforce_rtx_2080",  # Default GPU type
     "num_gpus": 1,  # Default number of GPUs if type is selected
 }
 
 GPU_OPTIONS = ["none", "geforce_rtx_3090", "rtx_a6000", "a100_80gb", "titan_rtx", "geforce_rtx_2080", "other"]
-PARTITION_OPTIONS = ["cpu.normal", "gpu.normal", "tikgpu.medium", "tikgpu.all", "other"]
 
 # --- Environment Defaults ---
 DEFAULT_ENV_CONFIG = {
@@ -197,20 +195,6 @@ def main():
                     validate=lambda text: text.isdigit() or "Please enter a valid number",
                 ))
 
-    if 'partition' not in config['slurm'] or not args.config_file:
-        # Suggest partition based on GPU
-        suggested_partition = config["slurm"]["partition"]  # Keep default/YAML value initially
-        config["slurm"]["partition"] = ask_question(
-            "select",
-            "Select SLURM partition:",
-            choices=PARTITION_OPTIONS,
-            default=suggested_partition if suggested_partition in PARTITION_OPTIONS else PARTITION_OPTIONS[0],
-        )
-        if config["slurm"]["partition"] == "other":
-            config["slurm"]["partition"] = ask_question(
-                "text", "Enter custom partition name:"
-            )
-
     # 4. Environment Setup
     print("\n--- Environment Configuration ---")
     if 'install_python' not in config['env'] or not args.config_file:
@@ -231,7 +215,6 @@ def main():
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task={config['slurm']['cpus_per_task']}
 #SBATCH --mem={config['slurm']['mem']}
-#SBATCH --partition={config['slurm']['partition']}
 """
     # Add GPU resource request if a GPU is selected
     if config["slurm"]["gpu_type"] != "none":
