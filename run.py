@@ -486,7 +486,7 @@ export HF_HOME="${{NET_SCRATCH_PATH}}/.cache/huggingface"
 export HF_DATASETS_CACHE="${{NET_SCRATCH_PATH}}/.cache/huggingface/datasets"
 
 # Execute the Python application with output redirected to local scratch
-echo "Running: python {config["script"]} {f"--config-file {config['yaml_config']}" if config['yaml_config'] != 'none' else ""} {config['script_args']} | tee -a "${{local_job_dir}}/job_info.log"
+echo "Running: python {config["script"]} {f"--config-file {config['yaml_config']}" if config['yaml_config'] != 'none' else ""} {config['script_args']}" | tee -a "${{local_job_dir}}/job_info.log"
 
 # Setting relevant environment variables for the main application
 export VLLM_LOGGING_LEVEL=DEBUG
