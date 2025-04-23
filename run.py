@@ -318,8 +318,9 @@ fi; \\
 echo "All local job files transferred to ${{final_job_dir}}"; \\
 echo "Removing local job directory: ${{local_job_dir}}"; \\
 rm -rf "${{local_job_dir}}"; \\
-echo "Cleanup trap finished."; \\
+echo "Cleanup trap finished.";
 '
+
 # Set the trap using the command string variable for the EXIT signal
 trap "${{CLEANUP_COMMAND}}" EXIT
 # --- END CORRECTED Cleanup Trap ---
@@ -332,8 +333,6 @@ trap "${{CLEANUP_COMMAND}}" EXIT
   echo "SLURM_JOB_ID: ${{SLURM_JOB_ID}}"
   echo "Detailed job data will be saved to: ${{final_job_dir}}"
   echo "Local job directory: ${{local_job_dir}}"
-  echo "Minimal Python install dir target: ${{PYTHON_INSTALL_DIR}}"
-  echo "Attempting to use Python version: ${{TARGET_PYTHON_VERSION_FULL}}"
 }} | tee "${{local_job_dir}}/job_info.log"
 """
 
