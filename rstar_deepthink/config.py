@@ -48,14 +48,14 @@ class Config:
 
     max_tokens: int = 512  # Maximum tokens for generation of a single step
     dtype: str = "bfloat16"  # Data type for model (affects precision/speed)
-    max_model_len: int = 16384  # Affects the context window size
+    max_model_len: int = 14336  # Affects the context window size
     # max_num_seqs: int = 1024  # Maximum number of sequences to generate in parallel
     # max_num_batched_tokens = 16384  # Maximum number of tokens to process in a batch
     top_p: float = 1.0  # Top-p sampling parameter (cumulative probability cutoff)
     top_k: int = -1  # Top-k sampling parameter (number of candidates to consider)
     repetition_penalty: float = 1.05  # Penalty for repeating tokens in generation
 
-    policy_temperature: float = 0.7  # Sampling temperature for LLM generation
+    policy_temperature: float = 0.9  # Sampling temperature for LLM generation
 
     variable_temperature: bool = False  # Whether to use variable temperature for sampling
     min_policy_temperature: float = 0.7  # Minimum temperature for variable temperature sampling

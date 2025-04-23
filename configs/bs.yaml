@@ -1,7 +1,6 @@
 search-mode: "bs"
 log-level: "DEBUG"
 
-beam-width: 12
-branching-factor: 12
-max-depth: 12
-
+beam-width: 8
+branching-factor: 4
+max-depth: 10
