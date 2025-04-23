@@ -169,20 +169,8 @@ class Config:
         3. Updates the instance with values from the config file
         """
         try:
-            # Define possible config file locations
-            config_paths = [
-                os.path.join(f"{PROJECT_PATH}/configs", self.config_file),
-                os.path.join(f"{HOME_PATH}/tmp_configs", self.config_file)
-            ]
-
-            # Find the first existing config file
-            config_path = next((path for path in config_paths if os.path.isfile(path)), None)
-
-            if config_path is None:
-                raise FileNotFoundError(f"Config file not found: {self.config_file}")
-
             # Read and parse the YAML file
-            with open(config_path, 'r') as f:
+            with open(self.config_file, 'r') as f:
                 config_data = yaml.safe_load(f) or {}
 
             # Convert kebab-case keys to snake_case for Python compatibility
@@ -192,7 +180,7 @@ class Config:
             for key, value in config_data.items():
                 if hasattr(self, key):
                     setattr(self, key, value)
-                    logging.debug(f"Loaded from {config_path}: {key}={value}")
+                    logging.debug(f"Loaded from {self.config_file}: {key}={value}")
 
         except FileNotFoundError:
             logging.error(f"Config file not found: {self.config_file}")
