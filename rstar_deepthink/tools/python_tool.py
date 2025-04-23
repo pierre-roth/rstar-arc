@@ -21,7 +21,7 @@ if SUBPROCESS_PYTHON_PATH:
     logger.info(f"Using subprocess Python executable: {SUBPROCESS_PYTHON_PATH}")
 else:
     SUBPROCESS_PYTHON_PATH = "python3"
-    logger.warning(
+    logger.info(
         "SUBPROCESS_PYTHON_EXEC environment variable not set. "
         f"Falling back to '{SUBPROCESS_PYTHON_PATH}'. Subprocess performance might be suboptimal."
     )
