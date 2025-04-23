@@ -1,10 +1,5 @@
-import json
-import logging
 import os
-import pathlib
 import sys
-from collections import defaultdict
-from typing import Tuple, Dict, Set, Optional, Any, List
 
 # --- Project Setup ---
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -15,6 +10,7 @@ if project_root not in sys.path:
 from constants import NET_SCRATCH_TASK_DATA_DIR
 from rstar_deepthink.config import Config
 from utils import setup_logging
+from data_utils import *
 
 logger = logging.getLogger(__name__)
 
@@ -22,61 +18,6 @@ logger = logging.getLogger(__name__)
 WRITE_BACK_BATCH_SIZE = 100
 DEFAULT_N_TRAIN = 3  # Default if original task JSON is missing/malformed
 DEFAULT_N_TEST = 1  # Default if original task JSON is missing/malformed
-
-
-def load_task_info(base_dir: str) -> Tuple[Dict[str, str], Dict[str, Set[str]]]:
-    """Scans the base directory for ARC task JSON files."""
-    task_name_to_path: Dict[str, str] = {}
-    structure: Dict[str, Set[str]] = defaultdict(set)
-    logger.info(f"Scanning task directory structure: {base_dir}")
-    if not os.path.isdir(base_dir):
-        logger.error(f"Task directory not found: {base_dir}")
-        return {}, {}
-    base_path = pathlib.Path(base_dir)
-
-    for filepath in base_path.rglob('*.json'):
-        task_name = filepath.stem
-        task_name_to_path[task_name] = str(filepath)
-        try:
-            relative_dir = filepath.parent.relative_to(base_path)
-            subdir_key = str(relative_dir).split(os.path.sep)[0] if relative_dir.parts else '.'
-            structure[subdir_key].add(task_name)
-        except ValueError:
-            logger.warning(
-                f"Could not determine relative path for {filepath} against base {base_path}. Assigning to root.")
-            structure['.'].add(task_name)
-
-    logger.info(f"Finished scanning. Found {len(task_name_to_path)} tasks in subdirectories: {list(structure.keys())}")
-    return task_name_to_path, dict(structure)
-
-
-def load_json_file(filepath: str) -> Optional[Any]:
-    """Loads JSON data from a single file."""
-    if not filepath or not os.path.exists(filepath):
-        logger.error(f"File not found or path invalid: {filepath}")
-        return None
-    try:
-        with open(filepath, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except json.JSONDecodeError:
-        logger.error(f"Invalid JSON in file: {filepath}")
-    except Exception as e:
-        logger.error(f"Error loading file {filepath}: {e}")
-    return None
-
-
-def write_batch_data(filepath: str, data_batch: List[Dict]):
-    """Writes a batch of JSON lines to the output file."""
-    if not data_batch:
-        return
-    try:
-        with open(filepath, 'a', encoding='utf-8') as f:
-            for data in data_batch:
-                f.write(json.dumps(data) + '\n')
-    except IOError as e:
-        logger.error(f"Failed to write batch to {filepath}: {e}")
-    except TypeError as e:
-        logger.error(f"Data serialization error writing to {filepath}: {e}. Data sample: {data_batch[:1]}")
 
 
 # --- Main Orchestration ---

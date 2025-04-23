@@ -1,5 +1,5 @@
-import collections  # For efficient line skipping with deque
-import itertools  # For efficient line skipping
+import collections
+import itertools
 import json
 import logging
 import os
@@ -16,6 +16,7 @@ from rstar_deepthink.arc_task import ARCTask
 from rstar_deepthink.config import Config
 from rstar_deepthink.tools import execute_code_with_task
 from utils import batch, setup_logging
+from data_utils import count_lines
 
 logger = logging.getLogger(__name__)
 
@@ -69,20 +70,6 @@ def process_solution(args: (ARCTask, str)) -> str:
     current_solution_code = STEP_END.join(current_parts)
 
     return current_solution_code
-
-
-def count_lines(filename):
-    """Counts lines in a file, returns 0 if file not found or on error."""
-    try:
-        with open(filename, 'r', encoding='utf-8') as f:
-            # Efficiently count lines using a generator expression
-            return sum(1 for _ in f)
-    except FileNotFoundError:
-        return 0
-    except Exception as e:
-        # Log error but return 0 to allow starting fresh if count fails
-        logger.error(f"Error counting lines in {filename}: {e}")
-        return 0
 
 
 def main():

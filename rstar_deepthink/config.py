@@ -3,8 +3,8 @@ import logging
 import os
 import sys
 from dataclasses import dataclass, field
+from random import shuffle, sample
 from typing import Optional
-from random import choices, shuffle, sample
 
 import yaml
 
@@ -32,7 +32,8 @@ class Config:
     save_sft_data: bool = True  # Whether to save SFT data
 
     num_examples: int = -1  # Number of examples to use for training (default: all)
-    example_names: list[list[str]] = field(default_factory=lambda: [["6d0aefbc", "1cf80156"], ["1cf80156", "00d62c1b"]])  # list of names of example tasks (to be used sequentially in different rollouts)
+    example_names: list[list[str]] = field(default_factory=lambda: [["6d0aefbc", "1cf80156"], ["1cf80156",
+                                                                                               "00d62c1b"]])  # list of names of example tasks (to be used sequentially in different rollouts)
     rotate_example: bool = False  # Whether to rotate the example tasks in each rollout
 
     policy_model: str = "Qwen/Qwen2.5-Coder-7B-Instruct"  # Model that generates reasoning steps
@@ -50,7 +51,7 @@ class Config:
     max_model_len: int = 16384  # Affects the context window size
     # max_num_seqs: int = 1024  # Maximum number of sequences to generate in parallel
     # max_num_batched_tokens = 16384  # Maximum number of tokens to process in a batch
-    top_p: float = 0.95  # Top-p sampling parameter (cumulative probability cutoff)
+    top_p: float = 1.0  # Top-p sampling parameter (cumulative probability cutoff)
     top_k: int = -1  # Top-k sampling parameter (number of candidates to consider)
     repetition_penalty: float = 1.05  # Penalty for repeating tokens in generation
 
@@ -59,6 +60,8 @@ class Config:
     variable_temperature: bool = False  # Whether to use variable temperature for sampling
     min_policy_temperature: float = 0.7  # Minimum temperature for variable temperature sampling
     max_policy_temperature: float = 1.1  # Maximum temperature for variable temperature sampling
+
+    learning_rate: float = 5e-5  # Learning rate for training
 
     seed: int = 42  # Random seed for reproducibility
     deterministic: bool = False  # Whether to enforce deterministic behavior
@@ -75,6 +78,7 @@ class Config:
     beam_width: int = 3  # Number of top-scoring beams to track
     branching_factor: int = 4  # Number of children to generate if no children exist yet
     regeneration_probability: float = 1 / 8  # Probability of regenerating a node if it has no children
+    min_step_margin: float = 0.1  # Minimum avg q value margin for preference pairs
 
     c_puct: float = 2.0  # PUCT exploration constant
     num_rollouts: int = 8  # Number of simulations to run for MCTS

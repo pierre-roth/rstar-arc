@@ -24,9 +24,9 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from constants import NET_SCRATCH_PATH, SFT_SYSTEM_PROMPT, SFT_IN_BETWEEN_PROMPT, LOCAL_SCRATCH_PATH
+from rstar_deepthink import Config
 from rstar_deepthink.arc_task import ARCTask  # Example import
 from rstar_deepthink.arc_task.task_utils import task_to_prompt  # Example import
-
 
 # --- Setup Logging ---
 # Configure logging to output to console and optionally to a file
@@ -43,13 +43,17 @@ logger = logging.getLogger(__name__)  # Get logger for this module
 
 logger.info("Project root added to path and custom modules imported.")
 
+config = Config()
+
 # --- Configuration ---
 logger.info("--- Configuration ---")
-MODEL_ID = "Qwen/Qwen2.5-Coder-1.5B"
-TRAINING_DATASET_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{1}", "dataset_training.jsonl")
-VALIDATION_DATASET_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{1}", "dataset_validation.jsonl")
-MAX_SEQ_LENGTH = 8*1024  # Adjust based on your data and GPU memory
-LEARNING_RATE = 2e-5
+MODEL_ID = config.policy_model
+TRAINING_DATASET_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{config.round_number}",
+                                     "dataset_training.jsonl")
+VALIDATION_DATASET_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{config.round_number}",
+                                       "dataset_validation.jsonl")
+MAX_SEQ_LENGTH = config.max_model_len  # Adjust based on your data and GPU memory
+LEARNING_RATE = config.learning_rate
 WANDB_PROJECT = "deepthink-sft"  # Added wandb project name
 WANDB_ENTITY = None  # Set to your team name or username if needed
 
@@ -68,14 +72,23 @@ lora_config = LoraConfig(
         "q_proj", "k_proj", "v_proj", "o_proj",
         "gate_proj", "up_proj", "down_proj",
     ],
-    lora_dropout=0.05,
+    rank_pattern={
+        r"(q_proj|k_proj|v_proj|o_proj)$": 16,
+        r"(gate_proj|up_proj|down_proj)$": 32,
+    },
+    alpha_pattern={
+        r"(q_proj|k_proj|v_proj|o_proj)$": 16,
+        r"(gate_proj|up_proj|down_proj)$": 32,
+    },
+    lora_dropout=0.03,
     bias="none",
     task_type="CAUSAL_LM",
 )
 logger.info(
     f"LoraConfig: r={lora_config.r}, alpha={lora_config.lora_alpha}, dropout={lora_config.lora_dropout}, target_modules={lora_config.target_modules}")
 
-OUTPUT_DIR = os.path.join(NET_SCRATCH_PATH, "models", "fine_tuned", "policy", f"fine-tuned-{MODEL_ID.split('/')[1]}-{MAX_SEQ_LENGTH}-{LEARNING_RATE}-{lora_config.r}-{lora_config.lora_alpha}")
+OUTPUT_DIR = os.path.join(NET_SCRATCH_PATH, "models", "fine_tuned", "policy",
+                          f"fine-tuned-{MODEL_ID.split('/')[1]}-{MAX_SEQ_LENGTH}-{LEARNING_RATE}-{lora_config.r}-{lora_config.lora_alpha}")
 logger.info(f"OUTPUT_DIR: {OUTPUT_DIR}")
 
 # --- Training Arguments ---
@@ -83,9 +96,9 @@ run_name = f"{MODEL_ID.split('/')[-1]}-finetune-{MAX_SEQ_LENGTH}-{LEARNING_RATE}
 training_arguments = TrainingArguments(
     output_dir=OUTPUT_DIR,
     per_device_train_batch_size=1,  # Keep small for small models/memory
-    gradient_accumulation_steps=32,  # Effective batch size = batch_size * grad_accum_steps
+    gradient_accumulation_steps=16,  # Effective batch size = batch_size * grad_accum_steps
     optim="adamw_torch",  # Changed from paged_adamw_8bit to standard adamw
-    learning_rate=2e-5,
+    learning_rate=LEARNING_RATE,
     lr_scheduler_type="cosine",
     num_train_epochs=1,
     warmup_ratio=0.03,

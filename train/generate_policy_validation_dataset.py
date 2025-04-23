@@ -1,13 +1,7 @@
-import difflib
 import heapq
-import json
-import logging
 import os
-import pathlib
-import re
 import sys
-from collections import defaultdict
-from typing import Tuple, Dict, Set, Optional, Any, List
+from typing import Dict, List
 
 # --- Project Setup ---
 # Assuming these imports work in the target environment
@@ -20,6 +14,7 @@ from rstar_deepthink.config import Config
 # remove_markers is specific to rstar_deepthink, keep it if solutions have markers
 # from rstar_deepthink.tools.python_tool import remove_markers
 from utils import setup_logging
+from data_utils import *
 
 logger = logging.getLogger(__name__)
 
@@ -28,149 +23,6 @@ NUM_SOLUTIONS_Q_VALUE = 64
 NUM_SOLUTIONS_LENGTH = 32
 NUM_SOLUTIONS_DIVERSITY = 8
 WRITE_BACK_BATCH_SIZE = 1000
-
-
-def remove_comments(code: str) -> str:
-    """Removes single-line and multi-line comments from Python code."""
-    code = re.sub(r'#.*', '', code)
-    code = re.sub(r'\"\"\"[\s\S]*?\"\"\"', '', code)
-    code = re.sub(r"\'\'\'[\s\S]*?\'\'\'", '', code)
-    code = "\n".join(line for line in code.splitlines() if line.strip())
-    return code
-
-
-def calculate_avg_q(data: Dict) -> float:
-    """Calculates the average Q-value from solution metadata."""
-    metadata = data.get("metadata")
-    if metadata:
-        q_values = metadata.get("q_values")
-        if q_values and isinstance(q_values, list) and len(q_values) > 0:
-            try:
-                numeric_q_values = [float(q) for q in q_values if isinstance(q, (int, float))]
-                if len(numeric_q_values) == len(q_values):
-                    return sum(numeric_q_values) / len(numeric_q_values)
-                else:
-                    logger.warning(f"Non-numeric Q-values found for task {data.get('task_name')}")
-            except (ValueError, TypeError) as e:
-                logger.warning(f"Error calculating avg Q for task {data.get('task_name')}: {e}")
-                return float("-inf")
-    return float("-inf")
-
-
-def get_code_length(code: str) -> int:
-    """Calculates the length of the code after removing comments."""
-    # Assuming solutions in raw_evaluation.jsonl are clean (no markers)
-    code_to_measure = code
-    return len(remove_comments(code_to_measure))
-
-
-def calculate_code_similarity(code1: str, code2: str) -> float:
-    """Calculates similarity using Levenshtein distance ratio on comment-removed code."""
-    code1_clean = remove_comments(code1)
-    code2_clean = remove_comments(code2)
-    # Lower score = less similar (more diverse)
-    return 1.0 - difflib.SequenceMatcher(None, code1_clean, code2_clean).ratio()
-
-
-def select_diverse_subset(solutions: List[Dict], k: int) -> List[Dict]:
-    """Selects a diverse subset of k solutions using a greedy approach."""
-    if not solutions:
-        return []
-    if len(solutions) <= k:
-        return solutions
-
-    for sol in solutions:
-        if 'clean_code' not in sol:
-            sol['clean_code'] = remove_comments(sol['solution_code'])
-
-    # Already sorted by length before calling this function typically
-
-    selected_solutions = [solutions[0]]
-    remaining_solutions = solutions[1:]
-
-    while len(selected_solutions) < k and remaining_solutions:
-        best_candidate = None
-        max_min_distance = -1
-
-        for candidate in remaining_solutions:
-            min_distance_to_selected = float('inf')
-            for selected in selected_solutions:
-                distance = calculate_code_similarity(candidate['clean_code'], selected['clean_code'])
-                min_distance_to_selected = min(min_distance_to_selected, distance)
-
-            if min_distance_to_selected > max_min_distance:
-                max_min_distance = min_distance_to_selected
-                best_candidate = candidate
-
-        if best_candidate:
-            selected_solutions.append(best_candidate)
-            remaining_solutions.remove(best_candidate)
-        else:
-            if remaining_solutions:
-                selected_solutions.append(remaining_solutions.pop(0))
-            else:
-                break
-
-    for sol in solutions:
-        if 'clean_code' in sol: del sol['clean_code']
-
-    return selected_solutions
-
-
-def load_task_info(base_dir: str) -> Tuple[Dict[str, str], Dict[str, Set[str]]]:
-    """Scans the base directory for ARC task JSON files."""
-    task_name_to_path: Dict[str, str] = {}
-    structure: Dict[str, Set[str]] = defaultdict(set)  # Keep structure if needed later
-    logger.info(f"Scanning task directory structure: {base_dir}")
-    if not os.path.isdir(base_dir):
-        logger.error(f"Task directory not found: {base_dir}")
-        return {}, {}
-    base_path = pathlib.Path(base_dir)
-
-    for filepath in base_path.rglob('*.json'):
-        task_name = filepath.stem
-        task_name_to_path[task_name] = str(filepath)
-        # Keep structure loading for consistency, though not used directly here
-        try:
-            relative_dir = filepath.parent.relative_to(base_path)
-            subdir_key = str(relative_dir).split(os.path.sep)[0] if relative_dir.parts else '.'
-            structure[subdir_key].add(task_name)
-        except ValueError:
-            logger.warning(
-                f"Could not determine relative path for {filepath} against base {base_path}. Assigning to root.")
-            structure['.'].add(task_name)
-
-    logger.info(f"Finished scanning. Found {len(task_name_to_path)} tasks in subdirectories: {list(structure.keys())}")
-    return task_name_to_path, dict(structure)
-
-
-def load_json_file(filepath: str) -> Optional[Any]:
-    """Loads JSON data from a single file."""
-    if not filepath or not os.path.exists(filepath):
-        logger.error(f"File not found or path invalid: {filepath}")
-        return None
-    try:
-        with open(filepath, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except json.JSONDecodeError:
-        logger.error(f"Invalid JSON in file: {filepath}")
-    except Exception as e:
-        logger.error(f"Error loading file {filepath}: {e}")
-    return None
-
-
-def write_batch_data(filepath: str, data_batch: List[Dict]):
-    """Writes a batch of JSON lines to the output file."""
-    if not data_batch:
-        return
-    try:
-        with open(filepath, 'a', encoding='utf-8') as f:
-            for data in data_batch:
-                f.write(json.dumps(data) + '\n')
-    except IOError as e:
-        logger.error(f"Failed to write batch to {filepath}: {e}")
-    except TypeError as e:
-        logger.error(f"Data serialization error writing to {filepath}: {e}. Data sample: {data_batch[:1]}")
 
 
 # --- Main Script Logic ---

@@ -291,7 +291,7 @@
     - evaluation: 10/400 = 2.50% coverage
 
 
-### Week 7 (14.04.2025)
+### Week 7 & 8 (14.04.2025)
 
 - **Work planned**:
   - refactor code (again) to make it more manageable
@@ -317,6 +317,7 @@
     see if it works
 
 - **Work done**:
+  - token count histogram created (counts only token for task representation)
   - 
 
 

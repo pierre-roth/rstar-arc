@@ -35,7 +35,7 @@ def remove_markers(code):
 
 def comment_out_markers(code):
     """Comment out STEP_END and CODE_END markers in the code."""
-    commented_code = code.replace(f"{CODE}\n", "").replace(f"{STEP_END}", f"# {STEP_END}\n").replace(f"{CODE_END}", "")
+    commented_code = code.replace(f"{CODE}\n", "").replace(f"{STEP_END}", f"# {STEP_END}").replace(f"{CODE_END}", "")
     return commented_code
 
 

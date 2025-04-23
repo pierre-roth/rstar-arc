@@ -59,8 +59,6 @@ def _compute_final_outcomes(nodes: list[Node]):
                     # Includes invalid terminal nodes and those failing tests
                     node.final_wrong = 1
                     # logger.debug(f"Node {node.tag} is incorrect/invalid terminal.")
-            # Non-terminal leaf nodes (shouldn't happen if max_depth is reached?)
-            # Treat them as leading to wrong paths for safety, or adjust as needed.
             # else:
             #    node.final_wrong = 1 # Or handle differently if needed
         else:
@@ -72,7 +70,7 @@ def _compute_final_outcomes(nodes: list[Node]):
                 node.final_wrong += child.final_wrong
             # logger.debug(f"Node {node.tag} aggregated: correct={node.final_correct}, wrong={node.final_wrong}")
 
-    # Find root node(s) (those without a parent reference in the map)
+    # Find root node(s) (those without a parent)
     root_nodes = [node for node in nodes if node.parent is None]
     if not root_nodes and nodes:  # Fallback if parent links weren't set correctly
         root_nodes = [nodes[0]]
@@ -159,7 +157,7 @@ def _extract_preference_pairs(nodes: list[Node], config: Config) -> list[dict]:
         for chosen_node in chosen_nodes:
             for rejected_node in rejected_nodes:
                 # Basic check: ensure chosen Q > rejected Q
-                if chosen_node.q_value() > rejected_node.q_value():
+                if chosen_node.q_value() > rejected_node.q_value() + config.min_step_margin:
                     preference_pair_data = {
                         "task_name": task_name,
                         "prefix": prefix_code,  # Prompt + code up to the split point
