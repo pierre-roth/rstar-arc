@@ -290,8 +290,6 @@ trap "exit 1" HUP INT TERM
 
 # Define the cleanup actions command string first
 # Note: Comments explaining the logic are moved *outside* the command string
-# Note: We are NOT cleaning up PYTHON_INSTALL_DIR here to allow potential reuse.
-# Add 'rm -rf "${{PYTHON_INSTALL_DIR}}"; \\' inside the single quotes below if you *always* want cleanup.
 CLEANUP_COMMAND=' \\
 echo "Transferring logs and cleaning up..."; \\
 mkdir -p "${{final_job_dir}}"; \\
