@@ -17,7 +17,7 @@ from data_utils import *
 logger = logging.getLogger(__name__)
 
 # --- Constants ---
-WRITE_BACK_BATCH_SIZE = 1000
+WRITE_BACK_BATCH_SIZE = 100
 
 
 # --- Main Script Logic ---

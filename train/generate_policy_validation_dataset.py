@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 NUM_SOLUTIONS_Q_VALUE = 32
 NUM_SOLUTIONS_LENGTH = 16
 NUM_SOLUTIONS_DIVERSITY = 4
-WRITE_BACK_BATCH_SIZE = 1000
+WRITE_BACK_BATCH_SIZE = 100
 
 
 # --- Main Script Logic ---
