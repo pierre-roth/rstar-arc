@@ -1,7 +1,7 @@
 import logging
 from random import choice
 
-from vllm.outputs import RequestOutput
+# Removed static import of RequestOutput to avoid heavy dependency at module import.
 
 from constants import SFT_SYSTEM_PROMPT, SFT_IN_BETWEEN_PROMPT, CODE_PREFIX, BOOTSTRAP_SYSTEM_PROMPT, \
     BOOTSTRAP_TASK_PROMPT
@@ -113,7 +113,7 @@ class Agent:
         """Choose which nodes to further develop given newly generated ones"""
         pass
 
-    def generate_next_step(self, outputs: list[RequestOutput]) -> None:
+    def generate_next_step(self, outputs) -> None:
         """Generate and add child nodes from model outputs."""
         self.candidate_nodes = []
 

@@ -1,7 +1,7 @@
 import logging
 
 from pebble import ProcessPool
-from vllm.outputs import RequestOutput
+# Removed static import of RequestOutput to avoid heavy dependency at module import.
 
 # noinspection PyUnresolvedReferences
 from rstar_deepthink.agents import Agent, temperature_lerp, temperature_beta_cdf
@@ -23,7 +23,7 @@ class Solver:
         self.reward.init()  # Initialize the reward model
 
     @staticmethod
-    def processor(agent: Agent, output: list[RequestOutput]) -> Agent:
+    def processor(agent: Agent, output) -> Agent:
         agent.generate_next_step(output)
         return agent
 
@@ -54,7 +54,7 @@ class Solver:
 
         return prompts, prompts_span, valid_agents, invalid_agents, expanded_agents
 
-    def generate_postprocess(self, outputs: list[list[RequestOutput]], valid_agents: list[Agent]) -> list[Agent]:
+    def generate_postprocess(self, outputs: list[list], valid_agents: list[Agent]) -> list[Agent]:
         post_agents = []
 
         num_workers = min(len(valid_agents), max(1, self.config.cpus - 1))

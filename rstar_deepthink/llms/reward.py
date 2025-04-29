@@ -2,11 +2,11 @@ import logging
 import os
 from datetime import datetime
 
+# 'torch' and 'nn' are used for tensor and module definitions
 import torch
-from peft import PeftModel
 from torch import nn
-from transformers import AutoModelForCausalLM, AutoTokenizer, PreTrainedModel
 
+# Heavy frameworks (PEFT, Transformers) are imported inside methods to keep module import light
 from rstar_deepthink.config import Config
 
 logger = logging.getLogger(__name__)
@@ -34,15 +34,19 @@ class RewardModelModule(nn.Module):
 
     def __init__(
             self,
-            model_or_name: str | PreTrainedModel | PeftModel,
+            model_or_name,
             *,
             dtype: torch.dtype = torch.float16,
-            device: str | torch.device | None = None,
+            device=None,
             dropout: float = 0.1,
     ):
         super().__init__()
 
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+
+        # Import heavy ML libs only when initializing
+        from transformers import AutoModelForCausalLM, AutoTokenizer, PreTrainedModel
+        from peft import PeftModel
 
         # If provided a loaded PreTrainedModel or PeftModel, use directly; else load from name/path
         if isinstance(model_or_name, (PreTrainedModel, PeftModel)):
@@ -135,6 +139,9 @@ class RewardModelModule(nn.Module):
 
         # Save backbone (PreTrainedModel supports save_pretrained)
         os.makedirs(output_dir, exist_ok=True)
+
+        from transformers import PreTrainedModel
+
         if isinstance(self.backbone, PreTrainedModel):
             self.backbone.save_pretrained(output_dir)
         else:
@@ -150,7 +157,7 @@ class RewardModelModule(nn.Module):
             model_dir: str,
             *,
             dtype: torch.dtype = torch.float16,
-            device: str | torch.device | None = None,
+            device=None,
             dropout: float = 0.1,
     ) -> "RewardModelModule":
         """
@@ -158,6 +165,9 @@ class RewardModelModule(nn.Module):
         """
         # Determine device
         dev = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        # Import heavy transformers only when loading pretrained
+        from transformers import AutoModelForCausalLM
+
         # Load backbone model
         backbone = AutoModelForCausalLM.from_pretrained(
             model_dir,

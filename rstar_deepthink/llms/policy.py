@@ -2,7 +2,7 @@ import logging
 import os.path
 from datetime import datetime
 
-from vllm import LLM, SamplingParams, RequestOutput
+"""Removed static import of vllm. Import LLM and SamplingParams locally when needed."""
 
 from constants import STEP_END, CODE_END
 from rstar_deepthink.config import Config
@@ -19,6 +19,8 @@ class PolicyModel:
         """Initialize the language model."""
 
         start = datetime.now()
+        # Import heavy vllm LLM class only when initializing model
+        from vllm import LLM
 
         model = self.config.policy_model if not self.config.fine_tuned else os.path.join(self.config.policy_model_dir,
                                                                                          self.config.policy_model)
@@ -38,7 +40,7 @@ class PolicyModel:
         end = datetime.now()
         self.config.model_initialization_times["policy"] = end - start
 
-    def generate(self, prompts: list[str], temperature: float) -> list[RequestOutput]:
+    def generate(self, prompts: list[str], temperature: float):
         """
         Generate completions for a given list of prompts
 
@@ -50,6 +52,8 @@ class PolicyModel:
             List of RequestOutput objects
         """
 
+        # Import heavy vllm SamplingParams only when generating
+        from vllm import SamplingParams
         sampling_parameters = SamplingParams(
             temperature=temperature,
             top_p=self.config.top_p,
