@@ -23,9 +23,9 @@ logger = logging.getLogger(__name__)
 # rstar_deepthink.tools.python_tool.use_subprocess = False  # Disable subprocess for this script
 
 # --- Constants ---
-NUM_SOLUTIONS_Q_VALUE = 64
-NUM_SOLUTIONS_LENGTH = 32
-NUM_SOLUTIONS_DIVERSITY = 8
+NUM_SOLUTIONS_Q_VALUE = 32
+NUM_SOLUTIONS_LENGTH = 16
+NUM_SOLUTIONS_DIVERSITY = 4
 TARGET_EXAMPLES_PER_TASK = 200  # M value
 MAX_GENERATION_ATTEMPTS = 1000  # N value
 VERIFY_GENERATED_EXAMPLES = True  # Boolean flag for additional verification

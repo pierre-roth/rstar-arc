@@ -16,8 +16,6 @@ logger = logging.getLogger(__name__)
 
 # --- Constants ---
 WRITE_BACK_BATCH_SIZE = 100
-DEFAULT_N_TRAIN = 3  # Default if original task JSON is missing/malformed
-DEFAULT_N_TEST = 1  # Default if original task JSON is missing/malformed
 
 
 # --- Main Orchestration ---
@@ -72,28 +70,13 @@ def main(config: Config):
                         continue
 
                     # --- Determine Chunk Size ---
-                    try:
-                        n_train = len(original_task_json.get('train', []))
-                        n_test = len(original_task_json.get('test', []))
-                        if n_train + n_test == 0:
-                            logger.warning(
-                                f"Original task '{original_task_name}' has 0 train/test examples in Pass 1. Using defaults.")
-                            n_train = DEFAULT_N_TRAIN
-                            n_test = DEFAULT_N_TEST
-                        chunk_size = n_train + n_test
-                    except Exception as e:
-                        logger.warning(
-                            f"Error reading train/test examples for task '{original_task_name}' in Pass 1: {e}. Using defaults.")
-                        n_train = DEFAULT_N_TRAIN
-                        n_test = DEFAULT_N_TEST
-                        chunk_size = n_train + n_test
+                    n_train = len(original_task_json.get('train', []))
+                    n_test = len(original_task_json.get('test', []))
+                    chunk_size = n_train + n_test
 
                     # --- Count Complete Chunks ---
-                    if chunk_size > 0:
-                        num_complete_chunks = len(augmented_examples) // chunk_size
-                        total_output_entries_per_task[original_task_name] += num_complete_chunks + 1
-                    else:
-                        logger.warning(f"Chunk size is 0 for task '{original_task_name}'. Cannot count entries.")
+                    num_complete_chunks = len(augmented_examples) // chunk_size
+                    total_output_entries_per_task[original_task_name] += num_complete_chunks + 1
 
                 except json.JSONDecodeError:
                     logger.warning(f"Skipping invalid JSON line {line_num + 1} during weight calculation.")
@@ -161,20 +144,9 @@ def main(config: Config):
                     continue  # Already warned in Pass 1
 
                 # --- Determine Chunk Size Again ---
-                try:
-                    n_train = len(original_task_json.get('train', []))
-                    n_test = len(original_task_json.get('test', []))
-                    if n_train + n_test == 0:
-                        n_train, n_test = DEFAULT_N_TRAIN, DEFAULT_N_TEST
-                    chunk_size = n_train + n_test
-                except Exception:
-                    n_train, n_test = DEFAULT_N_TRAIN, DEFAULT_N_TEST
-                    chunk_size = n_train + n_test
-
-                if chunk_size == 0:
-                    logger.warning(
-                        f"Chunk size is 0 for task '{original_task_name}' in Pass 2. Skipping line {line_num + 1}.")
-                    continue
+                n_train = len(original_task_json.get('train', []))
+                n_test = len(original_task_json.get('test', []))
+                chunk_size = n_train + n_test
 
                 # --- Process and Chunk Examples ---
                 for i in range(0, len(augmented_examples), chunk_size):
