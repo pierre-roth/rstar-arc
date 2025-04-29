@@ -3,9 +3,12 @@ import os
 import random
 import sys
 from concurrent.futures import TimeoutError
-from typing import Dict, List, Set, Tuple
 
+# Pebble-based process pool for parallel task augmentation
 from pebble import ProcessPool
+
+# Cache augmentable solutions globally to reduce pickling IPC overhead per task
+_AUGMENTABLE_SOLUTIONS: dict[str, list[dict]] = {}
 
 # --- Project Setup ---
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -34,14 +37,16 @@ TIMEOUT = 10800
 
 
 # --- Main Processing Function (for Parallel Execution) ---
-def process_task_augmentation(job_data: Tuple[str, List[Dict], str, int, int]) -> List[Dict]:
+def process_task_augmentation(job_data: tuple[str, str, int, int]) -> list[dict]:
     """Processes augmentation for a single task using its curated solutions."""
-    task_name, curated_solutions, rearc_data_dir, target_examples_m, max_attempts_n = job_data
+    # Unpack job_data: use global cache for curated solutions
+    task_name, rearc_data_dir, target_examples_m, max_attempts_n = job_data
+    curated_solutions = _AUGMENTABLE_SOLUTIONS.get(task_name, [])
     logger.debug(
         f"Processing task: {task_name} with {len(curated_solutions)} solutions. M={target_examples_m}, N={max_attempts_n}")
 
-    assigned_examples: Dict[int, List[Dict]] = defaultdict(list)
-    solved_example_identifiers: Set[str] = set()
+    assigned_examples: dict[int, list[dict]] = defaultdict(list)
+    solved_example_identifiers: set[str] = set()
     solved_count = 0
     tried_count = 0
 
@@ -169,7 +174,7 @@ def main(config: Config):
     logger.info(f"Identified {len(training_task_names)} training tasks.")
 
     # --- Load and Group Cleaned Solutions by Task ---
-    solutions_by_task: Dict[str, List[Dict]] = defaultdict(list)
+    solutions_by_task: dict[str, list[dict]] = defaultdict(list)
     # ... (loading logic remains the same as previous version) ...
     try:
         with open(solutions_file_path, 'r', encoding='utf-8') as infile:
@@ -189,8 +194,8 @@ def main(config: Config):
     logger.info(f"Loaded solutions for {len(solutions_by_task)} tasks from {solutions_file_path}.")
 
     # --- Curate Solutions for Each Training Task ---
-    curated_augmentable_solutions_per_task: Dict[str, List[Dict]] = {}
-    curated_non_augmentable_solutions_per_task: Dict[str, List[Dict]] = {}
+    curated_augmentable_solutions_per_task: dict[str, list[dict]] = {}
+    curated_non_augmentable_solutions_per_task: dict[str, list[dict]] = {}
     # ... (curation logic remains the same: Q-val -> Length -> Diversity) ...
     for task_name, solutions in solutions_by_task.items():
         logger.debug(f"Curating solutions for task: {task_name} ({len(solutions)} found)")
@@ -222,11 +227,15 @@ def main(config: Config):
                 curated_non_augmentable_solutions_per_task[task_name] = diverse_solutions
 
     logger.info(f"Finished curation for {len(curated_augmentable_solutions_per_task)} training tasks.")
+    # Cache augmentable solutions for worker processes to minimize pickled data
+    global _AUGMENTABLE_SOLUTIONS
+    _AUGMENTABLE_SOLUTIONS = curated_augmentable_solutions_per_task
 
     # --- Prepare Augmentation Jobs (Task-Based) ---
     augmentation_jobs = []
-    for task_name, curated_solutions in curated_augmentable_solutions_per_task.items():
-        job = (task_name, curated_solutions, rearc_data_dir, TARGET_EXAMPLES_PER_TASK, MAX_GENERATION_ATTEMPTS)
+    # Prepare lightweight jobs: only include task_name and parameters; solutions loaded from cache
+    for task_name in curated_augmentable_solutions_per_task.keys():
+        job = (task_name, rearc_data_dir, TARGET_EXAMPLES_PER_TASK, MAX_GENERATION_ATTEMPTS)
         augmentation_jobs.append(job)
     logger.info(f"Prepared {len(augmentation_jobs)} task-based augmentation jobs.")
 

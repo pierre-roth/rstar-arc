@@ -20,7 +20,7 @@ from __future__ import annotations
 import logging
 import os
 import sys
-from typing import Any, Dict
+from typing import Any
 
 import torch
 import wandb
@@ -140,7 +140,7 @@ logger.info("Dataset ready.")
 
 # ─────────────────── data collator ───────────────────
 class WeightedCollator(DataCollatorForLanguageModeling):
-    def __call__(self, ex, **k) -> Dict[str, Any]:
+    def __call__(self, ex, **k) -> dict[str, Any]:
         w = torch.tensor([e["weight"] for e in ex], dtype=torch.float32)
         ex_wo = [{k2: v for k2, v in e.items() if k2 != "weight"} for e in ex]
         batch = super().__call__(ex_wo)  # mlm=False inherited

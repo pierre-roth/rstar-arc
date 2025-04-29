@@ -1,6 +1,7 @@
 import logging
 
 from pebble import ProcessPool
+from tqdm import tqdm
 # Removed static import of RequestOutput to avoid heavy dependency at module import.
 
 # noinspection PyUnresolvedReferences
@@ -63,6 +64,7 @@ class Solver:
             future = pool.map(self.__class__.processor, valid_agents, outputs)
             iterator = future.result()
 
+        progress_bar = tqdm(total=len(valid_agents), desc="generate_postprocess")
         while True:
             try:
                 result = next(iterator)
@@ -72,6 +74,8 @@ class Solver:
             except Exception as error:
                 logger.critical(f"Exception while generating postprocess (shouldn't happen): {error}")
                 post_agents.append(None)
+            progress_bar.update(1)
+        progress_bar.close()
 
         # update agents
         updated_agents = [

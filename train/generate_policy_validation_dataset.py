@@ -1,7 +1,6 @@
 import heapq
 import os
 import sys
-from typing import Dict, List
 
 # --- Project Setup ---
 # Assuming these imports work in the target environment
@@ -42,7 +41,7 @@ def main(config: Config):
     task_name_to_path, directory_structure = load_task_info(arc_tasks_base_dir)
 
     # --- Load and Group Solutions by Task ---
-    solutions_by_task: Dict[str, List[Dict]] = defaultdict(list)
+    solutions_by_task: dict[str, list[dict]] = defaultdict(list)
     logger.info(f"Loading solutions from {solutions_file_path}...")
     try:
         with open(solutions_file_path, 'r', encoding='utf-8') as infile:
@@ -72,7 +71,7 @@ def main(config: Config):
     logger.info(f"Loaded solutions for {len(solutions_by_task)} tasks from {solutions_file_path}.")
 
     # --- Curate Solutions for Each Task ---
-    curated_solutions_per_task: Dict[str, List[Dict]] = {}
+    curated_solutions_per_task: dict[str, list[dict]] = {}
     logger.info("Curating solutions for each task...")
     for task_name, solutions in solutions_by_task.items():
         logger.debug(f"Curating solutions for task: {task_name} ({len(solutions)} found)")
@@ -112,7 +111,7 @@ def main(config: Config):
     logger.info(f"Finished curation. Found curated solutions for {len(curated_solutions_per_task)} tasks.")
 
     # --- Prepare Weights ---
-    weights_per_task: Dict[str, float] = {}
+    weights_per_task: dict[str, float] = {}
     for task_name, curated_list in curated_solutions_per_task.items():
         num_curated = len(curated_list)
         if num_curated > 0:
