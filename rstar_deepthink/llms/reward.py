@@ -1,300 +1,223 @@
 import logging
-from dataclasses import dataclass
+import os
 from datetime import datetime
-from typing import List, Optional, Union, Tuple
 
 import torch
-import torch.nn as nn
-from transformers import AutoModelForCausalLM, AutoTokenizer, PreTrainedModel, PretrainedConfig
-from transformers.modeling_outputs import ModelOutput
+from peft import PeftModel
+from torch import nn
+from transformers import AutoModelForCausalLM, AutoTokenizer, PreTrainedModel
 
 from rstar_deepthink.config import Config
 
 logger = logging.getLogger(__name__)
 
 
-# Define a custom output class for the reward model to potentially include hidden states if needed later
-@dataclass
-class RewardModelOutput(ModelOutput):
+class ValueHead(nn.Sequential):
     """
-    Output class for the RewardModelWithValueHead.
-    """
-    logits: torch.FloatTensor = None  # The scalar reward score(s)
-    # Add other outputs like hidden_states if needed for other purposes
-
-
-class ValueHead(nn.Module):
-    """
-    Value Head for the Reward Model.
-    Takes hidden states from the base model and outputs a scalar reward value.
+    Tiny head: (hidden_size) → (1)
     """
 
-    def __init__(self, config: PretrainedConfig, **kwargs):
-        super().__init__()
-        # Use dropout probability from config or default
-        dropout_prob = getattr(config, "summary_dropout_prob", kwargs.pop("summary_dropout_prob", 0.1))
-        self.dropout = nn.Dropout(dropout_prob) if dropout_prob > 0 else nn.Identity()
-
-        # Determine hidden size - prioritize config attribute, fallback to common sizes or default
-        hidden_size = getattr(config, "hidden_size",
-                              getattr(config, "word_embed_proj_dim", 4096))  # Example fallback logic
-
-        # Linear layer to project hidden state to a single scalar value
-        self.summary = nn.Linear(hidden_size, 1)
-
-        # Initialize weights (optional, but can sometimes help stability)
-        # nn.init.xavier_uniform_(self.summary.weight) # Example initialization
-        # nn.init.zeros_(self.summary.bias)
-        # rStar-Math paper used specific small init values:
-        nn.init.normal_(self.summary.weight, mean=5e-7, std=1e-6)
-        nn.init.constant_(self.summary.bias, 1e-6)
-
-    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
-        """
-        Forward pass of the ValueHead.
-
-        Args:
-            hidden_states: Hidden states from the base language model.
-
-        Returns:
-            A tensor containing the scalar reward value(s).
-        """
-        hidden_states = self.dropout(hidden_states)
-
-        # Ensure correct dtype for the linear layer
-        if hasattr(self.summary, "weight") and hidden_states.dtype != self.summary.weight.dtype:
-            output = hidden_states.to(self.summary.weight.dtype)
-        else:
-            output = hidden_states
-
-        # Project to scalar value
-        output = self.summary(output)
-
-        # Optional: Apply activation like tanh as mentioned in rStar-Math paper
-        # output = torch.tanh(output)
-
-        return output
+    def __init__(self, hidden_size: int, dropout: float = 0.1):
+        super().__init__(
+            nn.Dropout(dropout) if dropout > 0 else nn.Identity(),
+            nn.Linear(hidden_size, 1),
+        )
+        # Very small normal init (helps for RLHF style training)
+        nn.init.normal_(self[1].weight, mean=5e-7, std=1e-6)
+        nn.init.constant_(self[1].bias, 1e-6)
 
 
-class RewardModelWithValueHead(PreTrainedModel):
+class RewardModelModule(nn.Module):
     """
-    A wrapper model that combines a pre-trained transformer base
-    with a ValueHead to predict reward scores.
-    Inherits from PreTrainedModel for easier saving/loading.
+    Wraps a decoder-only LM with a scalar reward head.
     """
-    # Add the config_class for compatibility with from_pretrained etc.
-    config_class = PretrainedConfig  # Use base config class or specific one if needed
 
-    def __init__(self, pretrained_model: PreTrainedModel):
-        # Initialize using the base model's config
-        super().__init__(pretrained_model.config)
-        self.pretrained_model = pretrained_model
-        self.v_head = ValueHead(self.config)
-
-        # Copy gradient checkpointing attributes if they exist
-        if hasattr(self.pretrained_model, "gradient_checkpointing_disable"):
-            self.gradient_checkpointing_disable = self.pretrained_model.gradient_checkpointing_disable
-        if hasattr(self.pretrained_model, "gradient_checkpointing_enable"):
-            self.gradient_checkpointing_enable = self.pretrained_model.gradient_checkpointing_enable
-
-    def forward(
+    def __init__(
             self,
-            input_ids: Optional[torch.LongTensor] = None,
-            attention_mask: Optional[torch.FloatTensor] = None,
-            return_dict: Optional[bool] = None,
-            output_attentions: Optional[bool] = None,
-            output_hidden_states: Optional[bool] = None,
-            use_cache: Optional[bool] = None,  # Added use_cache
-            past_key_values: Optional[Tuple[Tuple[torch.Tensor]]] = None,  # Added past_key_values
-            **kwargs,  # Allow other base model args
-    ) -> Union[torch.Tensor, RewardModelOutput]:
+            model_or_name: str | PreTrainedModel | PeftModel,
+            *,
+            dtype: torch.dtype = torch.float16,
+            device: str | torch.device | None = None,
+            dropout: float = 0.1,
+    ):
+        super().__init__()
+
+        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+
+        # If provided a loaded PreTrainedModel or PeftModel, use directly; else load from name/path
+        if isinstance(model_or_name, (PreTrainedModel, PeftModel)):
+            self.backbone = model_or_name.to(self.device)
+            # Attempt to infer tokenizer name
+            model_name_for_tok = getattr(self.backbone, "name_or_path", None)
+            if model_name_for_tok is None and hasattr(self.backbone, "base_model"):
+                model_name_for_tok = getattr(self.backbone.base_model, "name_or_path", None)
+            if model_name_for_tok is None:
+                model_name_for_tok = str(model_or_name)
+        else:
+            self.backbone = AutoModelForCausalLM.from_pretrained(
+                model_or_name,
+                torch_dtype=dtype,
+                trust_remote_code=True,
+            ).to(self.device)
+            model_name_for_tok = model_or_name
+        # -------------------------------------------------------------------
+
+        hidden_size = getattr(self.backbone.config, "hidden_size", None)
+        if hidden_size is None:
+            raise ValueError("Could not infer hidden_size from backbone config")
+
+        self.v_head = ValueHead(hidden_size, dropout).to(self.device)
+
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name_for_tok, use_fast=True)
+        if self.tokenizer.pad_token is None:
+            self.tokenizer.pad_token = self.tokenizer.eos_token
+
+        self.eval()
+
+    # ----------------------------------------------------
+    # Inference helpers
+    # ----------------------------------------------------
+    @torch.no_grad()
+    def forward(self, input_ids: torch.LongTensor, attention_mask: torch.Tensor):
         """
-        Forward pass of the combined reward model.
-
-        Args:
-            input_ids: Input token IDs.
-            attention_mask: Attention mask.
-            return_dict: Whether to return a ModelOutput object.
-            output_attentions: Whether to output attention weights.
-            output_hidden_states: Whether to output hidden states.
-            use_cache: Whether to use cached outputs.
-            past_key_values: Cached key/value pairs for faster decoding.
-            kwargs: Additional arguments passed to the base model.
-
-
-        Returns:
-            Scalar reward score tensor or RewardModelOutput object.
+        Args
+        ----
+        input_ids      : (B, L)
+        attention_mask : (B, L)  – 1 for real tokens, 0 for padding
+        Returns
+        -------
+        reward         : (B,)    – scalar per sequence
         """
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
-        output_hidden_states = True  # Always require hidden states for the value head
-
-        # Pass inputs to the base transformer model
-        outputs = self.pretrained_model(
+        outputs = self.backbone(
             input_ids=input_ids,
             attention_mask=attention_mask,
-            output_attentions=output_attentions,
-            output_hidden_states=output_hidden_states,
-            return_dict=True,  # Force return_dict from base model
-            use_cache=use_cache,
-            past_key_values=past_key_values,
-            **kwargs,
+            output_hidden_states=True,
+            return_dict=True,
         )
 
-        # Get the last hidden state
-        # Indexing might vary slightly based on model architecture, [-1] is common
-        last_hidden_state = outputs.hidden_states[-1]
+        # Last hidden state: (B, L, H)
+        last_hidden = outputs.hidden_states[-1]
 
-        # Pass the last hidden state through the value head
-        # Shape: (batch_size, sequence_length, hidden_size) -> (batch_size, sequence_length, 1)
-        values = self.v_head(last_hidden_state)
+        # Index of last non-pad token for each sequence
+        seq_lens = attention_mask.long().sum(dim=1) - 1  # (B,)
 
-        # --- Extract Score for the Last Token ---
-        # Find the index of the last non-padding token for each sequence
-        if attention_mask is None:
-            # If no mask, assume all tokens are valid (might be incorrect for padding)
-            sequence_lengths = -1  # Take the last token
+        # Fancy indexing instead of gather:
+        batch_idx = torch.arange(last_hidden.size(0), device=last_hidden.device)
+        last_token_h = last_hidden[batch_idx, seq_lens]  # (B, H)
+
+        reward = self.v_head(last_token_h).squeeze(-1)  # (B,)
+        return reward
+
+    @torch.no_grad()
+    def score(self, texts: list[str], max_length: int = 1024, batch_size: int = 8):
+        """
+        Plain-text → float score.
+        """
+        all_scores: list[float] = []
+        for i in range(0, len(texts), batch_size):
+            enc = self.tokenizer(
+                texts[i: i + batch_size],
+                padding=True,
+                truncation=True,
+                max_length=max_length,
+                return_tensors="pt",
+            ).to(self.device)
+
+            scores = self.forward(enc["input_ids"], enc["attention_mask"])
+            all_scores.extend(scores.cpu().tolist())
+
+        return all_scores
+
+    def save_pretrained(self, output_dir: str):
+        """
+        Save the merged backbone model and reward head to a directory.
+        """
+
+        # Save backbone (PreTrainedModel supports save_pretrained)
+        os.makedirs(output_dir, exist_ok=True)
+        if isinstance(self.backbone, PreTrainedModel):
+            self.backbone.save_pretrained(output_dir)
         else:
-            # Find the last token that is not padding (mask == 1)
-            sequence_lengths = torch.sum(attention_mask, dim=1) - 1
+            torch.save(self.backbone.state_dict(), os.path.join(output_dir, "pytorch_model.bin"))
+        # Save value head weights
+        torch.save(self.v_head.state_dict(), os.path.join(output_dir, "v_head.bin"))
+        # Save tokenizer
+        self.tokenizer.save_pretrained(output_dir)
 
-        # Gather the value corresponding to the last token of each sequence
-        # values shape: (batch_size, sequence_length, 1)
-        # sequence_lengths shape: (batch_size,) -> need (batch_size, 1, 1) for gather
-        # Un-squeeze twice to match the dimensions for gather
-        last_token_indices = sequence_lengths.unsqueeze(-1).unsqueeze(-1)
-        # Expand the index tensor to match the last dimension of the values tensor (which is 1)
-        last_token_indices = last_token_indices.expand(-1, -1, values.shape[-1])
-
-        # Gather the scores
-        # Shape: (batch_size, 1, 1)
-        final_scores = torch.gather(values, dim=1, index=last_token_indices)
-
-        # Squeeze the result to get shape (batch_size,)
-        final_scores = final_scores.squeeze(-1).squeeze(-1)
-
-        if not return_dict:
-            return final_scores
+    @classmethod
+    def from_pretrained(
+            cls,
+            model_dir: str,
+            *,
+            dtype: torch.dtype = torch.float16,
+            device: str | torch.device | None = None,
+            dropout: float = 0.1,
+    ) -> "RewardModelModule":
+        """
+        Load a RewardModel from a directory saved by `save_pretrained`.
+        """
+        # Determine device
+        dev = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        # Load backbone model
+        backbone = AutoModelForCausalLM.from_pretrained(
+            model_dir,
+            torch_dtype=dtype,
+            trust_remote_code=True,
+        ).to(dev)
+        # Instantiate reward model
+        rm = cls(backbone, dtype=dtype, device=dev, dropout=dropout)
+        # Load value head
+        v_head_path = os.path.join(model_dir, "v_head.bin")
+        if os.path.isfile(v_head_path):
+            state = torch.load(v_head_path, map_location=rm.device)
+            rm.v_head.load_state_dict(state)
         else:
-            return RewardModelOutput(
-                logits=torch.FloatTensor(final_scores)
-                # Optionally add other outputs from the base model if needed:
-                # hidden_states=outputs.hidden_states,
-                # attentions=outputs.attentions,
-            )
+            logger.warning(
+                f"Value head file not found at {v_head_path}! THIS SHOULD NOT HAPPEN AND THE MODEL IS BROKEN.")
+        return rm
 
 
 class RewardModel:
     """
-    Main Reward Model class using the Transformers library implementation.
-    Loads a pre-trained model and value head, provides scoring.
+    High-level wrapper for RewardModelModule handling model loading and scoring.
     """
 
     def __init__(self, config: Config):
-        """
-        Initializes the RewardModel.
-
-        Args:
-            config: The configuration object.
-        """
         self.config = config
-        self.model: Optional[RewardModelWithValueHead] = None  # Will hold the combined model
-        self.tokenizer: Optional[AutoTokenizer] = None
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        logger.info(f"RewardModel initialized (Transformers). Device: {self.device}")
+        self.llm: RewardModelModule | None = None
 
     def init(self):
-        """
-        Initialize the language model and tokenizer using Transformers.
-        """
-        start_time = datetime.now()
-        logger.info(f"Initializing Reward Model from: {self.config.reward_model}")
-        logger.info(f"Using device: {self.device}")
+        """Load the reward model for inference, using base or fine-tuned weights."""
+        # Map config.dtype (str or torch.dtype) to torch.dtype
+        dt = self.config.dtype.lower()
+        if dt in ("bfloat16", "bf16"):
+            torch_dtype = torch.bfloat16
+        elif dt in ("float16", "fp16"):
+            torch_dtype = torch.float16
+        elif dt in ("float32", "fp32"):
+            torch_dtype = torch.float32
+        else:
+            raise ValueError(f"Unsupported dtype '{self.config.dtype}' for RewardModel")
 
-        try:
-            # 1. Load Tokenizer
-            self.tokenizer = AutoTokenizer.from_pretrained(
-                self.config.reward_model,  # Should point to the base model ID/path
-                trust_remote_code=True
-            )
-            if self.tokenizer.pad_token is None:
-                self.tokenizer.pad_token = self.tokenizer.eos_token
-                logger.info(f"Set RewardModel pad token to EOS token: {self.tokenizer.pad_token}")
-
-            # 2. Load Base Model (e.g., the fine-tuned policy model)
-            # Use appropriate dtype from config
-            model_dtype = getattr(torch, self.config.dtype, torch.float32)
-            base_model = AutoModelForCausalLM.from_pretrained(
-                self.config.reward_model,
-                trust_remote_code=True,
-                torch_dtype=model_dtype,
-                # Add quantization config here if needed for the base model
-                # quantization_config=bnb_config, # Example
+        start = datetime.now()
+        # Load fine-tuned model if necessary
+        if self.config.use_reward_model:
+            model_path = os.path.join(self.config.reward_model_dir, self.config.reward_model)
+            self.llm = RewardModelModule.from_pretrained(
+                model_dir=model_path,
+                dtype=torch_dtype,
             )
 
-            # 3. Wrap with Value Head
-            self.model = RewardModelWithValueHead(base_model)
+        end = datetime.now()
+        self.config.model_initialization_times["reward"] = end - start
 
-            # 4. Move to device and set to eval mode
-            self.model.to(self.device)
-            self.model.eval()
-
-            end_time = datetime.now()
-            self.config.model_initialization_times["reward"] = end_time - start_time
-            logger.info(f"Reward Model initialized successfully in {end_time - start_time}.")
-
-        except Exception as e:
-            logger.error(f"Failed to initialize Reward Model: {e}", exc_info=True)
-            self.model = None
-            self.tokenizer = None
-            self.config.model_initialization_times[
-                "reward"] = datetime.now() - start_time  # Record time even on failure
-
-    @torch.no_grad()  # Ensure no gradients are computed during scoring
-    def score(self, prompts: List[str], batch_size: int = 8) -> List[float]:
+    def score(self, texts: list[str]) -> list[float]:
         """
-        Scores a list of prompts (reasoning sequences) using the loaded model.
-
-        Args:
-            prompts: A list of strings, where each string is a complete
-                     sequence (e.g., question + reasoning steps) to be scored.
-            batch_size: The batch size to use for inference.
-
-        Returns:
-            A list of float scores, one for each prompt. Returns empty list on error.
+        Score a list of texts, returning a scalar reward per text.
+        Uses config.batch_size (-1 for all-at-once) and config.max_seq_len.
         """
-        if self.model is None or self.tokenizer is None:
-            logger.error("Reward Model not initialized. Cannot score.")
-            return [0.0] * len(prompts)  # Return dummy scores
 
-        self.model.eval()  # Ensure model is in eval mode
+        if not self.config.use_reward_model:
+            return [0.0] * len(texts)
 
-        all_scores = []
-        try:
-            for i in range(0, len(prompts), batch_size):
-                batch_prompts = prompts[i: i + batch_size]
-
-                inputs = self.tokenizer(
-                    batch_prompts,
-                    return_tensors="pt",
-                    padding=True,
-                    truncation=True,
-                    max_length=self.config.max_model_len,  # Use max length from config
-                ).to(self.device)
-
-                # Get scores from the RewardModelWithValueHead forward pass
-                outputs = self.model(**inputs, return_dict=True)
-                scores = outputs.logits  # Logits are the final scalar scores
-
-                all_scores.extend(scores.cpu().float().tolist())
-
-            if len(all_scores) != len(prompts):
-                logger.error(f"Scoring mismatch: Expected {len(prompts)} scores, got {len(all_scores)}")
-                # Handle mismatch, maybe return dummy scores for consistency
-                return [0.0] * len(prompts)
-
-            return all_scores
-
-        except Exception as e:
-            logger.error(f"Error during reward model scoring: {e}", exc_info=True)
-            # Return dummy scores in case of any exception during batch processing
-            return [0.0] * len(prompts)
+        return self.llm.score(texts, max_length=self.config.max_seq_len, batch_size=self.config.reward_batch_size)

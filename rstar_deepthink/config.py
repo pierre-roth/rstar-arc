@@ -41,6 +41,7 @@ class Config:
     model_initialization_times = {"policy": None, "reward": None}  # Time taken to initialize models
     enforce_eager: bool = False
 
+    use_reward_model: bool = False  # Whether to use the reward model
     fine_tuned: bool = False  # Whether the model is fine-tuned
 
     net_scratch_model_base_path: str = os.path.join(NET_SCRATCH_PATH, "models")  # Base path where models are stored
@@ -48,7 +49,7 @@ class Config:
 
     max_tokens: int = 512  # Maximum tokens for generation of a single step
     dtype: str = "bfloat16"  # Data type for model (affects precision/speed)
-    max_model_len: int = 14336  # Affects the context window size
+    max_seq_len: int = 14336  # Affects the context window size
     # max_num_seqs: int = 1024  # Maximum number of sequences to generate in parallel
     # max_num_batched_tokens = 16384  # Maximum number of tokens to process in a batch
     top_p: float = 1.0  # Top-p sampling parameter (cumulative probability cutoff)
@@ -60,8 +61,6 @@ class Config:
     variable_temperature: bool = False  # Whether to use variable temperature for sampling
     min_policy_temperature: float = 0.7  # Minimum temperature for variable temperature sampling
     max_policy_temperature: float = 1.1  # Maximum temperature for variable temperature sampling
-
-    learning_rate: float = 5e-5  # Learning rate for training
 
     seed: int = 42  # Random seed for reproducibility
     deterministic: bool = False  # Whether to enforce deterministic behavior
@@ -110,6 +109,46 @@ class Config:
     reward_model_dir: Optional[str] = None  # Full path to reward model
     local_job_dir: Optional[str] = None  # Temporary path for job
 
+    # training related
+    # policy
+    learning_rate: float = 2e-5
+    num_train_epochs: int = 1
+
+    per_device_train_batch_size: int = 1
+    per_device_eval_batch_size: int = 1
+    gradient_accumulation_steps: int = 16
+
+    logging_steps: int = 25
+    eval_steps: int = 50
+    save_steps: int = 50
+    save_total_limit: int = 2
+    warmup_ratio: float = 0.03
+
+    use_bf16: bool = True
+    gradient_checkpointing: bool = True
+    gradient_checkpointing_reentrant: bool = False  # mirrors kwargs
+
+    # LoRA
+    lora_rank: int = 32
+    lora_alpha: int = 32
+    lora_dropout: float = 0.03
+
+    # Logging / tracking
+    report_to: str = "wandb"
+    wandb_project: str = "deepthink-sft"
+    wandb_entity: str | None = None  # optional team name
+
+    # reward
+    reward_batch_size: int = 1024
+    reward_lr_scheduler_type: str = "cosine"
+    reward_test_size: float = 0.05  # fraction of pairs held out for eval
+    # distributed / sharding
+    reward_use_deepspeed: bool = False  # enable DeepSpeed ZeRO
+    reward_deepspeed_config: str | None = None  # path to a ds_config.json
+    reward_use_fsdp: bool = False  # enable fully-sharded data parallel
+    reward_fsdp_policy: str = "full_shard auto_wrap"
+    reward_fsdp_min_num_params: int = 1e8  # auto-wrap only big modules
+
     def __post_init__(self):
         """
         Initialize computed fields and load configuration from file if provided
@@ -134,7 +173,7 @@ class Config:
             self._load_from_file()
 
         # Set computed model directories and other derived values
-        if self.fine_tuned or self.max_model_len > 32768:
+        if self.fine_tuned or self.max_seq_len > 32768:
             self.policy_model_dir = os.path.join(self.net_scratch_model_base_path, "policy")
             self.reward_model_dir = os.path.join(self.net_scratch_model_base_path, "reward")
         else:

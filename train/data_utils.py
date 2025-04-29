@@ -1,15 +1,15 @@
-import os
-import sys
-import logging
-import re
 import difflib
-from collections import defaultdict
-import pathlib
 import json
+import logging
+import os
+import pathlib
+import re
+import sys
+from collections import defaultdict
+from typing import Optional, Any, Callable
+
 import generators
 import verifiers
-
-from typing import Optional, Any, Callable
 
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if project_root not in sys.path:
@@ -120,7 +120,8 @@ def select_diverse_subset(solutions: list[dict], k: int) -> list[dict]:
 
     # Clean up temporary keys
     for sol in solutions:
-        if 'clean_code' in sol: del sol['clean_code']
+        if 'clean_code' in sol:
+            del sol['clean_code']
 
     return selected_solutions
 

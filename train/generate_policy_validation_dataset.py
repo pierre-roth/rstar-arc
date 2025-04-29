@@ -34,19 +34,18 @@ def main(config: Config):
     # --- Define Paths ---
     sft_data_dir = os.path.join(config.sft_data_dir, f"round_{config.round_number}")
     os.makedirs(sft_data_dir, exist_ok=True)
-    raw_eval_file_path = os.path.join(sft_data_dir, "raw_evaluation.jsonl")  # Input file
-    dataset_file_path = os.path.join(sft_data_dir, "dataset_validation.jsonl")  # Output file
+    solutions_file_path = os.path.join(sft_data_dir, "solutions_evaluation.jsonl")  # Input file
+    dataset_file_path = os.path.join(sft_data_dir, "policy_dataset_validation.jsonl")  # Output file
     arc_tasks_base_dir = NET_SCRATCH_TASK_DATA_DIR
 
     # --- Scan Task Directory ---
     task_name_to_path, directory_structure = load_task_info(arc_tasks_base_dir)
-    # We process all tasks found in raw_evaluation.jsonl, not just training ones
 
     # --- Load and Group Solutions by Task ---
     solutions_by_task: Dict[str, List[Dict]] = defaultdict(list)
-    logger.info(f"Loading solutions from {raw_eval_file_path}...")
+    logger.info(f"Loading solutions from {solutions_file_path}...")
     try:
-        with open(raw_eval_file_path, 'r', encoding='utf-8') as infile:
+        with open(solutions_file_path, 'r', encoding='utf-8') as infile:
             for line_num, line in enumerate(infile):
                 if not line.strip():
                     continue
@@ -67,10 +66,10 @@ def main(config: Config):
                 except json.JSONDecodeError:
                     logger.warning(f"Skipping invalid JSON in input file line {line_num + 1}: {line.strip()}")
     except FileNotFoundError:
-        logger.error(f"Raw evaluation input file not found: {raw_eval_file_path}")
+        logger.error(f"Evaluation solutions file not found: {solutions_file_path}")
         sys.exit(1)
 
-    logger.info(f"Loaded solutions for {len(solutions_by_task)} tasks from {raw_eval_file_path}.")
+    logger.info(f"Loaded solutions for {len(solutions_by_task)} tasks from {solutions_file_path}.")
 
     # --- Curate Solutions for Each Task ---
     curated_solutions_per_task: Dict[str, List[Dict]] = {}
@@ -89,7 +88,8 @@ def main(config: Config):
             sol['temp_length'] = get_code_length(sol['solution_code'])
         top_q_solutions.sort(key=lambda x: x['temp_length'])
         shortest_solutions = top_q_solutions[:NUM_SOLUTIONS_LENGTH]
-        for sol in top_q_solutions: del sol['temp_length']
+        for sol in top_q_solutions:
+            del sol['temp_length']
         logger.debug(f"Task {task_name}: Selected {len(shortest_solutions)} shortest solutions.")
 
         # 3. Select top K most diverse solutions
@@ -99,7 +99,8 @@ def main(config: Config):
         diverse_solutions = select_diverse_subset(shortest_solutions, NUM_SOLUTIONS_DIVERSITY)
         # Clean up temporary key
         for sol in shortest_solutions:
-            if 'clean_code' in sol: del sol['clean_code']
+            if 'clean_code' in sol:
+                del sol['clean_code']
 
         logger.debug(f"Task {task_name}: Selected {len(diverse_solutions)} diverse solutions.")
 
@@ -121,7 +122,7 @@ def main(config: Config):
 
     # --- Clear Output File ---
     try:
-        with open(dataset_file_path, 'w') as f:
+        with open(dataset_file_path, 'w') as _:
             pass
         logger.info(f"Cleared/Created output dataset file: {dataset_file_path}")
     except IOError as e:
@@ -184,7 +185,7 @@ def main(config: Config):
         logger.debug(f"Written final batch of {len(results_batch_to_write)} entries.")
 
     logger.info(f"--- Validation Dataset Creation Summary ---")
-    logger.info(f"Processed solutions for {len(solutions_by_task)} tasks from {raw_eval_file_path}")
+    logger.info(f"Processed solutions for {len(solutions_by_task)} tasks from {solutions_file_path}")
     logger.info(f"Generated curated solutions for {len(curated_solutions_per_task)} tasks.")
     logger.info(f"Wrote {output_entries} entries to {dataset_file_path}")
 

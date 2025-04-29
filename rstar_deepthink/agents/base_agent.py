@@ -3,7 +3,7 @@ from random import choice
 
 from vllm.outputs import RequestOutput
 
-from constants import CODE, SFT_SYSTEM_PROMPT, SFT_IN_BETWEEN_PROMPT, CODE_PREFIX, BOOTSTRAP_SYSTEM_PROMPT, \
+from constants import SFT_SYSTEM_PROMPT, SFT_IN_BETWEEN_PROMPT, CODE_PREFIX, BOOTSTRAP_SYSTEM_PROMPT, \
     BOOTSTRAP_TASK_PROMPT
 from rstar_deepthink.arc_task import ARCTask
 from rstar_deepthink.config import Config

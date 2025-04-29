@@ -4,7 +4,6 @@ import os
 import sys
 from random import shuffle
 
-from constants import EXAMPLE_DATA_FOLDER
 from rstar_deepthink.arc_task import ARCTask
 from rstar_deepthink.config import Config
 from rstar_deepthink.prompt.prompt_utils import task_to_prompt
@@ -38,10 +37,10 @@ def load_tasks(config: Config) -> list[ARCTask]:
 
     if config.solve_only_unsolved:
         # remove already solved tasks
-        raw_file = os.path.join(config.sft_data_dir, f"round_{config.round_number}", "solutions_training.jsonl")
+        solutions_file = os.path.join(config.sft_data_dir, f"round_{config.round_number}", "solutions_training.jsonl")
 
         solved_set = set()
-        with open(raw_file, "r", encoding="utf-8") as f:
+        with open(solutions_file, "r", encoding="utf-8") as f:
             for line in f:
                 if not line.strip():
                     continue

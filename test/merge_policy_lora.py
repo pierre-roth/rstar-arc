@@ -11,31 +11,25 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from constants import NET_SCRATCH_PATH
+from rstar_deepthink.config import Config
+from utils import setup_logging
 
-
-# --- Setup Logging ---
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",  # Using a standard date format
-    handlers=[logging.StreamHandler(sys.stdout)],
-)
 logger = logging.getLogger(__name__)
 
-# --- Configuration ---
-BASE_MODEL_ID = "Qwen/Qwen2.5-Coder-1.5B"  # The Hugging Face model ID of the base model used for training
+config = Config()
+setup_logging(config.numeric_log_level)
 
 # Path to the directory containing the saved LoRA adapter files (adapter_model.bin/safetensors and adapter_config.json)
-LORA_ADAPTER_PATH = f"{NET_SCRATCH_PATH}/models/fine_tuned/policy/fine-tuned-Qwen2.5-Coder-1.5B/checkpoint-300"  # TODO: add checkpoint to load
+"""Determine the LoRA adapter path based on training output naming convention"""
+basename = config.policy_model.split('/')[-1]
+# Adapter directories are saved under: models/fine_tuned/policy/ft-<basename>-<max_seq_len>-<learning_rate>-<lora_rank>-<lora_alpha>
+adapter_base_dir = os.path.join(NET_SCRATCH_PATH, "models", "fine_tuned", "policy")
+adapter_name = f"ft-{basename}-{config.max_seq_len}-{config.learning_rate}-{config.lora_rank}-{config.lora_alpha}"
+LORA_ADAPTER_PATH = os.path.join(adapter_base_dir, adapter_name)
 
-# Directory where the final merged model and tokenizer will be saved
-MERGED_MODEL_OUTPUT_DIR = f"{NET_SCRATCH_PATH}/models/policy/fine_tuned_1.5B"
-
-# Torch dtype for loading the model ('bfloat16', 'float16', 'float32')
-TORCH_DTYPE_STR = "bfloat16"
-
-
-# --- End Configuration ---
+# Directory where the final merged model and tokenizer will be saved, matching adapter_name
+merged_base_dir = os.path.join(NET_SCRATCH_PATH, "models", "policy")
+MERGED_MODEL_OUTPUT_DIR = os.path.join(merged_base_dir, adapter_name)
 
 
 def merge_lora_adapter(
@@ -160,8 +154,8 @@ def merge_lora_adapter(
 if __name__ == "__main__":
     # Call the function using the hardcoded variables defined at the top
     merge_lora_adapter(
-        base_model_id=BASE_MODEL_ID,
+        base_model_id=config.policy_model,
         lora_adapter_path=LORA_ADAPTER_PATH,
         output_dir=MERGED_MODEL_OUTPUT_DIR,
-        torch_dtype_str=TORCH_DTYPE_STR,
+        torch_dtype_str=config.dtype
     )

@@ -1,5 +1,4 @@
 import heapq
-import heapq
 import os
 import random
 import sys
@@ -15,28 +14,24 @@ if project_root not in sys.path:
 
 from constants import NET_SCRATCH_TASK_DATA_DIR, NET_SCRATCH_RE_ARC_DATA
 from rstar_deepthink.config import Config
-from rstar_deepthink.tools import execute_code_with_task
 # remove_markers is specific to rstar_deepthink, keep it if solutions have markers
-import rstar_deepthink.tools.python_tool
 from utils import setup_logging
 from data_utils import *
 
 logger = logging.getLogger(__name__)
 # Disable subprocess execution to verify examples a lot faster!
-rstar_deepthink.tools.python_tool.use_subprocess = False  # Disable subprocess for this script
+# rstar_deepthink.tools.python_tool.use_subprocess = False  # Disable subprocess for this script
 
 # --- Constants ---
 NUM_SOLUTIONS_Q_VALUE = 64
 NUM_SOLUTIONS_LENGTH = 32
 NUM_SOLUTIONS_DIVERSITY = 8
-TARGET_EXAMPLES_PER_TASK = 300  # M value
-MAX_GENERATION_ATTEMPTS = 9000  # N value
+TARGET_EXAMPLES_PER_TASK = 200  # M value
+MAX_GENERATION_ATTEMPTS = 1000  # N value
 VERIFY_GENERATED_EXAMPLES = True  # Boolean flag for additional verification
 BATCH_SIZE = 100
 TIMEOUT = 10800
 
-
-# --- Helper Functions ---
 
 # --- Main Processing Function (for Parallel Execution) ---
 def process_task_augmentation(job_data: Tuple[str, List[Dict], str, int, int]) -> List[Dict]:
@@ -154,15 +149,16 @@ def process_task_augmentation(job_data: Tuple[str, List[Dict], str, int, int]) -
 def main(config: Config):
     """Main function orchestrating the curation and augmentation process."""
     setup_logging(config.numeric_log_level)
-    logger.info("Starting SFT data augmentation process with curation...")
+    logger.info("Starting policy data augmentation process with curation...")
     logger.info(f"VERIFY_GENERATED_EXAMPLES set to: {VERIFY_GENERATED_EXAMPLES}")
-    logger.info(f"Target Examples (M): {TARGET_EXAMPLES_PER_TASK}, Max Attempts (N): {MAX_GENERATION_ATTEMPTS}")
+    logger.info(
+        f"Target Examples per task (M): {TARGET_EXAMPLES_PER_TASK}, Max Attempts (N): {MAX_GENERATION_ATTEMPTS}")
 
     # --- Define Paths (Using Config) ---
     sft_data_dir = os.path.join(config.sft_data_dir, f"round_{config.round_number}")
     os.makedirs(sft_data_dir, exist_ok=True)
-    cleaned_file = os.path.join(sft_data_dir, "cleaned.jsonl")
-    augmented_file = os.path.join(sft_data_dir, "augmented.jsonl")
+    solutions_file_path = os.path.join(sft_data_dir, "solutions_training.jsonl")
+    solutions_augmented_file_path = os.path.join(sft_data_dir, "solutions_training_augmented.jsonl")
     # Paths below might not be in Config, using constants/defaults
     arc_tasks_base_dir = NET_SCRATCH_TASK_DATA_DIR
     rearc_data_dir = NET_SCRATCH_RE_ARC_DATA
@@ -176,7 +172,7 @@ def main(config: Config):
     solutions_by_task: Dict[str, List[Dict]] = defaultdict(list)
     # ... (loading logic remains the same as previous version) ...
     try:
-        with open(cleaned_file, 'r', encoding='utf-8') as infile:
+        with open(solutions_file_path, 'r', encoding='utf-8') as infile:
             for line_num, line in enumerate(infile):
                 if not line.strip():
                     continue
@@ -184,27 +180,19 @@ def main(config: Config):
                     data = json.loads(line)
                     task_name = data.get("task_name")
                     if task_name and task_name in task_name_to_path:
-                        if "solution_code" in data:
-                            solutions_by_task[task_name].append(data)
-                        else:
-                            logger.warning(f"Skipping line {line_num + 1} in {cleaned_file}: Missing 'solution_code'.")
-                    # Allow non-ARC tasks through, they just won't be curated/augmented if not in training_task_names
-                    # elif task_name:
-                    #     logger.warning(f"Task '{task_name}' from cleaned file line {line_num+1} not found in task directory scan.")
+                        solutions_by_task[task_name].append(data)
                 except json.JSONDecodeError:
                     logger.warning(f"Skipping invalid JSON in cleaned file line {line_num + 1}: {line.strip()}")
     except FileNotFoundError:
-        logger.error(f"Cleaned input file not found: {cleaned_file}")
+        logger.error(f"Cleaned input file not found: {solutions_file_path}")
         sys.exit(1)
-    logger.info(f"Loaded solutions for {len(solutions_by_task)} tasks from {cleaned_file}.")
+    logger.info(f"Loaded solutions for {len(solutions_by_task)} tasks from {solutions_file_path}.")
 
     # --- Curate Solutions for Each Training Task ---
-    curated_solutions_per_task: Dict[str, List[Dict]] = {}
+    curated_augmentable_solutions_per_task: Dict[str, List[Dict]] = {}
+    curated_non_augmentable_solutions_per_task: Dict[str, List[Dict]] = {}
     # ... (curation logic remains the same: Q-val -> Length -> Diversity) ...
     for task_name, solutions in solutions_by_task.items():
-        if task_name not in training_task_names:
-            continue
-
         logger.debug(f"Curating solutions for task: {task_name} ({len(solutions)} found)")
         solutions_with_q = [(calculate_avg_q(sol), sol) for sol in solutions]
         top_q_solutions = [sol for q, sol in
@@ -214,7 +202,8 @@ def main(config: Config):
             sol['temp_length'] = get_code_length(sol['solution_code'])
         top_q_solutions.sort(key=lambda x: x['temp_length'])
         shortest_solutions = top_q_solutions[:NUM_SOLUTIONS_LENGTH]
-        for sol in top_q_solutions: del sol['temp_length']  # Clean up temp key
+        for sol in top_q_solutions:
+            del sol['temp_length']
 
         # Precompute clean_code for diversity selection
         for sol in shortest_solutions:
@@ -222,32 +211,53 @@ def main(config: Config):
         diverse_solutions = select_diverse_subset(shortest_solutions, NUM_SOLUTIONS_DIVERSITY)
         # Clean up temporary key
         for sol in shortest_solutions:
-            if 'clean_code' in sol: del sol['clean_code']
+            if 'clean_code' in sol:
+                del sol['clean_code']
 
         logger.debug(f"Task {task_name}: Selected {len(diverse_solutions)} diverse solutions.")
         if diverse_solutions:
-            curated_solutions_per_task[task_name] = diverse_solutions
+            if task_name in training_task_names:
+                curated_augmentable_solutions_per_task[task_name] = diverse_solutions
+            else:
+                curated_non_augmentable_solutions_per_task[task_name] = diverse_solutions
 
-    logger.info(f"Finished curation for {len(curated_solutions_per_task)} training tasks.")
+    logger.info(f"Finished curation for {len(curated_augmentable_solutions_per_task)} training tasks.")
 
     # --- Prepare Augmentation Jobs (Task-Based) ---
     augmentation_jobs = []
-    for task_name, curated_solutions in curated_solutions_per_task.items():
+    for task_name, curated_solutions in curated_augmentable_solutions_per_task.items():
         job = (task_name, curated_solutions, rearc_data_dir, TARGET_EXAMPLES_PER_TASK, MAX_GENERATION_ATTEMPTS)
         augmentation_jobs.append(job)
     logger.info(f"Prepared {len(augmentation_jobs)} task-based augmentation jobs.")
 
     # --- Clear Output File ---
     try:
-        with open(augmented_file, 'w') as f:
+        with open(solutions_augmented_file_path, 'w') as _:
             pass
-        logger.info(f"Cleared/Created output file: {augmented_file}")
+        logger.info(f"Cleared/Created output file: {solutions_augmented_file_path}")
     except IOError as e:
-        logger.error(f"Could not open or clear output file {augmented_file}: {e}")
+        logger.error(f"Could not open or clear output file {solutions_augmented_file_path}: {e}")
         sys.exit(1)
 
-    # --- Parallel Augmentation ---
     total_augmented_entries_saved = 0
+    # --- Write Non-Augmentable Solutions to Output File ---
+    results_batch_to_write = []
+    for task_name, solutions in curated_non_augmentable_solutions_per_task.items():
+        for i, solution in enumerate(solutions):
+            output_data = {
+                "task_name": f"{task_name}_curated_sol_{i}",
+                "original_task_name": task_name,
+                "solution_code": solution["solution_code"],
+                "examples": [],
+                "metadata": solution.get("metadata", {})
+            }
+            results_batch_to_write.append(output_data)
+
+    write_batch_data(solutions_augmented_file_path, results_batch_to_write)
+    logger.info(f"Written {len(results_batch_to_write)} non-augmentable entries to {solutions_augmented_file_path}.")
+    total_augmented_entries_saved += len(results_batch_to_write)
+
+    # --- Parallel Augmentation ---
     if augmentation_jobs:
         num_workers = max(1, config.cpus - 1 if config.cpus > 1 else 1)
         logger.info(f"Starting parallel augmentation using {num_workers} workers...")
@@ -269,7 +279,7 @@ def main(config: Config):
                             total_augmented_entries_saved += len(task_output_batch)
 
                             if len(results_batch_to_write) >= BATCH_SIZE:
-                                write_batch_data(augmented_file, results_batch_to_write)
+                                write_batch_data(solutions_augmented_file_path, results_batch_to_write)
                                 logger.info(
                                     f"Written {len(results_batch_to_write)} entries. Progress: {processed_jobs_count}/{len(augmentation_jobs)} tasks.")
                                 results_batch_to_write = []
@@ -286,7 +296,7 @@ def main(config: Config):
                         processed_jobs_count += 1  # Assume failure advances iterator
 
             if results_batch_to_write:
-                write_batch_data(augmented_file, results_batch_to_write)
+                write_batch_data(solutions_augmented_file_path, results_batch_to_write)
                 logger.info(f"Written final {len(results_batch_to_write)} entries.")
 
             logger.info(f"Finished parallel processing.")
@@ -298,7 +308,7 @@ def main(config: Config):
 
     logger.info(f"--- Augmentation Summary ---")
     logger.info(f"Total curated solution entries generated & saved: {total_augmented_entries_saved}")
-    logger.info(f"Total entries written to {augmented_file}")
+    logger.info(f"Total entries written to {solutions_augmented_file_path}")
 
 
 if __name__ == "__main__":

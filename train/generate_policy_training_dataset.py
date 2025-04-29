@@ -29,8 +29,8 @@ def main(config: Config):
     # --- Define Paths ---
     sft_data_dir = os.path.join(config.sft_data_dir, f"round_{config.round_number}")
     os.makedirs(sft_data_dir, exist_ok=True)
-    augmented_file_path = os.path.join(sft_data_dir, "augmented.jsonl")
-    dataset_file_path = os.path.join(sft_data_dir, "dataset_training.jsonl")
+    augmented_file_path = os.path.join(sft_data_dir, "solutions_training_augmented.jsonl")
+    dataset_file_path = os.path.join(sft_data_dir, "policy_dataset_training.jsonl")
     arc_tasks_base_dir = NET_SCRATCH_TASK_DATA_DIR
 
     # --- Scan Task Directory (Needed for Pass 1) ---
@@ -111,7 +111,7 @@ def main(config: Config):
 
     # --- Clear Output File ---
     try:
-        with open(dataset_file_path, 'w') as f:
+        with open(dataset_file_path, 'w') as _:
             pass
         logger.info(f"Cleared/Created output dataset file: {dataset_file_path}")
     except IOError as e:

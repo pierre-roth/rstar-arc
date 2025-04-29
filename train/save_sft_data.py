@@ -82,7 +82,7 @@ def _compute_final_outcomes(nodes: list[Node]):
         dfs(root)
 
 
-def _extract_solutions(nodes: list[Node], config: Config) -> list[dict]:
+def _extract_solutions_from_list(nodes: list[Node], config: Config) -> list[dict]:
     """
     Extracts valid solutions from the MCTS tree nodes.
 
@@ -107,6 +107,32 @@ def _extract_solutions(nodes: list[Node], config: Config) -> list[dict]:
                 "metadata": metadata
             }
             solutions.append(solution_data)
+
+    return solutions
+
+
+def _extract_solutions_from_subtree(node: Node, config: Config) -> list[dict]:
+    """
+    Extracts valid solutions from a subtree rooted at the given node.
+
+    Args:
+        node: The root node of the subtree.
+        config: The configuration object.
+
+    Returns:
+        A list of dictionaries, each representing a valid solution.
+    """
+    if not node.is_valid():
+        return []
+
+    # If it's a terminal node, check if it's a valid solution
+    if node.is_terminal() and _is_correct_final_solution(node):
+        return _extract_solutions_from_list([node], config)
+
+    # Otherwise, recursively check children
+    solutions = []
+    for child in node.children:
+        solutions.extend(_extract_solutions_from_subtree(child, config))
 
     return solutions
 
@@ -156,6 +182,9 @@ def _extract_preference_pairs(nodes: list[Node], config: Config) -> list[dict]:
         # Create pairs
         for chosen_node in chosen_nodes:
             for rejected_node in rejected_nodes:
+
+                solutions = _extract_solutions_from_subtree(chosen_node, config)
+
                 # Basic check: ensure chosen Q > rejected Q
                 if chosen_node.q_value() > rejected_node.q_value() + config.min_step_margin:
                     preference_pair_data = {
@@ -163,6 +192,8 @@ def _extract_preference_pairs(nodes: list[Node], config: Config) -> list[dict]:
                         "prefix": prefix_code,  # Prompt + code up to the split point
                         "chosen": chosen_node.state['code'],  # The chosen step's code
                         "rejected": rejected_node.state['code'],  # The rejected step's code
+                        "solutions": solutions,
+                        # complete solutions for augmentation (at least one must solve the augmented task)
                         "metadata": {
                             "chosen_q": chosen_node.q_value(),
                             "rejected_q": rejected_node.q_value(),
@@ -219,9 +250,9 @@ def save_sft_data(config: Config, nodes: list[Node]):
     logger.debug(f"Finished computing final outcomes for task {task_name}.")
 
     # --- 2. Save Solutions ---
-    solutions_to_save = _extract_solutions(nodes, config)
+    solutions_to_save = _extract_solutions_from_list(nodes, config)
 
-    # Append SFT data to raw.jsonl
+    # Append SFT data to solutions file
     if solutions_to_save:
         try:
             with open(solutions_file_path, 'a', encoding="utf-8") as f:

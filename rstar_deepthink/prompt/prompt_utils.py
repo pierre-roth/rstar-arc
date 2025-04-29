@@ -1,7 +1,7 @@
 import json
 import os
 
-from constants import CODE, CODE_END, STEP_END, EXAMPLE_DATA_FOLDER, BOOTSTRAP_SYSTEM_PROMPT
+from constants import EXAMPLE_DATA_FOLDER
 from rstar_deepthink.arc_task import ARCTask
 from rstar_deepthink.config import Config
 

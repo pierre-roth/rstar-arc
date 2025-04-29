@@ -16,14 +16,16 @@ PROJECT_ROOT = Path(__file__).parent.resolve()
 # Add more here if needed
 SCRIPTS = [
     "main.py",
-    "train/clean_sft_data.py",
-    "train/augment_sft_data.py",
+    "train/augment_policy_data.py",
     "train/generate_policy_training_dataset.py",
     "train/generate_policy_evaluation_dataset.py",
     "train/train_policy.py",
-    "test/merge_lora.py",
+    "test/merge_policy_lora.py",
+    "train/augment_reward_data.py",
+    "train/generate_reward_training_dataset.py",
+    "train/generate_reward_evaluation_dataset.py",
     "train/train_reward.py",
-    "train/validate_arc_jsonl.py",
+    "test/merge_reward_lora.py"
 ]
 
 # --- SLURM Defaults ---
