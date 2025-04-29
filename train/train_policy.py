@@ -5,10 +5,14 @@ Everything is driven by rstar_deepthink.Config:
   • model + dataset paths
   • LoRA hyper-params
   • batch-size, LR, logging, etc.
+Multi-GPU training is handled via 🤗 Accelerate.
+
 Launch with:
-  torchrun --nproc_per_node 4  train_policy_lora.py
+  # 4 GPUs with torchrun
+  torchrun --nproc_per_node 4 train/train_policy.py --config-file configs/train_policy.yaml
 or
-  accelerate launch train_policy_lora.py
+  # via Accelerate
+  accelerate launch train/train_policy.py --config-file configs/train_policy.yaml
 """
 
 from __future__ import annotations
@@ -23,8 +27,12 @@ import wandb
 from datasets import load_dataset
 from peft import LoraConfig, get_peft_model
 from transformers import (
-    AutoModelForCausalLM, AutoTokenizer,
-    TrainingArguments, Trainer, DataCollatorForLanguageModeling
+    AutoModelForCausalLM,
+    AutoTokenizer,
+    TrainingArguments,
+    Trainer,
+    DataCollatorForLanguageModeling,
+    set_seed
 )
 
 # ─────────────────── project imports ───────────────────
@@ -44,6 +52,7 @@ logger = logging.getLogger(__name__)
 
 # ─────────────────── config ───────────────────
 config = Config()
+set_seed(config.seed or 42)
 setup_logging(config.numeric_log_level)
 logger.info("Using model: %s", config.policy_model)
 
@@ -85,9 +94,9 @@ logger.info("LoRA: r=%d α=%d dropout=%.2f", lora_config.r, lora_config.lora_alp
 model = AutoModelForCausalLM.from_pretrained(
     config.policy_model,
     torch_dtype=torch.bfloat16 if config.use_bf16 else torch.float16,
-    device_map="auto",  # distribute if multi-GPU
     trust_remote_code=True,
 )
+# Multi-GPU training is handled via 🤗 Accelerate launch
 model.config.use_cache = False
 model = get_peft_model(model, lora_config)  # add adapters
 
@@ -170,7 +179,7 @@ args = TrainingArguments(
     learning_rate=config.learning_rate,
     num_train_epochs=config.num_train_epochs,
     warmup_ratio=config.warmup_ratio,
-    lr_scheduler_type="cosine",
+    lr_scheduler_type=config.lr_scheduler_type,
     logging_steps=config.logging_steps,
     evaluation_strategy="steps",
     eval_steps=config.eval_steps,
@@ -180,9 +189,6 @@ args = TrainingArguments(
     bf16=config.use_bf16,
     fp16=not config.use_bf16,
     gradient_checkpointing=config.gradient_checkpointing,
-    gradient_checkpointing_kwargs={
-        "use_reentrant": config.gradient_checkpointing_reentrant
-    } if config.gradient_checkpointing else None,
     run_name=f"{config.policy_model.split('/')[-1]}-sft-lora",
     report_to=config.report_to,
     remove_unused_columns=False,

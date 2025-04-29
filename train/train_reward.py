@@ -1,18 +1,18 @@
 """
-Train a reward model on positive–negative preference pairs with full multi-GPU
-support (DDP / DeepSpeed / FSDP).
+Train a reward model on positive–negative preference pairs.
 
-Launch examples
----------------
-# 4 GPUs, vanilla DDP
-torchrun --nproc_per_node 4 train_reward_model.py
+Everything is driven by rstar_deepthink.Config:
+  • model + dataset paths
+  • LoRA hyper-params
+  • batch-size, LR, logging, etc.
+Multi-GPU training is handled via 🤗 Accelerate.
 
-# 8 GPUs, DeepSpeed ZeRO-2
-torchrun --nproc_per_node 8 train_reward_model.py \
-         --config-file configs/rm_ds_zero2.yaml
-
-# 8 GPUs, FSDP via 🤗 Accelerate
-accelerate launch train_reward_model.py --config-file configs/rm_fsdp.yaml
+Launch with:
+  # 4 GPUs with torchrun
+  torchrun --nproc_per_node 4 train/train_reward.py --config-file configs/train_reward.yaml
+or
+  # via Accelerate
+  accelerate launch train/train_reward.py --config-file configs/train_reward.yaml
 """
 
 from __future__ import annotations
@@ -53,8 +53,13 @@ config = Config()
 set_seed(config.seed or 42)
 setup_logging(config.numeric_log_level)
 
-reward_output_dir = os.path.join(NET_SCRATCH_PATH, "models", "fine_tuned", "reward",
-                                 f"ft-{config.policy_model.split('/')[-1]}-{config.max_seq_len}-{config.learning_rate}-{config.lora_rank}-{config.lora_alpha}")
+reward_output_dir = os.path.join(
+    NET_SCRATCH_PATH,
+    "models",
+    "fine_tuned",
+    "reward",
+    f"ft-{config.reward_model.split('/')[-1]}-{config.max_seq_len}-{config.learning_rate}-{config.lora_rank}-{config.lora_alpha}"
+)
 os.makedirs(reward_output_dir, exist_ok=True)
 
 # Hardware overview
@@ -89,7 +94,7 @@ lora_config = LoraConfig(
         r"(q_proj|k_proj|v_proj|o_proj)$": config.lora_alpha // 2,
         r"(gate_proj|up_proj|down_proj)$": config.lora_alpha,
     },
-    lora_dropout=0.03,
+    lora_dropout=config.lora_dropout,
     bias="none",
     task_type="CAUSAL_LM",
 )
@@ -226,7 +231,7 @@ args = TrainingArguments(
     # optimisation
     num_train_epochs=config.num_train_epochs,
     learning_rate=config.learning_rate,
-    lr_scheduler_type=config.reward_lr_scheduler_type,
+    lr_scheduler_type=config.lr_scheduler_type,
     warmup_ratio=config.warmup_ratio,
     # logging / eval / save
     logging_steps=config.logging_steps,
@@ -238,11 +243,7 @@ args = TrainingArguments(
     # precision
     bf16=config.use_bf16,
     fp16=not config.use_bf16,
-    # distributed & sharding
-    ddp_find_unused_parameters=False,
-    deepspeed=config.reward_deepspeed_config if config.reward_use_deepspeed else None,
-    fsdp=config.reward_fsdp_policy if config.reward_use_fsdp else None,
-    fsdp_min_num_params=config.reward_fsdp_min_num_params if config.reward_use_fsdp else None,
+    # distributed: handled via 🤗 Accelerate launch
     # misc
     seed=config.seed,
     report_to=config.report_to,

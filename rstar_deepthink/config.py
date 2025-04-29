@@ -126,12 +126,13 @@ class Config:
 
     use_bf16: bool = True
     gradient_checkpointing: bool = True
-    gradient_checkpointing_reentrant: bool = False  # mirrors kwargs
 
     # LoRA
     lora_rank: int = 32
     lora_alpha: int = 32
     lora_dropout: float = 0.03
+
+    lr_scheduler_type: str = "cosine"
 
     # Logging / tracking
     report_to: str = "wandb"
@@ -140,7 +141,6 @@ class Config:
 
     # reward
     reward_batch_size: int = 1024
-    reward_lr_scheduler_type: str = "cosine"
     reward_test_size: float = 0.05  # fraction of pairs held out for eval
     # distributed / sharding
     reward_use_deepspeed: bool = False  # enable DeepSpeed ZeRO
