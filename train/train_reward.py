@@ -235,7 +235,7 @@ args = TrainingArguments(
     warmup_ratio=config.warmup_ratio,
     # logging / eval / save
     logging_steps=config.logging_steps,
-    evaluation_strategy="steps",
+    eval_strategy="steps",
     eval_steps=config.eval_steps,
     save_strategy="steps",
     save_steps=config.save_steps,
