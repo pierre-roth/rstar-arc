@@ -81,7 +81,7 @@ class RewardModelModule(nn.Module):
     # ----------------------------------------------------
     # Inference helpers
     # ----------------------------------------------------
-    def forward(self, input_ids: torch.LongTensor, attention_mask: torch.Tensor):
+    def forward(self, input_ids: torch.LongTensor, attention_mask: torch.Tensor, **kwargs):
         """
         Args
         ----
