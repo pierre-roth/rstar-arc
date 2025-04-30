@@ -215,19 +215,16 @@ class PairwiseTrainer(Trainer):
 
         # ----------------------------------------------------------- bookkeeping
         if return_outputs:
-            # Trainer expects a *single* tensor for predictions, so we stack
-            # them in the same order they appeared in the batch.
-            preds = torch.cat([chosen.detach(), rejected.detach()], dim=0)
+            # return one value per pair (= r₊ - r₋)
+            preds = (chosen.detach() - rejected.detach())  # shape (B,)
             return loss, preds
 
         return loss
 
 
 def compute_accuracy(eval_preds):
-    r = torch.tensor(eval_preds.predictions)  # ensure tensor
-    b = r.size(0) // 2
-    acc = (r[:b] > r[b:]).float().mean().item()  # cast to float first
-    return {"accuracy": acc}
+    diffs = torch.tensor(eval_preds.predictions)   # (N_pairs,)
+    return {"accuracy": (diffs > 0).float().mean().item()}
 
 
 # Load and tokenise dataset
