@@ -79,6 +79,13 @@ base = AutoModelForCausalLM.from_pretrained(
     trust_remote_code=True,
 )
 
+base.config.use_cache = False  # disable cache for gradient checkpointing
+
+base.gradient_checkpointing_enable()  # enable gradient checkpointing for memory efficiency
+
+base.enable_input_require_grads()  # enable input gradients for LoRA
+
+
 lora_config = LoraConfig(
     r=config.lora_rank,
     lora_alpha=config.lora_alpha,
@@ -102,8 +109,6 @@ lora_config = LoraConfig(
 base = get_peft_model(base, lora_config)
 
 model = RewardModelModule(base)
-if config.gradient_checkpointing and hasattr(model, "gradient_checkpointing_enable"):
-    model.gradient_checkpointing_enable()
 
 
 def preprocess_batch(

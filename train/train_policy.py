@@ -96,8 +96,12 @@ model = AutoModelForCausalLM.from_pretrained(
     torch_dtype=torch.bfloat16 if config.use_bf16 else torch.float16,
     trust_remote_code=True,
 )
-# Multi-GPU training is handled via 🤗 Accelerate launch
+# Multi-GPU training is handled via Accelerate launch
 model.config.use_cache = False
+model.gradient_checkpointing_enable()  # save memory
+
+model.enable_input_require_grads()
+
 model = get_peft_model(model, lora_config)  # add adapters
 
 # log trainable params
