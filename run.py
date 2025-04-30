@@ -36,7 +36,7 @@ DEFAULT_SLURM_CONFIG = {
     "num_gpus": 1,  # Default number of GPUs if type is selected
 }
 
-GPU_OPTIONS = ["none", "geforce_rtx_3090", "rtx_a6000", "a100_80gb", "titan_rtx", "geforce_rtx_2080", "other"]
+GPU_OPTIONS = ["none", "geforce_rtx_3090", "rtx_a6000", "a100", "titan_rtx", "geforce_rtx_2080", "other"]
 
 # --- Environment Defaults ---
 DEFAULT_ENV_CONFIG = {
