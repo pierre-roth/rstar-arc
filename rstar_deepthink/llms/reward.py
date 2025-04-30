@@ -81,16 +81,15 @@ class RewardModelModule(nn.Module):
     # ----------------------------------------------------
     # Inference helpers
     # ----------------------------------------------------
-    @torch.no_grad()
     def forward(self, input_ids: torch.LongTensor, attention_mask: torch.Tensor):
         """
         Args
         ----
-        input_ids      : (B, L)
-        attention_mask : (B, L)  – 1 for real tokens, 0 for padding
+        input_ids: (B, L)
+        attention_mask: (B, L) – 1 for real tokens, 0 for padding
         Returns
         -------
-        reward         : (B,)    – scalar per sequence
+        reward: (B,) – scalar per sequence
         """
         outputs = self.backbone(
             input_ids=input_ids,
