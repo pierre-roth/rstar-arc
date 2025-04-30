@@ -227,7 +227,7 @@ trainer = WeightedTrainer(
     args=args,
     train_dataset=tok_ds["train"],
     eval_dataset=tok_ds["validation"],
-    tokenizer=tok,
+    processing_class=tok,
     data_collator=WeightedCollator(tokenizer=tok, mlm=False),
 )
 

@@ -86,7 +86,6 @@ base.gradient_checkpointing_enable()  # enable gradient checkpointing for memory
 
 base.enable_input_require_grads()  # enable input gradients for LoRA
 
-
 lora_config = LoraConfig(
     r=config.lora_rank,
     lora_alpha=config.lora_alpha,
@@ -109,7 +108,9 @@ lora_config = LoraConfig(
 
 base = get_peft_model(base, lora_config)
 
-model = RewardModelModule(base)
+model = RewardModelModule(base, dropout=config.reward_value_head_dropout)
+# get rid of sliding-window SPDA warning
+model.backbone.config.attn_config['attn_impl'] = "flash"
 
 
 def preprocess_batch(
@@ -166,7 +167,11 @@ class PairwiseCollator(DataCollatorWithPadding):
             weights.append(f["weight"])
 
         # Pad chosen and rejected separately and collate into model inputs
-        batch = self.tokenizer.pad(chosen + rejected, return_tensors="pt")
+        batch = self.tokenizer.pad(
+            chosen + rejected,
+            return_tensors="pt",
+            padding=self.padding
+        )
         # sample-wise weights for pairwise loss (length B)
         batch["weight"] = torch.tensor(weights, dtype=torch.float32)
         # add dummy labels to ensure Trainer runs prediction and compute_metrics
@@ -178,29 +183,42 @@ class PairwiseCollator(DataCollatorWithPadding):
 class PairwiseTrainer(Trainer):
     """-log σ(r₊ − r₋) * sample_weight"""
 
-    def compute_loss(self, model, inputs, return_outputs=False, **_):
+    def compute_loss(self, model, inputs, return_outputs: bool = False, **_) -> torch.Tensor | tuple:
         """
-        Compute pairwise preference loss: -logsigmoid(r_chosen - r_rejected) weighted by sample weight.
+        Pair-wise preference loss
+
+        For every batch we receive the *chosen* sequence followed by the *rejected*
+        sequence.  The loss is
+
+            L = − log σ(r_chosen − r_rejected) · weight
+
+        where σ is the logistic sigmoid and *weight* is a scalar attached to every
+        pair.  When `return_outputs=True` we hand back the concatenated rewards
+        (first all chosen, then all rejected) so that `Trainer` can feed them to
+        `compute_metrics`.
         """
-        # Extract and remove weights from inputs
-        weights = inputs.pop("weight")  # (batch,)
-        # Split batch into chosen/rejected pairs
-        input_ids = inputs["input_ids"]  # shape (2*b, L)
-        attention_mask = inputs["attention_mask"]  # shape (2*b, L)
-        b = input_ids.size(0) // 2
+        # ------------------------------------------------------------------ data
+        weights = inputs.pop("weight")  # shape (B,)
+        input_ids = inputs["input_ids"]  # shape (2B, L)
+        attention_mask = inputs["attention_mask"]  # shape (2B, L)
+        B = input_ids.size(0) // 2
 
-        # Get rewards for each sequence in batch
-        rewards = model(input_ids=input_ids, attention_mask=attention_mask)  # (2*b,)
-        chosen, rejected = rewards[:b], rewards[b:]
+        # ------------------------------------------------------------ forward pass
+        rewards = model(input_ids=input_ids,
+                        attention_mask=attention_mask)  # shape (2B,)
+        chosen, rejected = rewards[:B], rewards[B:]  # each (B,)
 
-        # Compute loss per pair
-        loss_per_pair = -f.logsigmoid(chosen - rejected)  # (b,)
-        # Apply sample weights and normalize
-        weighted = loss_per_pair * weights.to(loss_per_pair.device)
-        loss = weighted.sum() / weights.sum()
+        # ------------------------------------------------------------------ loss
+        loss_per_pair = -f.logsigmoid(chosen - rejected)  # (B,)
+        loss = (loss_per_pair * weights.to(loss_per_pair.device)).sum() / weights.sum()
 
+        # ----------------------------------------------------------- bookkeeping
         if return_outputs:
-            return loss, {"chosen": chosen, "rejected": rejected}
+            # Trainer expects a *single* tensor for predictions, so we stack
+            # them in the same order they appeared in the batch.
+            preds = torch.cat([chosen.detach(), rejected.detach()], dim=0)
+            return loss, preds
+
         return loss
 
 
@@ -261,7 +279,7 @@ args = TrainingArguments(
     report_to=config.report_to,
     remove_unused_columns=False,
     load_best_model_at_end=True,
-    metric_for_best_model="accuracy",
+    metric_for_best_model="eval_accuracy",
     greater_is_better=True,
 )  # end of TrainingArguments
 # ─────────────────── wandb (lightweight) ───────────────────
@@ -289,7 +307,7 @@ trainer = PairwiseTrainer(
     args=args,
     train_dataset=tok_ds["train"],
     eval_dataset=tok_ds["test"],
-    tokenizer=tok,
+    processing_class=tok,
     data_collator=PairwiseCollator(tokenizer=tok, padding="longest"),
     compute_metrics=compute_accuracy,
 )

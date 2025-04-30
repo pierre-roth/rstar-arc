@@ -140,6 +140,7 @@ class Config:
     wandb_entity: str | None = None  # optional team name
 
     # reward
+    reward_value_head_dropout: float = 0.1  # dropout for the value head
     reward_batch_size: int = 1024
     reward_test_size: float = 0.05  # fraction of pairs held out for eval
     # distributed / sharding

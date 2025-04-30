@@ -36,7 +36,7 @@ class RewardModelModule(nn.Module):
             self,
             model_or_name,
             *,
-            dtype: torch.dtype = torch.float16,
+            dtype: torch.dtype = torch.bfloat16,
             device=None,
             dropout: float = 0.1,
     ):
@@ -70,7 +70,7 @@ class RewardModelModule(nn.Module):
         if hidden_size is None:
             raise ValueError("Could not infer hidden_size from backbone config")
 
-        self.v_head = ValueHead(hidden_size, dropout).to(self.device)
+        self.v_head = ValueHead(hidden_size, dropout).to(self.device, dtype=dtype)
 
         self.tokenizer = AutoTokenizer.from_pretrained(model_name_for_tok, use_fast=True)
         if self.tokenizer.pad_token is None:
@@ -155,7 +155,7 @@ class RewardModelModule(nn.Module):
             cls,
             model_dir: str,
             *,
-            dtype: torch.dtype = torch.float16,
+            dtype: torch.dtype = torch.bfloat16,
             device=None,
             dropout: float = 0.1,
     ) -> "RewardModelModule":
