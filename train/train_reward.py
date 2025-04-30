@@ -109,8 +109,9 @@ lora_config = LoraConfig(
 base = get_peft_model(base, lora_config)
 
 model = RewardModelModule(base, dropout=config.reward_value_head_dropout)
+
 # get rid of sliding-window SPDA warning
-model.backbone.config.attn_config['attn_impl'] = "flash"
+# model.backbone.config.attn_config['attn_impl'] = "flash"
 
 
 def preprocess_batch(
@@ -239,7 +240,7 @@ logger.info(
 TRAIN_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{config.round_number}", "reward_dataset_training.jsonl")
 VAL_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{config.round_number}", "reward_dataset_validation.jsonl")
 logger.info(f"Loading preference pairs from {TRAIN_PATH} and {VAL_PATH}")
-raw = load_dataset("json", data_files={"train": TRAIN_PATH, "test": VAL_PATH})
+raw = load_dataset("json", data_files={"train": TRAIN_PATH, "validation": VAL_PATH})
 
 remove_cols = [c for c in ("prefix", "chosen", "rejected") if c in raw["train"].column_names]
 tok_ds = raw.map(
@@ -248,7 +249,7 @@ tok_ds = raw.map(
     remove_columns=remove_cols,
     num_proc=max(1, os.cpu_count() // 2),
 )
-logger.info(f"Dataset ready – {len(tok_ds['train'])} train / {len(tok_ds['test'])} eval examples")
+logger.info(f"Dataset ready – {len(tok_ds['train'])} train / {len(tok_ds['validation'])} validation examples")
 
 # TrainingArguments
 args = TrainingArguments(
@@ -297,16 +298,17 @@ if config.report_to == "wandb":
             "lora_r": config.lora_rank,
             "lora_alpha": config.lora_alpha,
             "train_samples": len(tok_ds["train"]),
-            "val_samples": len(tok_ds["test"]),
+            "val_samples": len(tok_ds["validation"]),
             "max_seq_len": config.max_seq_len,
-        },
+        }
     )
+
 # Train
 trainer = PairwiseTrainer(
     model=model,
     args=args,
     train_dataset=tok_ds["train"],
-    eval_dataset=tok_ds["test"],
+    eval_dataset=tok_ds["validation"],
     processing_class=tok,
     data_collator=PairwiseCollator(tokenizer=tok, padding="longest"),
     compute_metrics=compute_accuracy,
@@ -330,7 +332,7 @@ torch.save(model.v_head.state_dict(), os.path.join(reward_output_dir, "v_head.bi
 # Also save tokenizer config for scoring convenience
 model.tokenizer.save_pretrained(reward_output_dir)
 
-eval_metrics = trainer.evaluate(eval_dataset=tok_ds["test"])
+eval_metrics = trainer.evaluate(eval_dataset=tok_ds["validation"])
 trainer.save_metrics("eval", eval_metrics)
 if config.report_to == "wandb":
     # Log final evaluation metrics
