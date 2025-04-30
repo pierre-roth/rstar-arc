@@ -267,6 +267,7 @@ args = TrainingArguments(
     save_strategy="steps",
     save_steps=config.save_steps,
     save_total_limit=config.save_total_limit,
+    save_safetensors=False,
     # precision
     bf16=config.use_bf16,
     fp16=not config.use_bf16,
@@ -279,7 +280,8 @@ args = TrainingArguments(
     load_best_model_at_end=True,
     metric_for_best_model="eval_accuracy",
     greater_is_better=True,
-)  # end of TrainingArguments
+)
+
 # ─────────────────── wandb (lightweight) ───────────────────
 if config.report_to == "wandb":
     os.environ["WANDB_SILENT"] = "true"
