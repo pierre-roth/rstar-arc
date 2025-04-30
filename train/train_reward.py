@@ -2,7 +2,7 @@
 Train a reward model on positive–negative preference pairs.
 
 Everything is driven by rstar_deepthink.Config:
-  • model + dataset paths
+  • model and dataset paths
   • LoRA hyper-params
   • batch-size, LR, logging, etc.
 Multi-GPU training is handled via Accelerate.
@@ -165,8 +165,13 @@ class PairwiseCollator(DataCollatorWithPadding):
             )
             weights.append(f["weight"])
 
+        # Pad chosen and rejected separately and collate into model inputs
         batch = self.tokenizer.pad(chosen + rejected, return_tensors="pt")
+        # sample-wise weights for pairwise loss (length B)
         batch["weight"] = torch.tensor(weights, dtype=torch.float32)
+        # add dummy labels to ensure Trainer runs prediction and compute_metrics
+        # labels will be ignored by our custom compute_loss
+        batch["labels"] = batch["input_ids"].clone()
         return dict(batch)
 
 
@@ -258,7 +263,6 @@ args = TrainingArguments(
     load_best_model_at_end=True,
     metric_for_best_model="accuracy",
     greater_is_better=True,
-    label_names=[],  # custom loss
 )  # end of TrainingArguments
 # ─────────────────── wandb (lightweight) ───────────────────
 if config.report_to == "wandb":
