@@ -5,7 +5,7 @@ Everything is driven by rstar_deepthink.Config:
   • model + dataset paths
   • LoRA hyper-params
   • batch-size, LR, logging, etc.
-Multi-GPU training is handled via 🤗 Accelerate.
+Multi-GPU training is handled via Accelerate.
 
 Launch with:
   # 4 GPUs with torchrun
