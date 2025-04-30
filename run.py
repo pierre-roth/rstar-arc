@@ -4,7 +4,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 import questionary
 import yaml
@@ -45,7 +45,7 @@ DEFAULT_ENV_CONFIG = {
 
 
 # --- Helper Functions ---
-def find_yaml_configs(config_dir: Path) -> List[str]:
+def find_yaml_configs(config_dir: Path) -> list[str]:
     """Finds YAML configuration files."""
     yaml_files = ["none"]  # Option to not use a config
     if config_dir.is_dir():
@@ -61,7 +61,7 @@ def find_yaml_configs(config_dir: Path) -> List[str]:
 
 
 def ask_question(
-        question_type: str, message: str, choices: Optional[List[str]] = None, default: Any = None, **kwargs
+        question_type: str, message: str, choices: Optional[list[str]] = None, default: Any = None, **kwargs
 ) -> Any:
     """Wrapper for questionary prompts."""
     # Create base kwargs dict
@@ -102,7 +102,7 @@ def main():
     )
     args = parser.parse_args()
 
-    config: Dict[str, Any] = {
+    config: dict[str, Any] = {
         "script": None,
         "slurm": DEFAULT_SLURM_CONFIG.copy(),
         "env": DEFAULT_ENV_CONFIG.copy(),

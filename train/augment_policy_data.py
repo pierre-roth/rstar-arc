@@ -129,7 +129,7 @@ def process_task_augmentation(job_data: tuple[str, str, int, int]) -> list[dict]
             logger.warning(
                 f"Task {task_name}: Reached generation attempt limit ({generation_attempts}/{max_attempts_n}) or total limit ({tried_count}/{max_attempts_n}). Found {solved_count}/{target_examples_m} examples.")
         else:
-            logger.debug(
+            logger.info(
                 f"Task {task_name}: Reached target examples ({solved_count}/{target_examples_m}). Total attempts: {tried_count}")
 
     # 3. Format Output
@@ -146,7 +146,7 @@ def process_task_augmentation(job_data: tuple[str, str, int, int]) -> list[dict]
             }
             output_batch.append(output_data)
 
-    logger.debug(f"Task {task_name}: Finished processing. Generated {len(output_batch)} output entries.")
+    logger.info(f"Task {task_name}: Finished processing. Generated {len(output_batch)} output entries.")
     return output_batch
 
 
