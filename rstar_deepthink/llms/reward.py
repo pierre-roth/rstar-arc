@@ -91,7 +91,7 @@ class RewardModelModule(nn.Module):
         """
         Args
         ----
-        input_ids:      (B, L)
+        input_ids: (B, L)
         attention_mask: (B, L)
         labels:         UNUSED – just here so that Trainer keeps them.
         """
