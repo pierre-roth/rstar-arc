@@ -25,6 +25,7 @@ from typing import Any, Sequence
 
 import torch
 import torch.nn.functional as f
+import wandb
 from datasets import load_dataset
 from peft import LoraConfig, get_peft_model
 from transformers import (
@@ -248,17 +249,36 @@ args = TrainingArguments(
     # precision
     bf16=config.use_bf16,
     fp16=not config.use_bf16,
-    # distributed: handled via 🤗 Accelerate launch
+    # distributed: handled via Accelerate launch
     # misc
     seed=config.seed,
+    run_name=f"ft-reward-lora-{config.reward_model.split('/')[-1]}-{config.max_seq_len}-{config.learning_rate}-{config.lora_rank}-{config.lora_alpha}",
     report_to=config.report_to,
     remove_unused_columns=False,
     load_best_model_at_end=True,
     metric_for_best_model="accuracy",
     greater_is_better=True,
     label_names=[],  # custom loss
-)
-
+)  # end of TrainingArguments
+# ─────────────────── wandb (lightweight) ───────────────────
+if config.report_to == "wandb":
+    os.environ["WANDB_SILENT"] = "true"
+    os.environ["WANDB_CONSOLE"] = "off"
+    wandb.init(
+        project=config.wandb_project,
+        entity=config.wandb_entity,
+        name=args.run_name,
+        config={
+            "lr": args.learning_rate,
+            "batch_size": args.per_device_train_batch_size * args.gradient_accumulation_steps,
+            "epochs": args.num_train_epochs,
+            "lora_r": config.lora_rank,
+            "lora_alpha": config.lora_alpha,
+            "train_samples": len(tok_ds["train"]),
+            "val_samples": len(tok_ds["test"]),
+            "max_seq_len": config.max_seq_len,
+        },
+    )
 # Train
 trainer = PairwiseTrainer(
     model=model,
@@ -273,6 +293,9 @@ trainer = PairwiseTrainer(
 logger.info(f"Starting training; evaluation every {config.eval_steps} steps")
 train_out = trainer.train()
 trainer.save_metrics("train", train_out.metrics)
+if config.report_to == "wandb":
+    # Log final training metrics
+    wandb.log({f"train/{k}": v for k, v in train_out.metrics.items()})
 
 logger.info(f"Saving LoRA adapter and value head to {reward_output_dir}")
 # Save LoRA adapter from the backbone (PeftModel) and the reward head
@@ -287,5 +310,9 @@ model.tokenizer.save_pretrained(reward_output_dir)
 
 eval_metrics = trainer.evaluate(eval_dataset=tok_ds["test"])
 trainer.save_metrics("eval", eval_metrics)
+if config.report_to == "wandb":
+    # Log final evaluation metrics
+    wandb.log({"final_eval/accuracy": eval_metrics.get("eval_accuracy")})
+    wandb.finish()
 
 logger.info(f"Done – final accuracy {eval_metrics.get('eval_accuracy', 0.0):.4f}")
