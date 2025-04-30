@@ -81,16 +81,21 @@ class RewardModelModule(nn.Module):
     # ----------------------------------------------------
     # Inference helpers
     # ----------------------------------------------------
-    def forward(self, input_ids: torch.LongTensor, attention_mask: torch.Tensor, **kwargs):
+    def forward(
+            self,
+            input_ids: torch.LongTensor,
+            attention_mask: torch.Tensor,
+            labels: torch.Tensor | None = None,  # <-- NEW
+            **kwargs,
+    ):
         """
         Args
         ----
-        input_ids: (B, L)
-        attention_mask: (B, L) – 1 for real tokens, 0 for padding
-        Returns
-        -------
-        reward: (B,) – scalar per sequence
+        input_ids:      (B, L)
+        attention_mask: (B, L)
+        labels:         UNUSED – just here so that Trainer keeps them.
         """
+
         outputs = self.backbone(
             input_ids=input_ids,
             attention_mask=attention_mask,
@@ -98,17 +103,11 @@ class RewardModelModule(nn.Module):
             return_dict=True,
         )
 
-        # Last hidden state: (B, L, H)
         last_hidden = outputs.hidden_states[-1]
+        seq_lens = attention_mask.long().sum(dim=1) - 1
+        last_token_h = last_hidden[torch.arange(last_hidden.size(0), device=last_hidden.device), seq_lens]
+        reward = self.v_head(last_token_h).squeeze(-1)
 
-        # Index of last non-pad token for each sequence
-        seq_lens = attention_mask.long().sum(dim=1) - 1  # (B,)
-
-        # Fancy indexing instead of gather:
-        batch_idx = torch.arange(last_hidden.size(0), device=last_hidden.device)
-        last_token_h = last_hidden[batch_idx, seq_lens]  # (B, H)
-
-        reward = self.v_head(last_token_h).squeeze(-1)  # (B,)
         return reward
 
     @torch.no_grad()
