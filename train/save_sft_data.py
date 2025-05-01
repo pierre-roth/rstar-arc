@@ -182,11 +182,11 @@ def _extract_preference_pairs(nodes: list[Node], config: Config) -> list[dict]:
         # Create pairs
         for chosen_node in chosen_nodes:
             for rejected_node in rejected_nodes:
-
-                solutions = _extract_solutions_from_subtree(chosen_node, config)
-
                 # Basic check: ensure chosen Q > rejected Q
                 if chosen_node.q_value() > rejected_node.q_value() + config.min_step_margin:
+                    # Extract solutions from the subtree of the chosen node
+                    solutions = _extract_solutions_from_subtree(chosen_node, config)
+
                     preference_pair_data = {
                         "task_name": task_name,
                         "prefix": prefix_code,  # Prompt + code up to the split point

@@ -142,13 +142,7 @@ class Config:
     # reward
     reward_value_head_dropout: float = 0.1  # dropout for the value head
     reward_batch_size: int = 1024
-    reward_test_size: float = 0.05  # fraction of pairs held out for eval
-    # distributed / sharding
-    reward_use_deepspeed: bool = False  # enable DeepSpeed ZeRO
-    reward_deepspeed_config: str | None = None  # path to a ds_config.json
-    reward_use_fsdp: bool = False  # enable fully-sharded data parallel
-    reward_fsdp_policy: str = "full_shard auto_wrap"
-    reward_fsdp_min_num_params: int = 1e8  # auto-wrap only big modules
+    reward_test_size: float = 0.05  # fraction of pairs held out for evaluation
 
     def __post_init__(self):
         """

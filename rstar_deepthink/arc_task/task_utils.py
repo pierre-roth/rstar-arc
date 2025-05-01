@@ -37,9 +37,17 @@ def load_tasks(config: Config) -> list[ARCTask]:
 
     if config.solve_only_unsolved:
         # remove already solved tasks
-        solutions_file = os.path.join(config.sft_data_dir, f"round_{config.round_number}", "solutions_training.jsonl")
+        if not config.evaluation:
+            solutions_file = os.path.join(config.sft_data_dir, f"round_{config.round_number}", "solutions_training.jsonl")
+        else:
+            solutions_file = os.path.join(config.sft_data_dir, f"round_{config.round_number}", "solutions_evaluation.jsonl")
 
         solved_set = set()
+        # create empty solutions-file if it does not exist
+        if not os.path.exists(solutions_file):
+            with open(solutions_file, "w", encoding="utf-8") as f:
+                pass
+
         with open(solutions_file, "r", encoding="utf-8") as f:
             for line in f:
                 if not line.strip():

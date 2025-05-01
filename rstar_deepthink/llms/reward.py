@@ -196,6 +196,9 @@ class RewardModel:
 
     def init(self):
         """Load the reward model for inference, using base or fine-tuned weights."""
+        if not self.config.use_reward_model:
+            return
+
         # Map config.dtype (str or torch.dtype) to torch.dtype
         dt = self.config.dtype.lower()
         if dt in ("bfloat16", "bf16"):
@@ -209,12 +212,11 @@ class RewardModel:
 
         start = datetime.now()
         # Load fine-tuned model if necessary
-        if self.config.use_reward_model:
-            model_path = os.path.join(self.config.reward_model_dir, self.config.reward_model)
-            self.llm = RewardModelModule.from_pretrained(
-                model_dir=model_path,
-                dtype=torch_dtype,
-            )
+        model_path = os.path.join(self.config.reward_model_dir, self.config.reward_model)
+        self.llm = RewardModelModule.from_pretrained(
+            model_dir=model_path,
+            dtype=torch_dtype,
+        )
 
         end = datetime.now()
         self.config.model_initialization_times["reward"] = end - start
