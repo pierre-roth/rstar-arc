@@ -11,7 +11,7 @@ def get_description(config, task_name: str) -> str:
     if config.evaluation:
         path = os.path.join(DATA_SAMPLE_DIR, "bootstrap", f"evaluation_descriptions_1.json")
     else:
-        path = os.path.join(DATA_SAMPLE_DIR, "bootstrap", f"training_descriptions_4.json")
+        path = os.path.join(DATA_SAMPLE_DIR, "bootstrap", f"training_descriptions_5.json")
 
     key = f"{task_name}.json"
 

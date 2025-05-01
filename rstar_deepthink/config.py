@@ -77,7 +77,7 @@ class Config:
     beam_width: int = 3  # Number of top-scoring beams to track
     branching_factor: int = 4  # Number of children to generate if no children exist yet
     regeneration_probability: float = 1 / 8  # Probability of regenerating a node if it has no children
-    min_step_margin: float = 0.1  # Minimum avg q value margin for preference pairs
+    min_step_margin: float = 0.3  # Minimum avg q value margin for preference pairs
 
     c_puct: float = 2.0  # PUCT exploration constant
     num_rollouts: int = 8  # Number of simulations to run for MCTS
