@@ -4,7 +4,7 @@ log-level: "INFO"
 save-for-visualization: false
 round-number: 2
 solve-only-unsolved: true
-solutions-per-task: 64
+solutions-per-task: 16
 
 policy-model: "Qwen/Qwen2.5-Coder-32B-Instruct-GPTQ-Int8"
 max-seq-len: 32768
