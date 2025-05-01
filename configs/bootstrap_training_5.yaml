@@ -7,7 +7,7 @@ solve-only-unsolved: true
 solutions-per-task: 64
 
 policy-model: "Qwen/Qwen2.5-Coder-32B-Instruct-GPTQ-Int8"
-max-model-len: 32768
+max-seq-len: 32768
 dtype: "auto"
 enforce-eager: false
 
