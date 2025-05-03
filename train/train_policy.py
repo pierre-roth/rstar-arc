@@ -25,7 +25,7 @@ from typing import Any
 import torch
 import wandb
 from datasets import load_dataset
-from peft import LoraConfig, get_peft_model
+from train.train_utils import maybe_peft_wrap
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
@@ -67,28 +67,6 @@ tok = AutoTokenizer.from_pretrained(config.policy_model, trust_remote_code=True)
 tok.pad_token = tok.pad_token or tok.eos_token
 tok.padding_side = "right"
 
-# ─────────────────── LoRA config ───────────────────
-lora_config = LoraConfig(
-    r=config.lora_rank,
-    lora_alpha=config.lora_alpha,
-    target_modules=[
-        "q_proj", "k_proj", "v_proj", "o_proj",
-        "gate_proj", "up_proj", "down_proj",
-    ],
-    rank_pattern={
-        r"(q_proj|k_proj|v_proj|o_proj)$": config.lora_rank // 2,
-        r"(gate_proj|up_proj|down_proj)$": config.lora_rank,
-    },
-    alpha_pattern={
-        r"(q_proj|k_proj|v_proj|o_proj)$": config.lora_alpha // 2,
-        r"(gate_proj|up_proj|down_proj)$": config.lora_alpha,
-    },
-    lora_dropout=config.lora_dropout,
-    bias="none",
-    task_type="CAUSAL_LM",
-)
-
-logger.info("LoRA: r=%d α=%d dropout=%.2f", lora_config.r, lora_config.lora_alpha, lora_config.lora_dropout)
 
 # ─────────────────── model ───────────────────
 model = AutoModelForCausalLM.from_pretrained(
@@ -102,7 +80,8 @@ model.gradient_checkpointing_enable()  # save memory
 
 model.enable_input_require_grads()
 
-model = get_peft_model(model, lora_config)  # add adapters
+# Wrap model with LoRA adapters or full-model fine-tuning as configured
+model = maybe_peft_wrap(model, config)
 
 # log trainable params
 trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)

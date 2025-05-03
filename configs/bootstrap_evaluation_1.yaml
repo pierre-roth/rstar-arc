@@ -1,21 +1,22 @@
 search-mode: "bootstrap"
 log-level: "INFO"
+evaluation: true
 
 save-for-visualization: false
-round-number: 1
-solve-only-unsolved: false
-solutions-per-task: 64
+round-number: 2
+solve-only-unsolved: true
+solutions-per-task: 16
 
-policy-model: "Qwen/Qwen2.5-Coder-7B-Instruct"
-max-model-len: 32768
+policy-model: "Qwen/Qwen2.5-Coder-32B-Instruct-GPTQ-Int8"
+max-seq-len: 32768
+dtype: "auto"
+enforce-eager: false
 
-
-evaluation: true
 data-folder: "/itet-stor/piroth/net_scratch/task_data/evaluation"
 sort-by-length: false
 
 num-examples: 1
-example-names: [["228f6490"]]
+example-names: [["06df4c85"]]
 
 rotate-example: false
 
@@ -25,11 +26,11 @@ max-policy-temperature: 1.0
 
 save-sft-data: true
 
-num-rollouts: 24
-hint-rollouts: 18
+num-rollouts: 32
+hint-rollouts: 24
 
 branching-factor: 8
-max-depth: 18
+max-depth: 16
 
-batch-size: 45
+batch-size: 60
 

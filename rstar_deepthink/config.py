@@ -107,13 +107,13 @@ class Config:
     # Computed fields
     policy_model_dir: Optional[str] = None  # Full path to policy model
     reward_model_dir: Optional[str] = None  # Full path to reward model
-    local_job_dir: Optional[str] = None  # Temporary path for job
+    local_job_dir: Optional[str] = None  # Temporary path for the job
 
     # training related
-    # policy
+    # If true, skips LoRA adapters and fine-tunes all model parameters
+    full_finetune: bool = False
     learning_rate: float = 2e-5
     num_train_epochs: int = 1
-
     per_device_train_batch_size: int = 1
     per_device_eval_batch_size: int = 1
     gradient_accumulation_steps: int = 16
@@ -126,13 +126,12 @@ class Config:
 
     use_bf16: bool = True
     gradient_checkpointing: bool = True
+    lr_scheduler_type: str = "cosine"
 
     # LoRA
     lora_rank: int = 32
     lora_alpha: int = 32
     lora_dropout: float = 0.03
-
-    lr_scheduler_type: str = "cosine"
 
     # Logging / tracking
     report_to: str = "wandb"
@@ -142,7 +141,6 @@ class Config:
     # reward
     reward_value_head_dropout: float = 0.1  # dropout for the value head
     reward_batch_size: int = 1024
-    reward_test_size: float = 0.05  # fraction of pairs held out for evaluation
 
     def __post_init__(self):
         """

@@ -27,7 +27,7 @@ import torch
 import torch.nn.functional as f
 import wandb
 from datasets import load_dataset
-from peft import LoraConfig, get_peft_model
+from train.train_utils import maybe_peft_wrap
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
@@ -86,27 +86,8 @@ base.gradient_checkpointing_enable()  # enable gradient checkpointing for memory
 
 base.enable_input_require_grads()  # enable input gradients for LoRA
 
-lora_config = LoraConfig(
-    r=config.lora_rank,
-    lora_alpha=config.lora_alpha,
-    target_modules=[
-        "q_proj", "k_proj", "v_proj", "o_proj",
-        "gate_proj", "up_proj", "down_proj",
-    ],
-    rank_pattern={
-        r"(q_proj|k_proj|v_proj|o_proj)$": config.lora_rank // 2,
-        r"(gate_proj|up_proj|down_proj)$": config.lora_rank,
-    },
-    alpha_pattern={
-        r"(q_proj|k_proj|v_proj|o_proj)$": config.lora_alpha // 2,
-        r"(gate_proj|up_proj|down_proj)$": config.lora_alpha,
-    },
-    lora_dropout=config.lora_dropout,
-    bias="none",
-    task_type="CAUSAL_LM",
-)
-
-base = get_peft_model(base, lora_config)
+# Wrap base model with LoRA adapters or full-model fine-tuning as configured
+base = maybe_peft_wrap(base, config)
 
 model = RewardModelModule(base, dropout=config.reward_value_head_dropout)
 
