@@ -196,27 +196,27 @@ class RewardModel:
 
     def init(self):
         """Load the reward model for inference, using base or fine-tuned weights."""
-        if not self.config.use_reward_model:
-            return
-
-        # Map config.dtype (str or torch.dtype) to torch.dtype
-        dt = self.config.dtype.lower()
-        if dt in ("bfloat16", "bf16"):
-            torch_dtype = torch.bfloat16
-        elif dt in ("float16", "fp16"):
-            torch_dtype = torch.float16
-        elif dt in ("float32", "fp32"):
-            torch_dtype = torch.float32
-        else:
-            raise ValueError(f"Unsupported dtype '{self.config.dtype}' for RewardModel")
 
         start = datetime.now()
-        # Load fine-tuned model if necessary
-        model_path = os.path.join(self.config.reward_model_dir, self.config.reward_model)
-        self.llm = RewardModelModule.from_pretrained(
-            model_dir=model_path,
-            dtype=torch_dtype,
-        )
+
+        if self.config.use_reward_model:
+            # Map config.dtype (str or torch.dtype) to torch.dtype
+            dt = self.config.dtype.lower()
+            if dt in ("bfloat16", "bf16"):
+                torch_dtype = torch.bfloat16
+            elif dt in ("float16", "fp16"):
+                torch_dtype = torch.float16
+            elif dt in ("float32", "fp32"):
+                torch_dtype = torch.float32
+            else:
+                raise ValueError(f"Unsupported dtype '{self.config.dtype}' for RewardModel")
+
+            # Load fine-tuned model if necessary
+            model_path = os.path.join(self.config.reward_model_dir, self.config.reward_model)
+            self.llm = RewardModelModule.from_pretrained(
+                model_dir=model_path,
+                dtype=torch_dtype,
+            )
 
         end = datetime.now()
         self.config.model_initialization_times["reward"] = end - start

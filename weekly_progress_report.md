@@ -318,11 +318,19 @@
 
 - **Work done**:
   - token count histogram created (counts only token for task representation)
-  - 
+  - some code refactoring, mainly related to the data pipeline and training code
+  - read Guillermo Barbadillo's Omni-ARC blog posts
+  - Added all the non-official tasks that are already solved to the training data (adapted all the other code to handle it appropriately)
+  - wrote first (not fully tested) version of the reward model code
+    - reworked some of the preference-pair saving logic and added logic to save solutions in the "chosen subtree" for augmentation
+    - wrote code to augment the preference pairs
+    - wrote a correct version of the reward model that works well with all other parts of the code
+    - wrote code for reward model dataset generation
+    - wrote code for training the reward model (works)
 
 
 - **Issues and Questions**:
-  - 
+  - I noticed I did not have all the data necessary to augment the preference pair data
 
 - **Results**:
   - ??
@@ -333,3 +341,26 @@
 ![arc_1.png](images/arc_1.png)
     - ARC-AGI-1 and ARC-AGI-2 tasks
 ![arc_1_and_2.png](images/arc_1_and_2.png)
+
+
+### Week 9 (28.04.2025)
+
+- **Work planned**:
+  - generate new descriptions with newer models
+  - add better way to start batch jobs
+  - get a fine-tuned version actually working and use it to solve tasks
+  - get familiar with how to use the CSCS cluster
+
+- **Work done**:
+  - ??
+
+- **Issues and Questions**:
+  - ??
+
+- **Results**:
+  - ??
+
+- **Visuals**:
+  - 
+
+
