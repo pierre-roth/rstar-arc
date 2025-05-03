@@ -34,12 +34,12 @@ def process_task_augmentation(job_data: tuple[str, list[dict], str, int]) -> lis
     logger.debug(
         f"Processing task: {task_name} with {len(pairs)} solutions. N={max_attempts_n}")
 
-    all_solutions = set()
-
+    # Flatten all solution dicts from the input pairs (preserve order, allow duplicates)
+    all_solutions: set[str] = set()
     for pair in pairs:
-        all_solutions.update(pair.get("solutions", []))
-
-    all_solutions = list(all_solutions)
+        sols = pair.get("solutions", [])
+        for sol in sols:
+            all_solutions.add(sol["solution_code"])
 
     assigned_examples: dict[int, list] = defaultdict(list)
     solved_count = 0
@@ -111,7 +111,11 @@ def process_task_augmentation(job_data: tuple[str, list[dict], str, int]) -> lis
     # (all_solutions was created above as list(all_solutions_set))
     for pair_idx, pair in enumerate(pairs):
         # gather all examples solved by any solution in this pair
-        pair_solutions = set(pair.get("solutions", []))
+        # use list of solutions directly (solutions are dicts, not hashable)
+        pair_solutions = set()
+        for sol in pair.get("solutions", []):
+            sol_code = sol["solution_code"]
+            pair_solutions.add(sol_code)
         solved_example_idxs: set[int] = set()
         for sol_idx, example_idxs in assigned_examples.items():
             sol = all_solutions[sol_idx]
