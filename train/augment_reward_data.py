@@ -44,14 +44,15 @@ def process_task_augmentation(job_data: tuple[str, list[dict], str, int]) -> lis
     assigned_examples: dict[int, list] = defaultdict(list)
     solved_count = 0
 
+    all_solutions_list: list[str] = list(all_solutions)  # Convert to list for indexing
+
     # 1. Process Existing reARC Examples
-    examples = load_rearc_examples(rearc_data_dir, task_name)
+    examples = load_rearc_examples(rearc_data_dir, task_name) or []
     if examples:
         logger.debug(f"Task {task_name}: Found {len(examples)} existing reARC examples.")
 
         for i, example in enumerate(examples):
-
-            for j, solution in enumerate(all_solutions):
+            for j, solution in enumerate(all_solutions_list):
                 if test_solution_on_rearc_example(solution, example):
                     assigned_examples[j].append(i)
                     solved_count += 1
@@ -94,7 +95,7 @@ def process_task_augmentation(job_data: tuple[str, list[dict], str, int]) -> lis
                 i = len(examples) - 1
 
                 # test against all solutions
-                for j, solution in enumerate(all_solutions):
+                for j, solution in enumerate(all_solutions_list):
                     if test_solution_on_rearc_example(solution, new_example):
                         assigned_examples[j].append(i)
                         solved_count += 1
@@ -118,7 +119,7 @@ def process_task_augmentation(job_data: tuple[str, list[dict], str, int]) -> lis
             pair_solutions.add(sol_code)
         solved_example_idxs: set[int] = set()
         for sol_idx, example_idxs in assigned_examples.items():
-            sol = all_solutions[sol_idx]
+            sol = all_solutions_list[sol_idx]
             if sol in pair_solutions:
                 solved_example_idxs.update(example_idxs)
 

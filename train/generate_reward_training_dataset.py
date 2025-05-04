@@ -34,33 +34,28 @@ def main(config: Config):
     # --- Scan Task Directory (Needed for Pass 1) ---
     task_name_to_path, directory_structure = load_task_info(arc_tasks_base_dir)
 
-    # --- Pass 1: Calculate Total Output Entries per Original Task ---
-    logger.info(f"Calculating weights: Reading {augmented_file_path} to count total output entries per pair...")
-    total_output_entries_per_pair = defaultdict(int)
-    total_lines_pass1 = 0
+    # --- Pass 1: Calculate number of output entries per original preference pair ---
+    logger.info(f"Calculating weights: reading {augmented_file_path} to count entries per pair...")
+    total_output_entries_per_pair: dict[int, int] = {}
 
     with open(augmented_file_path, 'r', encoding='utf-8') as infile:
         for line_num, line in enumerate(infile):
-            total_lines_pass1 += 1
             if not line.strip():
                 continue
-
             data = json.loads(line)
             original_task_name = data.get("original_task_name")
-            augmented_examples = data.get("examples")
+            augmented_examples = data.get("examples", [])
 
-            # --- Load Original Task Info for chunk size ---
+            # Load original task to determine chunk size
             original_task_path = task_name_to_path.get(original_task_name)
             original_task_json = load_json_file(original_task_path)
-
-            # --- Determine Chunk Size ---
-            n_train = len(original_task_json['train'])
-            n_test = len(original_task_json['test'])
+            n_train = len(original_task_json.get('train', []))
+            n_test = len(original_task_json.get('test', []))
             chunk_size = n_train + n_test
 
-            # --- Count Complete Chunks ---
-            num_complete_chunks = len(augmented_examples) // chunk_size
-            total_output_entries_per_pair[original_task_name] += num_complete_chunks + 1
+            # Total output entries = one per complete chunk + one full-task entry
+            num_complete_chunks = len(augmented_examples) // chunk_size if chunk_size > 0 else 0
+            total_output_entries_per_pair[line_num] = num_complete_chunks + 1
 
     # --- Clear Output File ---
     with open(dataset_file_path, 'w') as _:
@@ -87,8 +82,9 @@ def main(config: Config):
 
             augmented_examples = data.get("examples")
 
-            # --- Get Total Entries for Weight ---
-            total_entries = total_output_entries_per_pair.get(original_task_name)
+            # --- Compute weight so that all samples from one original pair sum to 1 ---
+            # Use line index of the augmented file to key the count
+            total_entries = total_output_entries_per_pair.get(line_num, 1)
             weight = 1.0 / total_entries
 
             # --- Load Original Task Info Again for Chunk Size ---
