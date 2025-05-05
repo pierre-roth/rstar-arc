@@ -1,7 +1,7 @@
 log-level: INFO
-round-number: 1
+round-number: 2
 
-max-seq-len: 12288
+max-seq-len: 20480
 
 policy-model: "Qwen/Qwen2.5-Coder-1.5B"
 use-bf16: true
