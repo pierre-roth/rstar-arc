@@ -25,7 +25,6 @@ from typing import Any
 import torch
 import wandb
 from datasets import load_dataset
-from train.train_utils import maybe_peft_wrap
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
@@ -34,6 +33,8 @@ from transformers import (
     DataCollatorForLanguageModeling,
     set_seed
 )
+
+from train_utils import maybe_peft_wrap
 
 # ─────────────────── project imports ───────────────────
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -66,7 +67,6 @@ os.makedirs(OUT_DIR, exist_ok=True)
 tok = AutoTokenizer.from_pretrained(config.policy_model, trust_remote_code=True)
 tok.pad_token = tok.pad_token or tok.eos_token
 tok.padding_side = "right"
-
 
 # ─────────────────── model ───────────────────
 model = AutoModelForCausalLM.from_pretrained(

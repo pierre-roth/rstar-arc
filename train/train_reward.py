@@ -27,7 +27,6 @@ import torch
 import torch.nn.functional as f
 import wandb
 from datasets import load_dataset
-from train.train_utils import maybe_peft_wrap
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
@@ -36,6 +35,8 @@ from transformers import (
     TrainingArguments,
     set_seed,
 )
+
+from train_utils import maybe_peft_wrap
 
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if project_root not in sys.path:
@@ -90,6 +91,7 @@ base.enable_input_require_grads()  # enable input gradients for LoRA
 base = maybe_peft_wrap(base, config)
 
 model = RewardModelModule(base, dropout=config.reward_value_head_dropout)
+
 
 # get rid of sliding-window SPDA warning
 # model.backbone.config.attn_config['attn_impl'] = "flash"
@@ -204,7 +206,7 @@ class PairwiseTrainer(Trainer):
 
 
 def compute_accuracy(eval_preds):
-    diffs = torch.tensor(eval_preds.predictions)   # (N_pairs,)
+    diffs = torch.tensor(eval_preds.predictions)  # (N_pairs,)
     return {"accuracy": (diffs > 0).float().mean().item()}
 
 
