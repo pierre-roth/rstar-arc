@@ -59,8 +59,12 @@ logger.info("Using model: %s", config.policy_model)
 
 TRAIN_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{config.round_number}", "policy_dataset_training.jsonl")
 VAL_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{config.round_number}", "policy_dataset_validation.jsonl")
-OUT_DIR = os.path.join(NET_SCRATCH_PATH, "models", "fine_tuned", "policy",
-                       f"ft-{config.policy_model.split('/')[-1]}-{config.max_seq_len}-{config.learning_rate}-{config.lora_rank}-{config.lora_alpha}")
+if not config.full_finetune:
+    OUT_DIR = os.path.join(NET_SCRATCH_PATH, "models", "fine_tuned", "policy",
+                        f"ft-{config.policy_model.split('/')[-1]}-{config.max_seq_len}-{config.learning_rate}-{config.lora_rank}-{config.lora_alpha}")
+else:
+    OUT_DIR = os.path.join(NET_SCRATCH_PATH, "models", "fine_tuned", "policy",
+                           f"ft-{config.policy_model.split('/')[-1]}-{config.max_seq_len}-{config.learning_rate}")
 os.makedirs(OUT_DIR, exist_ok=True)
 
 # ─────────────────── tokenizer ───────────────────
@@ -177,7 +181,8 @@ args = TrainingArguments(
     remove_unused_columns=False,
     load_best_model_at_end=True,
     metric_for_best_model="eval_loss",
-    greater_is_better=False
+    greater_is_better=False,
+    weight_decay=config.weight_decay
 )
 
 # ─────────────────── wandb (lightweight) ───────────────────

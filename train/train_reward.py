@@ -55,13 +55,22 @@ config = Config()
 set_seed(config.seed or 42)
 setup_logging(config.numeric_log_level)
 
-reward_output_dir = os.path.join(
-    NET_SCRATCH_PATH,
-    "models",
-    "fine_tuned",
-    "reward",
-    f"ft-{config.reward_model.split('/')[-1]}-{config.max_seq_len}-{config.learning_rate}-{config.lora_rank}-{config.lora_alpha}"
-)
+if not config.full_finetune:
+    reward_output_dir = os.path.join(
+        NET_SCRATCH_PATH,
+        "models",
+        "fine_tuned",
+        "reward",
+        f"ft-{config.reward_model.split('/')[-1]}-{config.max_seq_len}-{config.learning_rate}-{config.lora_rank}-{config.lora_alpha}"
+    )
+else:
+    reward_output_dir = os.path.join(
+        NET_SCRATCH_PATH,
+        "models",
+        "fine_tuned",
+        "reward",
+        f"ft-{config.reward_model.split('/')[-1]}-{config.max_seq_len}-{config.learning_rate}"
+    )
 os.makedirs(reward_output_dir, exist_ok=True)
 
 # Hardware overview

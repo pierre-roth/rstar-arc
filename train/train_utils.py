@@ -19,7 +19,7 @@ def maybe_peft_wrap(model, config):
     """
     logger = logging.getLogger(__name__)
     # If user requests full-model fine-tuning, skip LoRA
-    if getattr(config, "full_finetune", False):
+    if config.full_finetune:
         logger.info("Full-model fine-tuning enabled: skipping LoRA adapters")
         return model
 

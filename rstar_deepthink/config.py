@@ -117,6 +117,7 @@ class Config:
     per_device_train_batch_size: int = 1
     per_device_eval_batch_size: int = 1
     gradient_accumulation_steps: int = 16
+    weight_decay: float = 0.0
 
     logging_steps: int = 25
     eval_steps: int = 50
