@@ -7,8 +7,8 @@ reward-model: "Qwen/Qwen2.5-Coder-1.5B"
 use-bf16: true
 
 
-lora-rank: 32
-lora-alpha: 32
+lora-rank: 64
+lora-alpha: 64
 lora-dropout: 0.2
 full-finetune: false
 reward-value-head-dropout: 0.1
