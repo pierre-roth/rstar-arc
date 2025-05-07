@@ -56,20 +56,22 @@ set_seed(config.seed or 42)
 setup_logging(config.numeric_log_level)
 
 if not config.full_finetune:
+    dir_name = f"ft-{config.reward_model.split('/')[-1]}-{config.max_seq_len}-{config.learning_rate}-{config.lora_rank}-{config.lora_alpha}"
     reward_output_dir = os.path.join(
         NET_SCRATCH_PATH,
         "models",
         "fine_tuned",
         "reward",
-        f"ft-{config.reward_model.split('/')[-1]}-{config.max_seq_len}-{config.learning_rate}-{config.lora_rank}-{config.lora_alpha}"
+        dir_name
     )
 else:
+    dir_name = f"ft-{config.reward_model.split('/')[-1]}-{config.max_seq_len}-{config.learning_rate}"
     reward_output_dir = os.path.join(
         NET_SCRATCH_PATH,
         "models",
         "fine_tuned",
         "reward",
-        f"ft-{config.reward_model.split('/')[-1]}-{config.max_seq_len}-{config.learning_rate}"
+        dir_name
     )
 os.makedirs(reward_output_dir, exist_ok=True)
 
@@ -266,7 +268,7 @@ args = TrainingArguments(
     # distributed: handled via Accelerate launch
     # misc
     seed=config.seed,
-    run_name=f"ft-reward-lora-{config.reward_model.split('/')[-1]}-{config.max_seq_len}-{config.learning_rate}-{config.lora_rank}-{config.lora_alpha}",
+    run_name=dir_name,
     report_to=config.report_to,
     remove_unused_columns=False,
     load_best_model_at_end=True,

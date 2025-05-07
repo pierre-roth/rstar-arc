@@ -60,9 +60,10 @@ logger.info("Using model: %s", config.policy_model)
 TRAIN_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{config.round_number}", "policy_dataset_training.jsonl")
 VAL_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{config.round_number}", "policy_dataset_validation.jsonl")
 if not config.full_finetune:
-    OUT_DIR = os.path.join(NET_SCRATCH_PATH, "models", "fine_tuned", "policy",
-                        f"ft-{config.policy_model.split('/')[-1]}-{config.max_seq_len}-{config.learning_rate}-{config.lora_rank}-{config.lora_alpha}")
+    dir_name = f"ft-{config.policy_model.split('/')[-1]}-{config.max_seq_len}-{config.learning_rate}-{config.lora_rank}-{config.lora_alpha}"
+    OUT_DIR = os.path.join(NET_SCRATCH_PATH, "models", "fine_tuned", "policy", dir_name)
 else:
+    dir_name = f"ft-{config.policy_model.split('/')[-1]}-{config.max_seq_len}-{config.learning_rate}"
     OUT_DIR = os.path.join(NET_SCRATCH_PATH, "models", "fine_tuned", "policy",
                            f"ft-{config.policy_model.split('/')[-1]}-{config.max_seq_len}-{config.learning_rate}")
 os.makedirs(OUT_DIR, exist_ok=True)
@@ -176,7 +177,7 @@ args = TrainingArguments(
     bf16=config.use_bf16,
     fp16=not config.use_bf16,
     gradient_checkpointing=config.gradient_checkpointing,
-    run_name=f"ft-policy-lora-{config.reward_model.split('/')[-1]}-{config.max_seq_len}-{config.learning_rate}-{config.lora_rank}-{config.lora_alpha}",
+    run_name=dir_name,
     report_to=config.report_to,
     remove_unused_columns=False,
     load_best_model_at_end=True,
