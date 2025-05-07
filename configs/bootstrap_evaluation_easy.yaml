@@ -2,7 +2,7 @@ search-mode: "bootstrap"
 log-level: "INFO"
 evaluation: true
 
-save-for-visualization: false
+save-for-visualization: true
 round-number: 2
 solve-only-unsolved: true
 solutions-per-task: 16

@@ -20,7 +20,7 @@ warmup-ratio: 0.03
 logging-steps: 25
 eval-steps: 50
 save-steps: 50
-save-total-limit: 4
+save-total-limit: 3
 gradient-checkpointing: true
 
 report-to: "wandb"

@@ -1,5 +1,5 @@
 search-mode: "mcts"
-log-level: "INFO"
+log-level: "DEBUG"
 
 fine-tuned: true
 
@@ -8,8 +8,11 @@ round-number: 2
 solve-only-unsolved: false
 solutions-per-task: 16
 
-policy-model: "fine_tuned_1.5B"
-max-model-len: 16384
+policy-model: "ft-Qwen2.5-Coder-1.5B-20480-5e-05"
+use_reward_model: true
+reward-model: "ft-Qwen2.5-Coder-1.5B-20480-5e-05"
+max-seq-len: 20480
+dtype: "bfloat16"
 
 
 data-folder: "/home/piroth/rstar-arc/data_sample/very_easy"
@@ -18,7 +21,7 @@ sort-by-length: false
 rotate-example: false
 
 variable-temperature: false
-policy-temperature: 0.3
+policy-temperature: 0.5
 
 save-sft-data: false
 

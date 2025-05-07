@@ -38,7 +38,7 @@ class MCTS(Agent):
     def select_next_step(self, scores: list[float] | None = None, from_root=False) -> None:
         """Process evaluations and select next nodes for expansion."""
         # Process candidate nodes if scores are provided
-        if scores:
+        if scores and all(score is not None for score in scores):
             for candidate_node, score in zip(self.candidate_nodes, scores):
                 # Update node statistics
                 if candidate_node.is_terminal():
