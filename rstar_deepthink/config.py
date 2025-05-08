@@ -40,6 +40,7 @@ class Config:
     reward_model: str = "Qwen/Qwen2.5-Coder-7B-Instruct"  # Reward Model for evaluating steps
     model_initialization_times = {"policy": None, "reward": None}  # Time taken to initialize models
     enforce_eager: bool = False
+    policy_vram_percentage: float = 0.45  # Percentage of VRAM to use for the policy model
 
     use_reward_model: bool = False  # Whether to use the reward model
     fine_tuned: bool = False  # Whether the model is fine-tuned
@@ -191,6 +192,9 @@ class Config:
             self.num_rollouts = 1
         elif self.search_mode in ["mcts", "custom", "bootstrap"]:
             self.beam_width = 1
+
+        if not self.use_reward_model:
+            self.policy_vram_percentage = 0.9
 
     def _load_from_file(self):
         """

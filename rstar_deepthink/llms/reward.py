@@ -224,7 +224,6 @@ class RewardModel:
     def score(self, texts: list[str]) -> list[float]:
         """
         Score a list of texts, returning a scalar reward per text.
-        Uses config.batch_size (-1 for all-at-once) and config.max_seq_len.
         """
 
         if not self.config.use_reward_model:

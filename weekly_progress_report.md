@@ -352,7 +352,9 @@
   - get familiar with how to use the CSCS cluster
 
 - **Work done**:
-  - ??
+  - generated new descriptions
+  - added better way to start slurm jobs
+  - got the fine tuned version basically working (still some kinks to work out with the scoring vram consumption)
 
 - **Issues and Questions**:
   - ??
@@ -363,4 +365,26 @@
 - **Visuals**:
   - 
 
+
+### Week 10 (05.05.2025)
+
+- **Work planned**:
+  - try out CSCS
+  - mask out prompt and task for loss calculation
+  - loss origin
+  - scale down training data
+  - integrate full solution generation and testing into training pipeline
+  - qualitatively analyze outputs of fine-tuned models
+
+- **Work done**:
+  - ??
+
+- **Issues and Questions**:
+  - ??
+
+- **Results**:
+  - ??
+
+- **Visuals**:
+  - 
 

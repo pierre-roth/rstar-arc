@@ -35,6 +35,7 @@ class PolicyModel:
             enforce_eager=self.config.enforce_eager,
             # max_num_seqs=self.config.max_num_seqs,
             # max_num_batched_tokens=self.config.max_num_batched_tokens,
+            gpu_memory_utilization=self.config.policy_vram_percentage,
         )
 
         end = datetime.now()
