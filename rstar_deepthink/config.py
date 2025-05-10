@@ -143,7 +143,7 @@ class Config:
 
     # reward
     reward_value_head_dropout: float = 0.1  # dropout for the value head
-    reward_batch_size: int = 128
+    reward_batch_size: int = 512
 
     def __post_init__(self):
         """

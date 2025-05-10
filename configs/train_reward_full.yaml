@@ -7,10 +7,10 @@ reward-model: "Qwen/Qwen2.5-Coder-1.5B"
 use-bf16: true
 
 full-finetune: true
-reward-value-head-dropout: 0.1
+reward-value-head-dropout: 0.05
 
 learning-rate: 0.00004
-weight_decay: 0.01
+weight_decay: 0.05
 
 per-device-train-batch-size: 1
 per-device-eval-batch-size: 1
