@@ -8,10 +8,10 @@ Everything is driven by rstar_deepthink.Config:
 Multi-GPU training is handled via Accelerate.
 
 Launch with:
-  # 4 GPUs with torchrun
+  # Example: 4 GPUs with torchrun
   torchrun --nproc_per_node 4 train/train_reward.py --config-file configs/train_reward.yaml
 or
-  # via Accelerate
+  # Example: via Accelerate
   accelerate launch train/train_reward.py --config-file configs/train_reward.yaml
 """
 
@@ -21,10 +21,10 @@ import logging
 import os
 import sys
 from functools import partial
-from typing import Any, Sequence
+from typing import Any, Sequence, Dict, List
 
 import torch
-import torch.nn.functional as f
+import torch.nn.functional as F  # Renamed for conventional alias
 import wandb
 from datasets import load_dataset
 from transformers import (
@@ -34,302 +34,394 @@ from transformers import (
     Trainer,
     TrainingArguments,
     set_seed,
+    PreTrainedTokenizerBase,
 )
 
-from train_utils import maybe_peft_wrap
-
+# Ensure project root is in path to import custom modules
+# This assumes the script is in a subdirectory like 'train/'
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from constants import NET_SCRATCH_PATH, SFT_SYSTEM_PROMPT, SFT_IN_BETWEEN_PROMPT
-from rstar_deepthink import Config
-from utils import setup_logging
-from rstar_deepthink.llms.reward import RewardModelModule
-from rstar_deepthink.arc_task import ARCTask
-from rstar_deepthink.arc_task.task_utils import task_to_prompt
+from train_utils import maybe_peft_wrap  # Assuming train_utils.py is in the same directory or accessible
+from constants import NET_SCRATCH_PATH, SFT_SYSTEM_PROMPT, SFT_IN_BETWEEN_PROMPT  # Project-specific constants
+from rstar_deepthink import Config  # Project-specific Config class
+from utils import setup_logging  # Project-specific logging setup
+from rstar_deepthink.llms.reward import RewardModelModule  # The model being trained
+from rstar_deepthink.arc_task import ARCTask  # Project-specific task representation
+from rstar_deepthink.arc_task.task_utils import task_to_prompt  # Utility for task formatting
 
 logger = logging.getLogger(__name__)
 
-config = Config()
-set_seed(config.seed or 42)
-setup_logging(config.numeric_log_level)
+# --- Configuration and Setup ---
+config = Config()  # Load configuration (e.g., from YAML via hydra or argparse)
+set_seed(config.seed or 42)  # Set seed for reproducibility
+setup_logging(config.numeric_log_level)  # Configure logging verbosity
 
+# Define output directory for the trained reward model
+base_model_name = config.reward_model.split('/')[-1]
 if not config.full_finetune:
-    dir_name = f"ft-{config.reward_model.split('/')[-1]}-{config.max_seq_len}-{config.learning_rate}-{config.lora_rank}-{config.lora_alpha}"
-    reward_output_dir = os.path.join(
-        NET_SCRATCH_PATH,
-        "models",
-        "fine_tuned",
-        "reward",
-        dir_name
-    )
+    # Directory name includes LoRA parameters if not full fine-tuning
+    dir_name_parts = [
+        f"ft-{base_model_name}",
+        str(config.max_seq_len),
+        str(config.learning_rate),
+        f"lora_r{config.lora_rank}",
+        f"lora_a{config.lora_alpha}"
+    ]
 else:
-    dir_name = f"ft-{config.reward_model.split('/')[-1]}-{config.max_seq_len}-{config.learning_rate}"
-    reward_output_dir = os.path.join(
-        NET_SCRATCH_PATH,
-        "models",
-        "fine_tuned",
-        "reward",
-        dir_name
-    )
+    # Directory name without LoRA parameters for full fine-tuning
+    dir_name_parts = [
+        f"ft-{base_model_name}",
+        str(config.max_seq_len),
+        str(config.learning_rate)
+    ]
+reward_output_dir = os.path.join(
+    NET_SCRATCH_PATH, "models", "fine_tuned", "reward", "-".join(dir_name_parts)
+)
 os.makedirs(reward_output_dir, exist_ok=True)
+logger.info(f"Reward model output directory: {reward_output_dir}")
 
-# Hardware overview
+# Log hardware overview
 num_gpus = torch.cuda.device_count()
-logger.info("GPUs visible: %d", num_gpus)
+logger.info(f"GPUs visible: {num_gpus}")
+if num_gpus > 0:
+    logger.info(f"Current CUDA device: {torch.cuda.current_device()}")
 
-# Tokenizer
-tok = AutoTokenizer.from_pretrained(config.reward_model, trust_remote_code=True)
-tok.pad_token = tok.pad_token or tok.eos_token
-tok.padding_side = "left"
+# --- Tokenizer ---
+logger.info(f"Loading tokenizer for reward model: {config.reward_model}")
+tok: PreTrainedTokenizerBase = AutoTokenizer.from_pretrained(
+    config.reward_model,
+    trust_remote_code=True
+)
+# Ensure pad_token is set
+if tok.pad_token is None:
+    tok.pad_token = tok.eos_token
+    logger.info(f"Tokenizer pad_token was None, set to eos_token: {tok.eos_token}")
+# Use right-padding so that the final token in each sequence is the last real token
+tok.padding_side = "right"
+logger.info(f"Tokenizer padding side set to: {tok.padding_side}")
 
-# Base model + value head
+# --- Model Initialization ---
+logger.info(f"Initializing base model for reward training: {config.reward_model}")
 dtype = torch.bfloat16 if config.use_bf16 else torch.float16
-base = AutoModelForCausalLM.from_pretrained(
+base_model = AutoModelForCausalLM.from_pretrained(
     config.reward_model,
     torch_dtype=dtype,
     trust_remote_code=True,
 )
 
-base.config.use_cache = False  # disable cache for gradient checkpointing
+# Configure model for training
+base_model.config.use_cache = False  # Disable cache for gradient checkpointing compatibility
+base_model.gradient_checkpointing_enable()  # Enable gradient checkpointing for memory efficiency
+base_model.enable_input_require_grads()  # Enable input gradients, necessary for some PEFT methods
 
-base.gradient_checkpointing_enable()  # enable gradient checkpointing for memory efficiency
+# Wrap base model with LoRA adapters if not full fine-tuning
+peft_wrapped_model = maybe_peft_wrap(base_model, config)  # maybe_peft_wrap handles the config.full_finetune check
 
-base.enable_input_require_grads()  # enable input gradients for LoRA
-
-# Wrap base model with LoRA adapters or full-model fine-tuning as configured
-base = maybe_peft_wrap(base, config)
-
-model = RewardModelModule(base, dropout=config.reward_value_head_dropout)
-
-
-# get rid of sliding-window SPDA warning
-# model.backbone.config.attn_config['attn_impl'] = "flash"
+# Instantiate the RewardModelModule with the (potentially PEFT-wrapped) backbone
+model = RewardModelModule(
+    peft_wrapped_model,
+    dtype=dtype,  # Pass dtype explicitly
+    dropout=config.reward_value_head_dropout
+)
+logger.info("RewardModelModule initialized with backbone and value head.")
 
 
+# --- Data Preprocessing ---
 def preprocess_batch(
-        ex: dict[str, Sequence[Any]], *, max_len: int
-) -> dict[str, Sequence[Any]]:
+        examples: Dict[str, Sequence[Any]], *, tokenizer: PreTrainedTokenizerBase, max_len: int
+) -> Dict[str, List[Any]]:
     """
-    Tokenise a batch of preference pairs.
-
-    *No* EOS token is appended: prefix + completion is *not* a full convo.
+    Tokenizes a batch of preference pairs (chosen and rejected responses).
+    The prompt is constructed from system prompt, task details, and prefix.
+    EOS token is NOT appended here as padding is handled by the collator.
     """
-    out: dict[str, list] = {
+    processed_examples: Dict[str, List[Any]] = {
         "chosen_input_ids": [], "chosen_attention_mask": [],
         "rejected_input_ids": [], "rejected_attention_mask": [],
         "weight": [],
     }
 
-    for j, p, ch, rj, w in zip(
-            ex["task_json"], ex["prefix"], ex["chosen"], ex["rejected"], ex["weight"]
+    for task_json, prefix, chosen_completion, rejected_completion, weight_val in zip(
+            examples["task_json"], examples["prefix"], examples["chosen"], examples["rejected"], examples["weight"]
     ):
-        chosen = tok(SFT_SYSTEM_PROMPT +
-                     task_to_prompt(ARCTask.from_dict(j)) +
-                     SFT_IN_BETWEEN_PROMPT + p + ch, max_length=max_len, truncation=True,
-                     padding=False, add_special_tokens=False)
-        rejected = tok(SFT_SYSTEM_PROMPT +
-                       task_to_prompt(ARCTask.from_dict(j)) +
-                       SFT_IN_BETWEEN_PROMPT + p + rj, max_length=max_len, truncation=True,
-                       padding=False, add_special_tokens=False)
+        task = ARCTask.from_dict(task_json)  # Assuming task_json is a string needing parsing
+        task_prompt_segment = task_to_prompt(task)
 
-        out["chosen_input_ids"].append(chosen["input_ids"])
-        out["chosen_attention_mask"].append(chosen["attention_mask"])
-        out["rejected_input_ids"].append(rejected["input_ids"])
-        out["rejected_attention_mask"].append(rejected["attention_mask"])
-        out["weight"].append(float(w))  # keep as float
-    return out
+        # Construct full prompts
+        # Note: SFT_SYSTEM_PROMPT, SFT_IN_BETWEEN_PROMPT are global constants
+        prompt_base = SFT_SYSTEM_PROMPT + task_prompt_segment + SFT_IN_BETWEEN_PROMPT + prefix
+
+        chosen_text = prompt_base + chosen_completion
+        rejected_text = prompt_base + rejected_completion
+
+        # Tokenize without padding; collator will handle padding
+        chosen_tokens = tokenizer(chosen_text, max_length=max_len, truncation=True, padding=False,
+                                  add_special_tokens=False)
+        rejected_tokens = tokenizer(rejected_text, max_length=max_len, truncation=True, padding=False,
+                                    add_special_tokens=False)
+
+        processed_examples["chosen_input_ids"].append(chosen_tokens["input_ids"])
+        processed_examples["chosen_attention_mask"].append(chosen_tokens["attention_mask"])
+        processed_examples["rejected_input_ids"].append(rejected_tokens["input_ids"])
+        processed_examples["rejected_attention_mask"].append(rejected_tokens["attention_mask"])
+        processed_examples["weight"].append(float(weight_val))
+
+    return processed_examples
 
 
 class PairwiseCollator(DataCollatorWithPadding):
     """
-    Pads chosen & rejected separately, concatenates them, **and** returns
-    a `weight` vector of shape (batch,).
+    Custom data collator for pairwise preference data.
+    It pads chosen and rejected sequences separately before concatenating them
+    into a single batch for the model. It also handles the 'weight' vector.
+    The tokenizer used should have `padding_side="left"`.
     """
 
-    def __call__(self, feats: Sequence[dict[str, Any]]) -> dict[str, torch.Tensor]:
-        chosen, rejected, weights = [], [], []
-        for f in feats:
-            chosen.append(
-                {"input_ids": f["chosen_input_ids"],
-                 "attention_mask": f["chosen_attention_mask"]}
-            )
-            rejected.append(
-                {"input_ids": f["rejected_input_ids"],
-                 "attention_mask": f["rejected_attention_mask"]}
-            )
-            weights.append(f["weight"])
+    def __call__(self, features: Sequence[Dict[str, Any]]) -> Dict[str, torch.Tensor]:
+        # Separate chosen and rejected items to maintain their order for loss calculation
+        chosen_items = [
+            {"input_ids": f["chosen_input_ids"], "attention_mask": f["chosen_attention_mask"]}
+            for f in features
+        ]
+        rejected_items = [
+            {"input_ids": f["rejected_input_ids"], "attention_mask": f["rejected_attention_mask"]}
+            for f in features
+        ]
+        weights = [f["weight"] for f in features]
 
-        # Pad chosen and rejected separately and collate into model inputs
+        # Concatenate chosen and rejected items. The first half of the batch will be 'chosen',
+        # the second half will be 'rejected'. This structure is expected by PairwiseTrainer.
+        all_items_to_pad = chosen_items + rejected_items
+
+        # Pad all items together using the tokenizer's padding settings
         batch = self.tokenizer.pad(
-            chosen + rejected,
+            all_items_to_pad,
             return_tensors="pt",
-            padding=self.padding
+            padding=self.padding,  # e.g., "longest"
+            # max_length=self.max_length, # Optionally enforce max_length at collate time too
+            # truncation=self.truncation, # Optionally truncate at collate time
         )
-        # sample-wise weights for pairwise loss (length B)
+
+        # Add sample-wise weights for the pairwise loss (shape: B)
         batch["weight"] = torch.tensor(weights, dtype=torch.float32)
-        # add dummy labels to ensure Trainer runs prediction and compute_metrics
-        # labels will be ignored by our custom compute_loss
-        batch["labels"] = batch["input_ids"].clone()
+
+        # Add dummy labels. These are required by the Hugging Face Trainer's infrastructure
+        # for running evaluation loops and computing metrics, even if the custom loss
+        # function (compute_loss) doesn't use them directly for gradient calculation.
+        # The content of labels doesn't matter here as long as they have the correct shape.
+        batch["labels"] = batch["input_ids"].clone()  # Or torch.zeros_like(batch["input_ids"])
+
         return dict(batch)
 
 
 class PairwiseTrainer(Trainer):
-    """-log σ(r₊ − r₋) * sample_weight"""
+    """
+    Custom Trainer for pairwise preference loss: L = −log σ(r_chosen − r_rejected) * sample_weight
+    """
 
-    def compute_loss(self, model, inputs, return_outputs: bool = False, **_) -> torch.Tensor | tuple:
+    def compute_loss(self, model, inputs, return_outputs: bool = False, **kwargs) -> torch.Tensor | tuple:
         """
-        Pair-wise preference loss
-
-        For every batch we receive the *chosen* sequence followed by the *rejected*
-        sequence.  The loss is
-
-            L = − log σ(r_chosen − r_rejected) · weight
-
-        where σ is the logistic sigmoid and *weight* is a scalar attached to every
-        pair.  When `return_outputs=True` we hand back the concatenated rewards
-        (first all chosen, then all rejected) so that `Trainer` can feed them to
-        `compute_metrics`.
+        Computes the pairwise preference loss.
+        The input batch is expected to have chosen sequences followed by rejected sequences.
         """
-        # ------------------------------------------------------------------ data
-        weights = inputs.pop("weight")  # shape (B,)
-        input_ids = inputs["input_ids"]  # shape (2B, L)
-        attention_mask = inputs["attention_mask"]  # shape (2B, L)
-        B = input_ids.size(0) // 2
+        # Extract weights and model inputs
+        weights = inputs.pop("weight")  # Shape: (B_train,) where B_train is per-device train batch size
+        # `labels` are also in inputs but ignored by model.forward and this loss.
+        # The model's forward pass will receive input_ids and attention_mask.
 
-        # ------------------------------------------------------------ forward pass
-        rewards = model(input_ids=input_ids,
-                        attention_mask=attention_mask)  # shape (2B,)
-        chosen, rejected = rewards[:B], rewards[B:]  # each (B,)
+        # The `inputs` dict passed to model() should contain 'input_ids' and 'attention_mask'.
+        # `labels` are popped by Trainer if not used by model.forward signature.
+        # If `labels` is still in `inputs` and model.forward doesn't accept it, it might cause an error.
+        # RewardModelModule.forward explicitly accepts `labels=None`.
 
-        # ------------------------------------------------------------------ loss
-        loss_per_pair = -f.logsigmoid(chosen - rejected)  # (B,)
-        loss = (loss_per_pair * weights.to(loss_per_pair.device)).sum() / weights.sum()
+        # input_ids and attention_mask have shape (2 * B_train, L)
+        # The first B_train are chosen, the next B_train are rejected.
+        rewards = model(**inputs)  # Shape: (2 * B_train,)
 
-        # ----------------------------------------------------------- bookkeeping
+        num_pairs = rewards.size(0) // 2
+        chosen_rewards = rewards[:num_pairs]  # Shape: (B_train,)
+        rejected_rewards = rewards[num_pairs:]  # Shape: (B_train,)
+
+        # Compute pairwise loss
+        # Ensure weights are on the same device as the loss terms
+        loss_per_pair = -F.logsigmoid(chosen_rewards - rejected_rewards)  # Shape: (B_train,)
+
+        # Apply sample weights
+        weighted_loss = loss_per_pair * weights.to(loss_per_pair.device)
+
+        # Normalize by sum of weights (or count of non-zero weights) to make loss independent of weight scale
+        # Using sum of weights is common for weighted losses.
+        # If all weights are 1, this is equivalent to .mean().
+        loss = weighted_loss.sum() / weights.sum().clamp(min=1e-6)  # Avoid division by zero if all weights are zero
+
         if return_outputs:
-            # return one value per pair (= r₊ - r₋)
-            preds = (chosen.detach() - rejected.detach())  # shape (B,)
-            return loss, preds
+            # For metric computation, return the difference in rewards (logits for accuracy)
+            # Detach to prevent gradients from flowing back from metric computation.
+            predictions = (chosen_rewards.detach() - rejected_rewards.detach())  # Shape: (B_train,)
+            return loss, predictions  # Trainer expects (loss, outputs) where outputs can be (logits, labels)
 
         return loss
 
 
 def compute_accuracy(eval_preds):
-    diffs = torch.tensor(eval_preds.predictions)  # (N_pairs,)
-    return {"accuracy": (diffs > 0).float().mean().item()}
+    """Computes accuracy: percentage of pairs where chosen > rejected."""
+    # eval_preds.predictions are the (chosen_reward - rejected_reward) differences from PairwiseTrainer
+    reward_differences = torch.tensor(eval_preds.predictions)  # Shape: (N_eval_pairs,)
+    accuracy = (reward_differences > 0).float().mean().item()
+    return {"accuracy": accuracy}
 
 
-# Load and tokenise dataset
-trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
-total = sum(p.numel() for p in model.parameters())
+# --- Dataset Loading and Tokenization ---
+trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+total_params = sum(p.numel() for p in model.parameters())
 logger.info(
-    f"Trainable params: {trainable / 1e6:.1f} M / {total / 1e6:.1f} M ({trainable / total * 100:.2f}%)"
+    f"Trainable params: {trainable_params / 1e6:.2f} M / {total_params / 1e6:.2f} M "
+    f"({trainable_params / total_params * 100:.2f}%)"
 )
 
+# Define paths to training and validation data
+# These paths are assumed to be configured via `config.round_number`
 TRAIN_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{config.round_number}", "reward_dataset_training.jsonl")
 VAL_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{config.round_number}", "reward_dataset_validation.jsonl")
-logger.info(f"Loading preference pairs from {TRAIN_PATH} and {VAL_PATH}")
-raw = load_dataset("json", data_files={"train": TRAIN_PATH, "validation": VAL_PATH})
+logger.info(f"Loading preference pairs from TRAIN: {TRAIN_PATH}, VALIDATION: {VAL_PATH}")
 
-remove_cols = [c for c in ("prefix", "chosen", "rejected") if c in raw["train"].column_names]
-tok_ds = raw.map(
-    partial(preprocess_batch, max_len=config.max_seq_len),
+raw_datasets = load_dataset("json", data_files={"train": TRAIN_PATH, "validation": VAL_PATH})
+
+# Columns to remove after tokenization (original text columns)
+columns_to_remove = [c for c in ("task_json", "prefix", "chosen", "rejected") if
+                     c in raw_datasets["train"].column_names]
+
+# Partial function for preprocessing with fixed tokenizer and max_len
+# Note: `tok` here is the globally defined tokenizer
+preprocess_fn = partial(preprocess_batch, tokenizer=tok, max_len=config.max_seq_len)
+
+logger.info("Tokenizing datasets...")
+tokenized_datasets = raw_datasets.map(
+    preprocess_fn,
     batched=True,
-    remove_columns=remove_cols,
-    num_proc=max(1, os.cpu_count() // 2),
+    remove_columns=columns_to_remove,
+    num_proc=max(1, os.cpu_count() // 2 if os.cpu_count() else 1),  # Ensure at least 1 proc
+    desc="Running tokenizer on dataset",
 )
-logger.info(f"Dataset ready – {len(tok_ds['train'])} train / {len(tok_ds['validation'])} validation examples")
+logger.info(f"Dataset tokenization complete. Train examples: {len(tokenized_datasets['train'])}, "
+            f"Validation examples: {len(tokenized_datasets['validation'])}")
 
-# TrainingArguments
-args = TrainingArguments(
+# --- Training Arguments ---
+training_args = TrainingArguments(
     output_dir=reward_output_dir,
-    # batching
+    # Batching
     per_device_train_batch_size=config.per_device_train_batch_size,
     per_device_eval_batch_size=config.per_device_eval_batch_size,
     gradient_accumulation_steps=config.gradient_accumulation_steps,
-    # optimisation
+    # Optimization
     num_train_epochs=config.num_train_epochs,
     learning_rate=config.learning_rate,
     lr_scheduler_type=config.lr_scheduler_type,
     warmup_ratio=config.warmup_ratio,
-    # logging / eval / save
+    # Logging, Evaluation, Saving
+    logging_dir=os.path.join(reward_output_dir, "logs"),  # Specific logging directory
+    logging_strategy="steps",
     logging_steps=config.logging_steps,
     eval_strategy="steps",
     eval_steps=config.eval_steps,
-    save_strategy="steps",
+    save_strategy="steps",  # Changed from "save_strategy"
     save_steps=config.save_steps,
     save_total_limit=config.save_total_limit,
-    save_safetensors=False,
-    # precision
+    save_safetensors=False,  # As per original, can be True for .safetensors format
+    # Precision
     bf16=config.use_bf16,
-    fp16=not config.use_bf16,
-    # distributed: handled via Accelerate launch
-    # misc
+    fp16=not config.use_bf16,  # Only use fp16 if not bf16 and CUDA available
+    # Distributed Training (handled by Accelerate launcher)
+    # Miscellaneous
     seed=config.seed,
-    run_name=dir_name,
-    report_to=config.report_to,
-    remove_unused_columns=False,
+    run_name="-".join(dir_name_parts),  # Use the last part of dir_name (model name + params) as run name
+    report_to=config.report_to if config.report_to else "none",  # Default to "none" if not set
+    remove_unused_columns=False,  # Important: 'weight' column is used by collator/trainer
     load_best_model_at_end=True,
-    metric_for_best_model="eval_accuracy",
+    metric_for_best_model="eval_accuracy",  # Ensure this metric is returned by compute_metrics
     greater_is_better=True,
+    # ddp_find_unused_parameters=False, # Optionally set if facing DDP issues with PEFT
+    weight_decay=config.weight_decay
 )
 
-# ─────────────────── wandb (lightweight) ───────────────────
-if config.report_to == "wandb":
-    os.environ["WANDB_SILENT"] = "true"
-    os.environ["WANDB_CONSOLE"] = "off"
+# --- Weights & Biases Integration ---
+if training_args.report_to == "wandb":
+    logger.info("Initializing Weights & Biases for experiment tracking.")
+    os.environ["WANDB_SILENT"] = "true"  # Suppress W&B informational messages
+    # os.environ["WANDB_CONSOLE"] = "off" # Can be useful for cleaner logs
     wandb.init(
         project=config.wandb_project,
         entity=config.wandb_entity,
-        name=args.run_name,
-        config={
-            "lr": args.learning_rate,
-            "batch_size": args.per_device_train_batch_size * args.gradient_accumulation_steps,
-            "epochs": args.num_train_epochs,
-            "lora_r": config.lora_rank,
-            "lora_alpha": config.lora_alpha,
-            "train_samples": len(tok_ds["train"]),
-            "val_samples": len(tok_ds["validation"]),
+        name=training_args.run_name,  # Use run_name from TrainingArguments
+        config={  # Log key hyperparameters
+            "learning_rate": training_args.learning_rate,
+            "train_batch_size": training_args.per_device_train_batch_size * \
+                                training_args.gradient_accumulation_steps * \
+                                (num_gpus if num_gpus > 0 else 1),
+            "eval_batch_size": training_args.per_device_eval_batch_size * (num_gpus if num_gpus > 0 else 1),
+            "num_epochs": training_args.num_train_epochs,
+            "lora_rank": config.lora_rank if not config.full_finetune else "N/A",
+            "lora_alpha": config.lora_alpha if not config.full_finetune else "N/A",
             "max_seq_len": config.max_seq_len,
+            "base_model": config.reward_model,
+            "output_dir": reward_output_dir,
+            "train_samples": len(tokenized_datasets["train"]),
+            "val_samples": len(tokenized_datasets["validation"]),
         }
     )
 
-# Train
+# --- Trainer Initialization and Execution ---
 trainer = PairwiseTrainer(
     model=model,
-    args=args,
-    train_dataset=tok_ds["train"],
-    eval_dataset=tok_ds["validation"],
-    processing_class=tok,
-    data_collator=PairwiseCollator(tokenizer=tok, padding="longest"),
-    compute_metrics=compute_accuracy,
+    args=training_args,
+    train_dataset=tokenized_datasets["train"],
+    eval_dataset=tokenized_datasets["validation"],
+    # tokenizer=tok, # Pass tokenizer if needed by Trainer internal (e.g. for generation during eval)
+    # Not strictly needed if only using compute_metrics and custom collator handles all tokenization.
+    data_collator=PairwiseCollator(tokenizer=tok, padding="longest"),  # Use the custom collator
+    compute_metrics=compute_accuracy,  # Function to compute metrics during evaluation
 )
 
-logger.info(f"Starting training; evaluation every {config.eval_steps} steps")
-train_out = trainer.train()
-trainer.save_metrics("train", train_out.metrics)
-if config.report_to == "wandb":
-    # Log final training metrics
-    wandb.log({f"train/{k}": v for k, v in train_out.metrics.items()})
+logger.info(
+    f"Starting training. Evaluation every {training_args.eval_steps} steps. Logging every {training_args.logging_steps} steps.")
+train_result = trainer.train()
+trainer.save_metrics("train", train_result.metrics)  # Save final training metrics
 
-logger.info(f"Saving LoRA adapter and value head to {reward_output_dir}")
-# Save LoRA adapter from the backbone (PeftModel) and the reward head
+if training_args.report_to == "wandb":
+    wandb.log({f"train/{k}": v for k, v in train_result.metrics.items()})  # Log final train metrics to W&B
+
+logger.info(f"Training complete. Saving model components to {reward_output_dir}")
+
+# Save the final model (best model if load_best_model_at_end=True)
+# Trainer.save_model() saves the full state, including adapter if PEFT is used.
+# For RewardModelModule, we need to save backbone (potentially PEFT) and v_head separately.
+
+# If using PEFT, backbone is a PeftModel. save_pretrained saves adapter config and weights.
+# If not PEFT, backbone is a PreTrainedModel. save_pretrained saves the full model.
 model.backbone.save_pretrained(reward_output_dir)
+logger.info(f"Backbone (adapter or full model) saved to {reward_output_dir}")
 
-# Save the value head separately
-os.makedirs(reward_output_dir, exist_ok=True)
-torch.save(model.v_head.state_dict(), os.path.join(reward_output_dir, "v_head.bin"))
+# Save the value head state dictionary
+v_head_path = os.path.join(reward_output_dir, "v_head.bin")
+torch.save(model.v_head.state_dict(), v_head_path)
+logger.info(f"Value head saved to {v_head_path}")
 
-# Also save tokenizer config for scoring convenience
+# Also save the tokenizer for convenience during inference
 model.tokenizer.save_pretrained(reward_output_dir)
+logger.info(f"Tokenizer saved to {reward_output_dir}")
 
-eval_metrics = trainer.evaluate(eval_dataset=tok_ds["validation"])
-trainer.save_metrics("eval", eval_metrics)
-if config.report_to == "wandb":
-    # Log final evaluation metrics
-    wandb.log({"final_eval/accuracy": eval_metrics.get("eval_accuracy")})
-    wandb.finish()
+# --- Final Evaluation ---
+logger.info("Performing final evaluation on the validation set...")
+eval_metrics = trainer.evaluate(eval_dataset=tokenized_datasets["validation"])
+trainer.save_metrics("eval", eval_metrics)  # Save final evaluation metrics
 
-logger.info(f"Done – final accuracy {eval_metrics.get('eval_accuracy', 0.0):.4f}")
+final_accuracy = eval_metrics.get("eval_accuracy", 0.0)
+logger.info(f"Final evaluation complete. Accuracy: {final_accuracy:.4f}")
+
+if training_args.report_to == "wandb":
+    wandb.log({"final_eval/accuracy": final_accuracy})  # Log final eval accuracy
+    wandb.finish()  # Close W&B run
+
+logger.info(f"Script finished. Model and metrics saved in {reward_output_dir}")

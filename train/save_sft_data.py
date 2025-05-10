@@ -72,14 +72,9 @@ def _compute_final_outcomes(nodes: list[Node]):
 
     # Find root node(s) (those without a parent)
     root_nodes = [node for node in nodes if node.parent is None]
-    if not root_nodes and nodes:  # Fallback if parent links weren't set correctly
-        root_nodes = [nodes[0]]
-        logger.warning("Could not definitively find root node(s), starting DFS from the first node.")
+    root = root_nodes[0]
 
-    # Start DFS from root(s)
-    for root in root_nodes:
-        logger.debug(f"Starting outcome computation DFS from root: {root.tag}")
-        dfs(root)
+    dfs(root)
 
 
 def _extract_solutions_from_list(nodes: list[Node], config: Config) -> list[dict]:
@@ -111,7 +106,12 @@ def _extract_solutions_from_list(nodes: list[Node], config: Config) -> list[dict
     return solutions
 
 
-def _extract_solutions_from_subtree(node: Node, config: Config) -> list[dict]:
+def avg_q_value(node: Node):
+    q_values = node.collect_metadata()["q_values"]
+    return sum(q_values) / len(q_values)
+
+
+def _extract_valid_terminal_nodes_from_subtree(node: Node, config: Config) -> list[Node]:
     """
     Extracts valid solutions from a subtree rooted at the given node.
 
@@ -122,19 +122,42 @@ def _extract_solutions_from_subtree(node: Node, config: Config) -> list[dict]:
     Returns:
         A list of dictionaries, each representing a valid solution.
     """
-    if not node.is_valid():
-        return []
 
     # If it's a terminal node, check if it's a valid solution
-    if node.is_terminal() and _is_correct_final_solution(node):
-        return _extract_solutions_from_list([node], config)
+    if node.is_terminal():
+        return [node]
 
     # Otherwise, recursively check children
-    solutions = []
+    nodes = []
     for child in node.children:
-        solutions.extend(_extract_solutions_from_subtree(child, config))
+        nodes.extend(_extract_valid_terminal_nodes_from_subtree(child, config))
 
-    return solutions
+    return nodes
+
+
+def get_solution(node: Node, best: bool, config: Config) -> Node:
+    """
+    Walks down the MCTS tree to find the best or worst node based on the `best` flag.
+
+    Args:
+        node: The starting node.
+        best: If True, find the best node; if False, find the worst node.
+        config: The configuration object.
+
+    Returns:
+        The best or worst node found.
+    """
+    candidate_nodes = _extract_valid_terminal_nodes_from_subtree(node, config)
+
+    if best:
+        potential_nodes = [n for n in candidate_nodes if _is_correct_final_solution(n)]
+        potential_nodes.sort(key=avg_q_value, reverse=True)
+        return potential_nodes[0] if potential_nodes else None
+    else:
+        potential_nodes = [n for n in candidate_nodes if not _is_correct_final_solution(n)]
+        potential_nodes.sort(key=avg_q_value, reverse=False)
+        potential_nodes.sort(key=lambda n: n.is_valid(), reverse=True)
+        return potential_nodes[0] if potential_nodes else None
 
 
 # --- Preference Pair Extraction ---
@@ -153,6 +176,7 @@ def _extract_preference_pairs(nodes: list[Node], config: Config) -> list[dict]:
     task_name = nodes[0].task.name
     preference_pairs = []
 
+    ### prefix trace preference pairs ###
     # Iterate through nodes to find decision points
     for node in nodes:
         if not node.is_valid() or not node.children:  # Skip leaves
@@ -176,25 +200,44 @@ def _extract_preference_pairs(nodes: list[Node], config: Config) -> list[dict]:
         chosen_nodes = chosen_candidates[:num_pairs_to_select]
         rejected_nodes = rejected_candidates[:num_pairs_to_select]
 
+        # aim for N^2 pairs
+        if len(chosen_nodes) == 1:
+            rejected_nodes = rejected_candidates[:num_pairs_to_select**2]
+        if len(rejected_nodes) == 1:
+            chosen_nodes = chosen_candidates[:num_pairs_to_select**2]
+
         # Reconstruct the prefix (only code up to the split point)
         prefix_code = node.collect_code()
 
         # Create pairs
         for chosen_node in chosen_nodes:
             for rejected_node in rejected_nodes:
-                # Basic check: ensure chosen Q > rejected Q
-                if chosen_node.q_value() > rejected_node.q_value() + config.min_step_margin:
+                # the q values are at least min_step_margin apart
+                if chosen_node.q_value() > rejected_node.q_value():
                     # Extract solutions from the subtree of the chosen node
-                    solutions = _extract_solutions_from_subtree(chosen_node, config)
+                    solution_nodes = _extract_valid_terminal_nodes_from_subtree(chosen_node, config)
+
+                    solution_nodes = [node for node in solution_nodes if _is_correct_final_solution(node)]
+
+                    solution_nodes.sort(key=avg_q_value, reverse=True)
+
+                    solution_nodes = solution_nodes[:config.solution_per_pair]
+
+                    solutions = _extract_solutions_from_list(solution_nodes, config)
+
+                    chosen_end_node = get_solution(chosen_node, True, config)
+                    rejected_end_node = get_solution(rejected_node, False, config)
 
                     preference_pair_data = {
                         "task_name": task_name,
-                        "prefix": prefix_code,  # Prompt + code up to the split point
+                        "prefix": prefix_code,  # prefix code
                         "chosen": chosen_node.state['code'],  # The chosen step's code
                         "rejected": rejected_node.state['code'],  # The rejected step's code
                         "solutions": solutions,
+
                         # complete solutions for augmentation (at least one must solve the augmented task)
                         "metadata": {
+                            "full_trace": False,
                             "chosen_q": chosen_node.q_value(),
                             "rejected_q": rejected_node.q_value(),
                             "chosen_tag": chosen_node.tag,
@@ -206,10 +249,73 @@ def _extract_preference_pairs(nodes: list[Node], config: Config) -> list[dict]:
                             "rejected_final_wrong": rejected_node.final_wrong,
                             "prefix_temperature": node.temperature,
                             "chosen_temperature": chosen_node.temperature,
-                            "rejected_temperature": rejected_node.temperature
+                            "rejected_temperature": rejected_node.temperature,
+                            "chosen_count": len(chosen_candidates),
+                            "rejected_count": len(rejected_candidates),
+
+                            "chosen_end_node": chosen_end_node.collect_code(),
+                            "rejected_end_node": rejected_end_node.collect_code(),
+                            "chosen_avg_q": sum(chosen_end_node.collect_metadata()["q_values"]) / len(chosen_end_node.collect_metadata()["q_values"]),
+                            "rejected_avg_q": sum(rejected_end_node.collect_metadata()["q_values"]) / len(rejected_end_node.collect_metadata()["q_values"]),
                         }
                     }
                     preference_pairs.append(preference_pair_data)
+
+    ### full trace preference pairs ###
+    # find root
+    root_nodes = [node for node in nodes if node.parent is None]
+    root = root_nodes[0]
+
+    # add full trace preference pairs
+    incorrect_solutions = [node for node in nodes if node.is_terminal() and node.is_valid() and not _is_correct_final_solution(node)]
+    correct_solutions = [node for node in nodes if node.is_terminal() and node.is_valid() and _is_correct_final_solution(node)]
+
+    if not incorrect_solutions or not correct_solutions:
+        return preference_pairs
+
+    incorrect_solutions.sort(key=avg_q_value, reverse=False)
+    correct_solutions.sort(key=avg_q_value, reverse=True)
+
+    # Select top N (e.g., N=3 as per paper/code)
+    num_pairs_to_select = 3
+    chosen_nodes = correct_solutions[:num_pairs_to_select]
+    rejected_nodes = incorrect_solutions[:num_pairs_to_select]
+
+    if len(chosen_nodes) == 1:
+        rejected_nodes = incorrect_solutions[:num_pairs_to_select ** 2]
+    if len(rejected_nodes) == 1:
+        chosen_nodes = correct_solutions[:num_pairs_to_select ** 2]
+
+    prefix_code = ""
+
+    for chosen_node in chosen_nodes:
+        for rejected_node in rejected_nodes:
+            preference_pair_data = {
+                "task_name": task_name,
+                "prefix": prefix_code,  # code up to the split point
+                "chosen": chosen_node.collect_code(),  # The chosen step's code
+                "rejected": rejected_node.collect_code(),  # The rejected step's code
+                "solutions": _extract_solutions_from_list([chosen_node], config),
+                # complete solutions for augmentation (at least one must solve the augmented task)
+                "metadata": {
+                    "full_trace": True,
+                    "chosen_q": chosen_node.q_value(),
+                    "rejected_q": rejected_node.q_value(),
+                    "chosen_tag": chosen_node.tag,
+                    "rejected_tag": rejected_node.tag,
+                    "parent_tag": root.tag,
+                    "prefix_final_correct": root.final_correct,
+                    "prefix_final_wrong": root.final_wrong,
+                    "chosen_final_correct": chosen_node.final_correct,
+                    "rejected_final_wrong": rejected_node.final_wrong,
+                    "prefix_temperature": 0,
+                    "chosen_temperature": chosen_node.temperature,
+                    "rejected_temperature": rejected_node.temperature,
+                    "chosen_count": len(chosen_nodes),
+                    "rejected_count": len(rejected_nodes)
+                }
+            }
+            preference_pairs.append(preference_pair_data)
 
     return preference_pairs
 

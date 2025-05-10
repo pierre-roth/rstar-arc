@@ -173,10 +173,14 @@ def main(config: Config):
                 if not line.strip():
                     continue
                 try:
-                    data = json.loads(line)
-                    task_name = data.get("task_name")
+                    pair = json.loads(line)
+
+                    if not pair_valid(pair, config):
+                        continue
+
+                    task_name = pair.get("task_name")
                     if task_name and task_name in task_name_to_path:
-                        pairs_per_task[task_name].append(data)
+                        pairs_per_task[task_name].append(pair)
                 except json.JSONDecodeError:
                     logger.warning(f"Skipping invalid JSON in cleaned file line {line_num + 1}: {line.strip()}")
     except FileNotFoundError:

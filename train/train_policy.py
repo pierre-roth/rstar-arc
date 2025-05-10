@@ -95,20 +95,55 @@ logger.info("Trainable params: %.1f M / %.1f M (%.2f%%)", trainable / 1e6, total
 
 
 # ─────────────────── preprocessing ───────────────────
-def preprocess(batch):
-    texts = [
-        SFT_SYSTEM_PROMPT +
-        task_to_prompt(ARCTask.from_dict(j)) +
-        SFT_IN_BETWEEN_PROMPT + sol + tok.eos_token
-        for j, sol in zip(batch["task_json"], batch["solution"])
-    ]
-    model_inp = tok(
-        texts, max_length=config.max_seq_len,
-        truncation=True, padding="max_length"
+def preprocess_for_completion_only(batch):
+    """
+    Preprocesses the batch to train the model only on completing the solution, given the prompt.
+    The prompt tokens in the labels will be masked.
+    """
+    prompts = []
+    full_texts = []
+
+    # Construct prompts and full texts
+    for task_json, solution in zip(batch["task_json"], batch["solution"]):
+        # 1. Construct the prompt part
+        prompt_text = (
+                SFT_SYSTEM_PROMPT +
+                task_to_prompt(ARCTask.from_dict(task_json)) +
+                SFT_IN_BETWEEN_PROMPT
+        )
+        prompts.append(prompt_text)
+
+        # 2. Construct the full text (prompt + solution + eos)
+        full_text = prompt_text + solution + tok.eos_token
+        full_texts.append(full_text)
+
+    # 3. Tokenize the full texts
+    model_inputs = tok(
+        full_texts,
+        max_length=config.max_seq_len,
+        truncation=True,
+        padding="max_length",  # Pad to max_length for consistent tensor shapes
+        return_attention_mask=True  # Ensure attention_mask is returned
     )
-    model_inp["labels"] = model_inp["input_ids"].copy()
-    model_inp["weight"] = [float(w) for w in batch["weight"]]
-    return model_inp
+
+    # 4. Create labels and mask the prompt part
+    labels = []
+    for i in range(len(full_texts)):
+        prompt_token_ids = tok(prompts[i], add_special_tokens=False).input_ids
+        prompt_length = len(prompt_token_ids)
+
+        current_input_ids = model_inputs["input_ids"][i]
+        current_labels = list(current_input_ids)
+
+        for j in range(len(current_labels)):
+            if j < prompt_length:
+                current_labels[j] = -100
+
+        labels.append(current_labels)
+
+    model_inputs["labels"] = labels
+    model_inputs["weight"] = [float(w) for w in batch["weight"]]
+    return model_inputs
 
 
 logger.info("Loading SFT dataset …")
@@ -119,7 +154,8 @@ dataset = load_dataset(
 )
 dataset["train"] = dataset["train"].shuffle(seed=42)
 tok_ds = dataset.map(
-    preprocess, batched=True,
+    preprocess_for_completion_only,
+    batched=True,
     remove_columns=[c for c in dataset["train"].column_names if c != "weight"],
     num_proc=max(1, os.cpu_count() // 2),
 )

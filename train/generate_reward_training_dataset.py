@@ -37,6 +37,7 @@ def main(config: Config):
     # --- Pass 1: Calculate number of output entries per original preference pair ---
     logger.info(f"Calculating weights: reading {augmented_file_path} to count entries per pair...")
     total_output_entries_per_pair: dict[int, int] = {}
+    total_output_entries_per_task: dict[str, int] = {}
 
     with open(augmented_file_path, 'r', encoding='utf-8') as infile:
         for line_num, line in enumerate(infile):
@@ -56,6 +57,7 @@ def main(config: Config):
             # Total output entries = one per complete chunk + one full-task entry
             num_complete_chunks = len(augmented_examples) // chunk_size if chunk_size > 0 else 0
             total_output_entries_per_pair[line_num] = num_complete_chunks + 1
+            total_output_entries_per_task[original_task_name] = total_output_entries_per_task.get(original_task_name, 0) + num_complete_chunks + 1
 
     # --- Clear Output File ---
     with open(dataset_file_path, 'w') as _:
@@ -82,10 +84,11 @@ def main(config: Config):
 
             augmented_examples = data.get("examples")
 
-            # --- Compute weight so that all samples from one original pair sum to 1 ---
-            # Use line index of the augmented file to key the count
-            total_entries = total_output_entries_per_pair.get(line_num, 1)
-            weight = 1.0 / total_entries
+            # total_entries = total_output_entries_per_pair.get(line_num, 1)
+            total_entries_per_task = total_output_entries_per_task.get(original_task_name, 1)
+
+            # weight = 1.0 / total_entries
+            weight = 1.0 / total_entries_per_task
 
             # --- Load Original Task Info Again for Chunk Size ---
             original_task_path = task_name_to_path.get(original_task_name)

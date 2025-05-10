@@ -46,22 +46,42 @@ def main(config: Config):
     results_batch_to_write = []
     output_entries = 0
 
+    total_output_entries_per_task: dict[str, int] = {}
+
     with open(preference_pairs_file_path, 'r', encoding='utf-8') as infile:
         for line_num, line in enumerate(infile):
             if not line.strip():
                 continue
 
-            data = json.loads(line)
+            pair = json.loads(line)
 
-            task_name = data.get("task_name")
+            if not pair_valid(pair, config):
+                continue
+
+            task_name = pair.get("task_name")
+
+            total_output_entries_per_task[task_name] = total_output_entries_per_task.get(task_name, 0) + 1
+
+    with open(preference_pairs_file_path, 'r', encoding='utf-8') as infile:
+        for line_num, line in enumerate(infile):
+            if not line.strip():
+                continue
+
+            pair = json.loads(line)
+
+            if not pair_valid(pair, config):
+                continue
+
+            task_name = pair.get("task_name")
             task_path = task_name_to_path.get(task_name)
             task_json = load_json_file(task_path)
 
-            prefix = data.get("prefix")
-            chosen = data.get("chosen")
-            rejected = data.get("rejected")
+            prefix = pair.get("prefix")
+            chosen = pair.get("chosen")
+            rejected = pair.get("rejected")
 
-            weight = 1
+            # weight = 1.0
+            weight = 1.0 / total_output_entries_per_task[task_name]
 
             output_data = {
                 "task_name": task_name,

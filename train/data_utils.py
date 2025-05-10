@@ -228,3 +228,15 @@ def get_rearc_verifier(task_name: str) -> Optional[Callable]:
     """Gets the reARC verifier function for a given task name."""
     verifier_name = f"verify_{task_name}"
     return getattr(verifiers, verifier_name, None)
+
+
+def pair_valid(pair: dict[str, Any], config) -> bool:
+    """Checks if a reARC pair is valid."""
+    if not pair.get("metadata", {}).get("chosen_q") or not pair.get("metadata", {}).get("rejected_q"):
+        return False
+    elif not pair["metadata"]["chosen_q"] > pair["metadata"]["rejected_q"] + config.min_step_margin:
+        return False
+
+    return True
+
+

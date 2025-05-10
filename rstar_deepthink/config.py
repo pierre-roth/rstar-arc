@@ -29,6 +29,7 @@ class Config:
     save_for_visualization: bool = True  # Whether to visualize the reasoning steps
     solve_only_unsolved: bool = False  # Whether to only solve unsolved tasks
     solutions_per_task: int = None  # Bound the number of solutions (that pass training examples) to find for each task (None means as many as possible)
+    solution_per_pair: int = 4  # Number of complete solutions to store for each preference pair
     save_sft_data: bool = True  # Whether to save SFT data
 
     num_examples: int = -1  # Number of examples to use for training (default: all)
@@ -142,7 +143,7 @@ class Config:
 
     # reward
     reward_value_head_dropout: float = 0.1  # dropout for the value head
-    reward_batch_size: int = 1024
+    reward_batch_size: int = 128
 
     def __post_init__(self):
         """
