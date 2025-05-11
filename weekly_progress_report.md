@@ -377,7 +377,8 @@
   - qualitatively analyze outputs of fine-tuned models
 
 - **Work done**:
-  - ??
+  - added completion-only logic to policy model training (reward model unaffected because it works very differently)
+  - 
 
 - **Issues and Questions**:
   - ??

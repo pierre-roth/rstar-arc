@@ -337,7 +337,7 @@ training_args = TrainingArguments(
     # Miscellaneous
     seed=config.seed,
     run_name="-".join(dir_name_parts),  # Use the last part of dir_name (model name + params) as run name
-    report_to=config.report_to if config.report_to else "none",  # Default to "none" if not set
+    report_to=config.report_to,  # Default to "none" if not set
     remove_unused_columns=False,  # Important: 'weight' column is used by collator/trainer
     load_best_model_at_end=True,
     metric_for_best_model="eval_accuracy",  # Ensure this metric is returned by compute_metrics
@@ -347,7 +347,7 @@ training_args = TrainingArguments(
 )
 
 # --- Weights & Biases Integration ---
-if training_args.report_to == "wandb":
+if config.report_to == "wandb":
     logger.info("Initializing Weights & Biases for experiment tracking.")
     os.environ["WANDB_SILENT"] = "true"  # Suppress W&B informational messages
     # os.environ["WANDB_CONSOLE"] = "off" # Can be useful for cleaner logs
@@ -389,7 +389,7 @@ logger.info(
 train_result = trainer.train()
 trainer.save_metrics("train", train_result.metrics)  # Save final training metrics
 
-if training_args.report_to == "wandb":
+if config.report_to == "wandb":
     wandb.log({f"train/{k}": v for k, v in train_result.metrics.items()})  # Log final train metrics to W&B
 
 logger.info(f"Training complete. Saving model components to {reward_output_dir}")
@@ -420,7 +420,7 @@ trainer.save_metrics("eval", eval_metrics)  # Save final evaluation metrics
 final_accuracy = eval_metrics.get("eval_accuracy", 0.0)
 logger.info(f"Final evaluation complete. Accuracy: {final_accuracy:.4f}")
 
-if training_args.report_to == "wandb":
+if config.report_to == "wandb":
     wandb.log({"final_eval/accuracy": final_accuracy})  # Log final eval accuracy
     wandb.finish()  # Close W&B run
 
