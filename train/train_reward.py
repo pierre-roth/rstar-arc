@@ -53,34 +53,36 @@ from rstar_deepthink.arc_task.task_utils import task_to_prompt  # Utility for ta
 
 logger = logging.getLogger(__name__)
 
-# --- Configuration and Setup ---
+# ------------------- configuration and setup -------------------
 config = Config()  # Load configuration (e.g., from YAML via hydra or argparse)
 set_seed(config.seed or 42)  # Set seed for reproducibility
 setup_logging(config.numeric_log_level)  # Configure logging verbosity
 
-# Define output directory for the trained reward model
 base_model_name = config.reward_model.split('/')[-1]
+
 if not config.full_finetune:
-    # Directory name includes LoRA parameters if not full fine-tuning
     dir_name_parts = [
         f"ft-{base_model_name}",
         str(config.max_seq_len),
         str(config.learning_rate),
         f"lora_r{config.lora_rank}",
-        f"lora_a{config.lora_alpha}"
+        f"lora_a{config.lora_alpha}",
     ]
 else:
-    # Directory name without LoRA parameters for full fine-tuning
     dir_name_parts = [
         f"ft-{base_model_name}",
         str(config.max_seq_len),
-        str(config.learning_rate)
+        str(config.learning_rate),
     ]
-reward_output_dir = os.path.join(
+
+OUT_DIR = os.path.join(
     NET_SCRATCH_PATH, "models", "fine_tuned", "reward", "-".join(dir_name_parts)
 )
-os.makedirs(reward_output_dir, exist_ok=True)
-logger.info(f"Reward model output directory: {reward_output_dir}")
+os.makedirs(OUT_DIR, exist_ok=True)
+logger.info(f"Reward model output directory: {OUT_DIR}")
+
+# A more explicit run name for logging / experiment tracking.
+RUN_NAME = f"reward-{'-'.join(dir_name_parts)}"
 
 # Log hardware overview
 num_gpus = torch.cuda.device_count()
@@ -88,7 +90,7 @@ logger.info(f"GPUs visible: {num_gpus}")
 if num_gpus > 0:
     logger.info(f"Current CUDA device: {torch.cuda.current_device()}")
 
-# --- Tokenizer ---
+# ------------------- tokenizer -------------------
 logger.info(f"Loading tokenizer for reward model: {config.reward_model}")
 tok: PreTrainedTokenizerBase = AutoTokenizer.from_pretrained(
     config.reward_model,
@@ -102,7 +104,7 @@ if tok.pad_token is None:
 tok.padding_side = "right"
 logger.info(f"Tokenizer padding side set to: {tok.padding_side}")
 
-# --- Model Initialization ---
+# ------------------- model initialization -------------------
 logger.info(f"Initializing base model for reward training: {config.reward_model}")
 dtype = torch.bfloat16 if config.use_bf16 else torch.float16
 base_model = AutoModelForCausalLM.from_pretrained(
@@ -128,8 +130,10 @@ model = RewardModelModule(
 logger.info("RewardModelModule initialized with backbone and value head.")
 
 
-# --- Data Preprocessing ---
-def preprocess_batch(
+# ------------------- preprocessing -------------------
+
+
+def preprocess_for_pairwise_pref(
         examples: Dict[str, Sequence[Any]], *, tokenizer: PreTrainedTokenizerBase, max_len: int
 ) -> Dict[str, List[Any]]:
     """
@@ -273,7 +277,7 @@ def compute_accuracy(eval_preds):
     return {"accuracy": accuracy}
 
 
-# --- Dataset Loading and Tokenization ---
+# ------------------- dataset loading and tokenization -------------------
 trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
 total_params = sum(p.numel() for p in model.parameters())
 logger.info(
@@ -295,7 +299,7 @@ columns_to_remove = [c for c in ("task_json", "prefix", "chosen", "rejected") if
 
 # Partial function for preprocessing with fixed tokenizer and max_len
 # Note: `tok` here is the globally defined tokenizer
-preprocess_fn = partial(preprocess_batch, tokenizer=tok, max_len=config.max_seq_len)
+preprocess_fn = partial(preprocess_for_pairwise_pref, tokenizer=tok, max_len=config.max_seq_len)
 
 logger.info("Tokenizing datasets...")
 tokenized_datasets = raw_datasets.map(
@@ -308,9 +312,9 @@ tokenized_datasets = raw_datasets.map(
 logger.info(f"Dataset tokenization complete. Train examples: {len(tokenized_datasets['train'])}, "
             f"Validation examples: {len(tokenized_datasets['validation'])}")
 
-# --- Training Arguments ---
+# ------------------- training args -------------------
 training_args = TrainingArguments(
-    output_dir=reward_output_dir,
+    output_dir=OUT_DIR,
     # Batching
     per_device_train_batch_size=config.per_device_train_batch_size,
     per_device_eval_batch_size=config.per_device_eval_batch_size,
@@ -321,7 +325,7 @@ training_args = TrainingArguments(
     lr_scheduler_type=config.lr_scheduler_type,
     warmup_ratio=config.warmup_ratio,
     # Logging, Evaluation, Saving
-    logging_dir=os.path.join(reward_output_dir, "logs"),  # Specific logging directory
+    logging_dir=os.path.join(OUT_DIR, "logs"),  # Specific logging directory
     logging_strategy="steps",
     logging_steps=config.logging_steps,
     eval_strategy="steps",
@@ -336,7 +340,7 @@ training_args = TrainingArguments(
     # Distributed Training (handled by Accelerate launcher)
     # Miscellaneous
     seed=config.seed,
-    run_name="-".join(dir_name_parts),  # Use the last part of dir_name (model name + params) as run name
+    run_name=RUN_NAME,  # Explicit run name with 'reward-' prefix
     report_to=config.report_to,  # Default to "none" if not set
     remove_unused_columns=False,  # Important: 'weight' column is used by collator/trainer
     load_best_model_at_end=True,
@@ -346,11 +350,11 @@ training_args = TrainingArguments(
     weight_decay=config.weight_decay
 )
 
-# --- Weights & Biases Integration ---
+# ------------------- weights & biases integration -------------------
 if config.report_to == "wandb":
     logger.info("Initializing Weights & Biases for experiment tracking.")
     os.environ["WANDB_SILENT"] = "true"  # Suppress W&B informational messages
-    # os.environ["WANDB_CONSOLE"] = "off" # Can be useful for cleaner logs
+    os.environ["WANDB_CONSOLE"] = "off"   # Hide live updating console to reduce clutter
     wandb.init(
         project=config.wandb_project,
         entity=config.wandb_entity,
@@ -366,13 +370,13 @@ if config.report_to == "wandb":
             "lora_alpha": config.lora_alpha if not config.full_finetune else "N/A",
             "max_seq_len": config.max_seq_len,
             "base_model": config.reward_model,
-            "output_dir": reward_output_dir,
+            "output_dir": OUT_DIR,
             "train_samples": len(tokenized_datasets["train"]),
             "val_samples": len(tokenized_datasets["validation"]),
         }
     )
 
-# --- Trainer Initialization and Execution ---
+# ------------------- trainer initialization and execution -------------------
 trainer = PairwiseTrainer(
     model=model,
     args=training_args,
@@ -392,7 +396,7 @@ trainer.save_metrics("train", train_result.metrics)  # Save final training metri
 if config.report_to == "wandb":
     wandb.log({f"train/{k}": v for k, v in train_result.metrics.items()})  # Log final train metrics to W&B
 
-logger.info(f"Training complete. Saving model components to {reward_output_dir}")
+logger.info(f"Training complete. Saving model components to {OUT_DIR}")
 
 # Save the final model (best model if load_best_model_at_end=True)
 # Trainer.save_model() saves the full state, including adapter if PEFT is used.
@@ -400,19 +404,19 @@ logger.info(f"Training complete. Saving model components to {reward_output_dir}"
 
 # If using PEFT, backbone is a PeftModel. save_pretrained saves adapter config and weights.
 # If not PEFT, backbone is a PreTrainedModel. save_pretrained saves the full model.
-model.backbone.save_pretrained(reward_output_dir)
-logger.info(f"Backbone (adapter or full model) saved to {reward_output_dir}")
+model.backbone.save_pretrained(OUT_DIR)
+logger.info(f"Backbone (adapter or full model) saved to {OUT_DIR}")
 
 # Save the value head state dictionary
-v_head_path = os.path.join(reward_output_dir, "v_head.bin")
+v_head_path = os.path.join(OUT_DIR, "v_head.bin")
 torch.save(model.v_head.state_dict(), v_head_path)
 logger.info(f"Value head saved to {v_head_path}")
 
 # Also save the tokenizer for convenience during inference
-model.tokenizer.save_pretrained(reward_output_dir)
-logger.info(f"Tokenizer saved to {reward_output_dir}")
+model.tokenizer.save_pretrained(OUT_DIR)
+logger.info(f"Tokenizer saved to {OUT_DIR}")
 
-# --- Final Evaluation ---
+# ------------------- final evaluation -------------------
 logger.info("Performing final evaluation on the validation set...")
 eval_metrics = trainer.evaluate(eval_dataset=tokenized_datasets["validation"])
 trainer.save_metrics("eval", eval_metrics)  # Save final evaluation metrics
@@ -424,4 +428,4 @@ if config.report_to == "wandb":
     wandb.log({"final_eval/accuracy": final_accuracy})  # Log final eval accuracy
     wandb.finish()  # Close W&B run
 
-logger.info(f"Script finished. Model and metrics saved in {reward_output_dir}")
+logger.info(f"Script finished. Model and metrics saved in {OUT_DIR}")
