@@ -378,6 +378,7 @@
 
 - **Work done**:
   - added completion-only logic to policy model training (reward model unaffected because it works very differently)
+  - started using CSCS Daint and wrote bash script to make Daint look like tik (file system wise)
   - 
 
 - **Issues and Questions**:

@@ -19,14 +19,14 @@ from __future__ import annotations
 
 import logging
 import os
+import random
 import sys
 from typing import Any
 
 import torch
 import wandb
-from datasets import load_dataset
-import random
 from datasets import DatasetDict
+from datasets import load_dataset
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
@@ -120,9 +120,12 @@ def preprocess_prompt_and_completion(batch):
         SFT_IN_BETWEEN_PROMPT + sol + tok.eos_token
         for j, sol in zip(batch["task_json"], batch["solution"])
     ]
+    # ↓ removed `padding="max_length"` to enable dynamic padding
     model_inp = tok(
-        texts, max_length=config.max_seq_len,
-        truncation=True, padding="max_length"
+        texts,
+        max_length=config.max_seq_len,
+        truncation=True,
+        padding=False
     )
 
     model_inp["labels"] = model_inp["input_ids"].copy()
@@ -138,30 +141,24 @@ def preprocess_for_completion_only(batch):
     prompts = []
     full_texts = []
 
-    # Construct prompts and full texts
     for task_json, solution in zip(batch["task_json"], batch["solution"]):
-        # 1. Construct the prompt part
         prompt_text = (
                 SFT_SYSTEM_PROMPT +
                 task_to_prompt(ARCTask.from_dict(task_json)) +
                 SFT_IN_BETWEEN_PROMPT
         )
         prompts.append(prompt_text)
+        full_texts.append(prompt_text + solution + tok.eos_token)
 
-        # 2. Construct the full text (prompt + solution + eos)
-        full_text = prompt_text + solution + tok.eos_token
-        full_texts.append(full_text)
-
-    # 3. Tokenize the full texts
+    # ↓ removed `padding="max_length"` to enable dynamic padding
     model_inputs = tok(
         full_texts,
         max_length=config.max_seq_len,
         truncation=True,
-        padding="max_length",  # Pad to max_length for consistent tensor shapes
-        return_attention_mask=True  # Ensure attention_mask is returned
+        padding=False,
+        return_attention_mask=True
     )
 
-    # 4. Create labels and mask the prompt part
     labels = []
     for i in range(len(full_texts)):
         prompt_token_ids = tok(prompts[i], add_special_tokens=False).input_ids
