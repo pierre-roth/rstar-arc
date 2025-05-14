@@ -27,6 +27,8 @@ import torch
 import torch.nn.functional as F  # Renamed for conventional alias
 import wandb
 from datasets import load_dataset
+import random
+from datasets import DatasetDict
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
@@ -44,7 +46,7 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from train_utils import maybe_peft_wrap  # Assuming train_utils.py is in the same directory or accessible
-from constants import NET_SCRATCH_PATH, SFT_SYSTEM_PROMPT, SFT_IN_BETWEEN_PROMPT  # Project-specific constants
+from constants import NET_SCRATCH_PATH, LOCAL_SCRATCH_PATH, SFT_SYSTEM_PROMPT, SFT_IN_BETWEEN_PROMPT  # Project-specific constants
 from rstar_deepthink import Config  # Project-specific Config class
 from utils import setup_logging  # Project-specific logging setup
 from rstar_deepthink.llms.reward import RewardModelModule  # The model being trained
@@ -129,6 +131,12 @@ model = RewardModelModule(
 )
 logger.info("RewardModelModule initialized with backbone and value head.")
 
+# Ensure the tokenizer used for data processing and the one saved with the model
+# are exactly the same instance and are configured for right-side padding.  This
+# guarantees consistency between training and the artefacts written to disk.
+model.tokenizer = tok  # Re-use the already configured tokenizer
+model.tokenizer.padding_side = "right"
+
 
 # ------------------- preprocessing -------------------
 
@@ -180,7 +188,6 @@ class PairwiseCollator(DataCollatorWithPadding):
     Custom data collator for pairwise preference data.
     It pads chosen and rejected sequences separately before concatenating them
     into a single batch for the model. It also handles the 'weight' vector.
-    The tokenizer used should have `padding_side="left"`.
     """
 
     def __call__(self, features: Sequence[Dict[str, Any]]) -> Dict[str, torch.Tensor]:
@@ -289,16 +296,51 @@ logger.info(
 # These paths are assumed to be configured via `config.round_number`
 TRAIN_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{config.round_number}", "reward_dataset_training.jsonl")
 VAL_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{config.round_number}", "reward_dataset_validation.jsonl")
-logger.info(f"Loading preference pairs from TRAIN: {TRAIN_PATH}, VALIDATION: {VAL_PATH}")
+# Load and split training dataset by task for validation
+logger.info(f"Loading preference pairs for training from: {TRAIN_PATH}")
+raw_dataset = load_dataset(
+    "json",
+    data_files={"train": TRAIN_PATH},
+    cache_dir=os.path.join(LOCAL_SCRATCH_PATH, ".cache/huggingface/datasets"),
+)
+logger.info(f"Loaded {len(raw_dataset['train'])} examples from {TRAIN_PATH}")
 
-raw_datasets = load_dataset("json", data_files={"train": TRAIN_PATH, "validation": VAL_PATH})
+# Split dataset into training and validation
+if config.validation_fraction > 0:
+    # Split by task names to create a validation set
+    task_names = list({ex["task_name"] for ex in raw_dataset["train"]})
+    rng = random.Random(config.seed or 42)
+    rng.shuffle(task_names)
+    val_count = int(len(task_names) * config.validation_fraction)
+    val_tasks = set(task_names[:val_count])
+    train_tasks = set(task_names[val_count:])
+    logger.info(
+        f"Splitting {len(task_names)} tasks into {len(train_tasks)} train and {len(val_tasks)} validation tasks "
+        f"(validation fraction={config.validation_fraction})"
+    )
+    # Filter examples by task membership
+    train_ds = raw_dataset["train"].filter(lambda ex: ex["task_name"] in train_tasks)
+    val_ds = raw_dataset["train"].filter(lambda ex: ex["task_name"] in val_tasks)
+    raw_datasets = DatasetDict({"train": train_ds, "validation": val_ds})
+else:
+    # Use static validation dataset as validation split, no test evaluation
+    logger.info(
+        "validation_fraction is 0: using static validation dataset from %s and skipping test evaluation",
+        VAL_PATH,
+    )
+    # Training set is the full dataset
+    train_ds = raw_dataset["train"]
+    # Load static validation dataset
+    raw_val = load_dataset(
+        "json",
+        data_files={"validation": VAL_PATH},
+        cache_dir=os.path.join(LOCAL_SCRATCH_PATH, ".cache/huggingface/datasets"),
+    )
+    val_ds = raw_val["validation"]
+    raw_datasets = DatasetDict({"train": train_ds, "validation": val_ds})
 
 # Columns to remove after tokenization (original text columns)
-columns_to_remove = [c for c in ("task_json", "prefix", "chosen", "rejected") if
-                     c in raw_datasets["train"].column_names]
-
-# Partial function for preprocessing with fixed tokenizer and max_len
-# Note: `tok` here is the globally defined tokenizer
+columns_to_remove = [c for c in ("task_json", "prefix", "chosen", "rejected") if c in raw_datasets["train"].column_names]
 preprocess_fn = partial(preprocess_for_pairwise_pref, tokenizer=tok, max_len=config.max_seq_len)
 
 logger.info("Tokenizing datasets...")
@@ -396,25 +438,12 @@ trainer.save_metrics("train", train_result.metrics)  # Save final training metri
 if config.report_to == "wandb":
     wandb.log({f"train/{k}": v for k, v in train_result.metrics.items()})  # Log final train metrics to W&B
 
-logger.info(f"Training complete. Saving model components to {OUT_DIR}")
+logger.info(f"Training complete. Saving model to {OUT_DIR}")
 
-# Save the final model (best model if load_best_model_at_end=True)
-# Trainer.save_model() saves the full state, including adapter if PEFT is used.
-# For RewardModelModule, we need to save backbone (potentially PEFT) and v_head separately.
-
-# If using PEFT, backbone is a PeftModel. save_pretrained saves adapter config and weights.
-# If not PEFT, backbone is a PreTrainedModel. save_pretrained saves the full model.
-model.backbone.save_pretrained(OUT_DIR)
-logger.info(f"Backbone (adapter or full model) saved to {OUT_DIR}")
-
-# Save the value head state dictionary
-v_head_path = os.path.join(OUT_DIR, "v_head.bin")
-torch.save(model.v_head.state_dict(), v_head_path)
-logger.info(f"Value head saved to {v_head_path}")
-
-# Also save the tokenizer for convenience during inference
-model.tokenizer.save_pretrained(OUT_DIR)
-logger.info(f"Tokenizer saved to {OUT_DIR}")
+# A single call is sufficient because RewardModelModule implements its own
+# `save_pretrained` that handles saving the backbone, value head and tokenizer
+# in a cohesive manner.
+model.save_pretrained(OUT_DIR)
 
 # ------------------- final evaluation -------------------
 logger.info("Performing final evaluation on the validation set...")
@@ -426,6 +455,44 @@ logger.info(f"Final evaluation complete. Accuracy: {final_accuracy:.4f}")
 
 if config.report_to == "wandb":
     wandb.log({"final_eval/accuracy": final_accuracy})  # Log final eval accuracy
-    wandb.finish()  # Close W&B run
 
-logger.info(f"Script finished. Model and metrics saved in {OUT_DIR}")
+logger.info(f"Script finished. Model and validation metrics saved in {OUT_DIR}")
+
+if config.validation_fraction > 0:
+    # ------------------- final test evaluation -------------------
+    logger.info("Loading test preference pairs for evaluation from: %s", VAL_PATH)
+    raw_test = load_dataset(
+        "json",
+        data_files={"test": VAL_PATH},
+        cache_dir=os.path.join(LOCAL_SCRATCH_PATH, ".cache/huggingface/datasets"),
+    )
+    logger.info(f"Loaded {len(raw_test['test'])} examples for test evaluation from {VAL_PATH}")
+    # Tokenize test dataset
+    test_columns_to_remove = [
+        c for c in ("task_json", "prefix", "chosen", "rejected")
+        if c in raw_test["test"].column_names
+    ]
+    tokenized_test = raw_test["test"].map(
+        preprocess_fn,
+        batched=True,
+        remove_columns=test_columns_to_remove,
+        num_proc=max(1, os.cpu_count() // 2 if os.cpu_count() else 1),
+        desc="Running tokenizer on test dataset",
+    )
+    logger.info("Running final evaluation on test set …")
+    # Use a distinct metric key prefix so test metrics are clearly separated
+    test_metrics = trainer.evaluate(eval_dataset=tokenized_test, metric_key_prefix="test")
+    trainer.save_metrics("test", test_metrics)
+    final_test_accuracy = test_metrics.get("test_accuracy", 0.0)
+    logger.info("Test evaluation complete. Accuracy: %.4f", final_test_accuracy)
+    if config.report_to == "wandb":
+        wandb.log({"test/accuracy": final_test_accuracy})
+
+    logger.info(f"Script finished. All metrics and model components saved in {OUT_DIR}")
+else:
+    logger.info("Skipping final test evaluation because validation_fraction is 0")
+
+# ------------------- wrap-up -------------------
+if config.report_to == "wandb":
+    # Ensure the WandB run is properly closed after all training and evaluation
+    wandb.finish()

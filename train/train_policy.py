@@ -25,6 +25,8 @@ from typing import Any
 import torch
 import wandb
 from datasets import load_dataset
+import random
+from datasets import DatasetDict
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
@@ -42,7 +44,11 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from constants import (
-    SFT_SYSTEM_PROMPT, SFT_IN_BETWEEN_PROMPT, LOCAL_SCRATCH_PATH, NET_SCRATCH_PATH
+    SFT_SYSTEM_PROMPT,
+    SFT_IN_BETWEEN_PROMPT,
+    LOCAL_SCRATCH_PATH,
+    NET_SCRATCH_PATH,
+    CODE_PREFIX,
 )
 from utils import setup_logging
 from rstar_deepthink import Config
@@ -175,21 +181,59 @@ def preprocess_for_completion_only(batch):
     return model_inputs
 
 
-logger.info("Loading SFT dataset …")
-dataset = load_dataset(
+logger.info("Loading SFT training dataset …")
+raw_dataset = load_dataset(
     "json",
-    data_files={"train": TRAIN_PATH, "validation": VAL_PATH},
+    data_files={"train": TRAIN_PATH},
     cache_dir=os.path.join(LOCAL_SCRATCH_PATH, ".cache/huggingface/datasets"),
 )
-# Shuffle & tokenize
-dataset["train"] = dataset["train"].shuffle(seed=42)
+logger.info(f"Loaded {len(raw_dataset['train'])} examples from {TRAIN_PATH}")
+
+# Split into training and validation sets
+if config.validation_fraction > 0:
+    # Split by task names to create a validation set
+    task_names = list({ex["task_name"] for ex in raw_dataset["train"]})
+    rng = random.Random(config.seed or 42)
+    rng.shuffle(task_names)
+    val_count = int(len(task_names) * config.validation_fraction)
+    val_tasks = set(task_names[:val_count])
+    train_tasks = set(task_names[val_count:])
+    logger.info(
+        f"Splitting {len(task_names)} tasks into {len(train_tasks)} train and {len(val_tasks)} validation tasks "
+        f"(validation fraction={config.validation_fraction})"
+    )
+    # Filter examples by task membership
+    train_ds = raw_dataset["train"].filter(lambda ex: ex["task_name"] in train_tasks)
+    val_ds = raw_dataset["train"].filter(lambda ex: ex["task_name"] in val_tasks)
+    dataset = DatasetDict({"train": train_ds, "validation": val_ds})
+else:
+    # Use static validation dataset as validation split, no test evaluation
+    logger.info(
+        "validation_fraction is 0: using static validation dataset from %s and skipping test evaluation",
+        VAL_PATH,
+    )
+    # Training set is full training dataset
+    train_ds = raw_dataset["train"]
+    # Load static validation dataset
+    raw_val = load_dataset(
+        "json",
+        data_files={"validation": VAL_PATH},
+        cache_dir=os.path.join(LOCAL_SCRATCH_PATH, ".cache/huggingface/datasets"),
+    )
+    val_ds = raw_val["validation"]
+    dataset = DatasetDict({"train": train_ds, "validation": val_ds})
+
+# Shuffle training split
+dataset["train"] = dataset["train"].shuffle(seed=config.seed or 42)
+
+# Tokenize datasets
 tokenized_datasets = dataset.map(
     preprocess_for_completion_only,
     batched=True,
     remove_columns=[c for c in dataset["train"].column_names if c != "weight"],
     num_proc=max(1, os.cpu_count() // 2 if os.cpu_count() else 1),
 )
-logger.info("Dataset ready.")
+logger.info("Tokenization complete.")
 
 
 # ------------------- data collator -------------------
@@ -222,6 +266,49 @@ class WeightedTrainer(Trainer):
         loss = (per_seq * w.to(per_seq.device)).mean()
 
         return (loss, outputs) if return_outputs else loss
+
+    def evaluate(self, eval_dataset=None, ignore_keys=None, metric_key_prefix="eval", **kwargs):
+        """Override evaluate to include qualitative code generation logs."""
+        # Run standard evaluation
+        metrics = super().evaluate(
+            eval_dataset=eval_dataset,
+            ignore_keys=ignore_keys,
+            metric_key_prefix=metric_key_prefix,
+            **kwargs,
+        )
+        # Qualitative evaluation: generate a few samples and log to WandB for eval only
+        try:
+            if config.report_to == "wandb" and metric_key_prefix == "eval":
+                # Use the original (un-tokenized) validation split
+                ds = dataset["validation"]
+                total = len(ds)
+                num_samples = min(3, total)
+                rng = random.Random(config.seed or 42)
+                indices = rng.sample(range(total), num_samples)
+                table = wandb.Table(columns=["task_name", "prompt", "generated_code"])
+                for idx in indices:
+                    row = ds[idx]
+                    task = ARCTask.from_dict(row["task_json"])
+                    prompt_body = task_to_prompt(task)
+                    # Construct full prompt: system + task + between + code prefix
+                    prompt = SFT_SYSTEM_PROMPT + prompt_body + SFT_IN_BETWEEN_PROMPT + CODE_PREFIX
+                    # Tokenize and generate
+                    inputs = tok(prompt, return_tensors="pt")
+                    inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
+                    gen_ids = self.model.generate(
+                        **inputs,
+                        do_sample=True,
+                        temperature=config.policy_temperature,
+                        top_p=config.top_p,
+                        top_k=config.top_k if config.top_k > 0 else None,
+                        max_new_tokens=config.max_tokens,
+                    )
+                    gen_text = tok.decode(gen_ids[0], skip_special_tokens=True)
+                    table.add_data(row.get("task_name", None), prompt, gen_text)
+                wandb.log({"qualitative_eval": table}, commit=False)
+        except Exception as e:
+            logger.warning(f"Qualitative evaluation failed: {e}")
+        return metrics
 
 
 # ------------------- training args -------------------
@@ -291,4 +378,63 @@ logger.info("✓ Finished — final loss %.4f", metrics.get("eval_loss", 0.0))
 
 if config.report_to == "wandb":
     wandb.log({"final_eval/loss": metrics.get("eval_loss")})
+
+if config.validation_fraction > 0:
+    # ------------------- final test evaluation -------------------
+    logger.info("Loading SFT test dataset …")
+    raw_test = load_dataset(
+        "json",
+        data_files={"test": VAL_PATH},
+        cache_dir=os.path.join(LOCAL_SCRATCH_PATH, ".cache/huggingface/datasets"),
+    )
+    logger.info(f"Loaded {len(raw_test['test'])} examples for test evaluation from {VAL_PATH}")
+    # Tokenize test dataset
+    tokenized_test = raw_test["test"].map(
+        preprocess_for_completion_only,
+        batched=True,
+        remove_columns=[c for c in raw_test["test"].column_names if c != "weight"],
+        num_proc=max(1, os.cpu_count() // 2 if os.cpu_count() else 1),
+    )
+    logger.info("Running final evaluation on test set …")
+    # Use test prefix for metrics
+    test_metrics = trainer.evaluate(eval_dataset=tokenized_test, metric_key_prefix="test")
+    trainer.save_metrics("test", test_metrics)
+    logger.info("Test set evaluation complete — loss %.4f", test_metrics.get("test_loss", 0.0))
+    if config.report_to == "wandb":
+        # Log quantitative test loss
+        wandb.log({"test/loss": test_metrics.get("test_loss")})
+        # Qualitative evaluation on test set: generate sample solutions
+        try:
+            # Sample a few test examples
+            ds_test = raw_test["test"]  # original test dataset
+            total_test = len(ds_test)
+            num_samples_test = min(3, total_test)
+            rng_test = random.Random(config.seed or 42)
+            test_indices = rng_test.sample(range(total_test), num_samples_test)
+            table_test = wandb.Table(columns=["task_name", "prompt", "generated_code"])
+            for tidx in test_indices:
+                row_test = ds_test[tidx]
+                task_obj = ARCTask.from_dict(row_test["task_json"])
+                prompt_body = task_to_prompt(task_obj)
+                # Construct full prompt: system + task + between + code prefix
+                prompt = SFT_SYSTEM_PROMPT + prompt_body + SFT_IN_BETWEEN_PROMPT + CODE_PREFIX
+                inputs = tok(prompt, return_tensors="pt")
+                inputs = {k: v.to(model.device) for k, v in inputs.items()}
+                gen_ids = model.generate(
+                    **inputs,
+                    do_sample=True,
+                    temperature=config.policy_temperature,
+                    top_p=config.top_p,
+                    top_k=config.top_k if config.top_k > 0 else None,
+                    max_new_tokens=config.max_tokens,
+                )
+                gen_text = tok.decode(gen_ids[0], skip_special_tokens=True)
+                table_test.add_data(row_test.get("task_name", None), prompt, gen_text)
+            wandb.log({"qualitative_test": table_test}, commit=False)
+        except Exception as e:
+            logger.warning(f"Qualitative test evaluation failed: {e}")
+else:
+    logger.info("Skipping final test evaluation because validation_fraction is 0")
+# Finalize wandb run after all evaluations
+if config.report_to == "wandb":
     wandb.finish()
