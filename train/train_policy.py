@@ -299,6 +299,7 @@ class WeightedTrainer(Trainer):
                     "passed_train",
                     "passed_test",
                     "error_category",
+                    "prompt_and_generation",
                 ]
             )
             for idx in indices:
@@ -359,6 +360,7 @@ class WeightedTrainer(Trainer):
                         passed_train_full,
                         passed_test,
                         category,
+                        gen_text,
                     )
                     # Per-token perplexity analysis
                     if config.perplexity_window_size is not None:
@@ -497,7 +499,7 @@ if config.validation_fraction > 0:
             num_samples_test = min(3, total_test)
             rng_test = random.Random(config.seed or 42)
             test_indices = rng_test.sample(range(total_test), num_samples_test)
-            table_test = wandb.Table(columns=["task_name", "prompt", "generated_code"])
+            table_test = wandb.Table(columns=["task_name", "prompt_and_generation"])
             for tidx in test_indices:
                 row_test = ds_test[tidx]
                 task_obj = ARCTask.from_dict(row_test["task_json"])
@@ -515,7 +517,7 @@ if config.validation_fraction > 0:
                     max_new_tokens=config.max_tokens,
                 )
                 gen_text = tok.decode(gen_ids[0], skip_special_tokens=True)
-                table_test.add_data(row_test.get("task_name", None), prompt, gen_text)
+                table_test.add_data(row_test.get("task_name", None), gen_text)
             wandb.log({"qualitative_test": table_test}, commit=False)
         except Exception as e:
             logger.warning(f"Qualitative test evaluation failed: {e}")
