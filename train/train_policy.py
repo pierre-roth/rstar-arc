@@ -394,9 +394,9 @@ class WeightedTrainer(Trainer):
                             perp_table.add_data(i, p, w)
                         wandb.log(
                             {f"perplexity/{row.get('task_name', None)}/{temp}": perp_table},
-                            commit=False,
+                            step=self.state.global_step,
                         )
-            wandb.log({"eval_summary": summary}, commit=False)
+            wandb.log({"eval_summary": summary}, step=self.state.global_step)
         return metrics
 
 
