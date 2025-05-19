@@ -146,7 +146,7 @@ class Config:
 
     # Evaluation options
     num_validation_samples: int = 5  # Number of validation prompts to sample for qualitative evaluation
-    eval_temperatures: tuple[float, ...] = (0.0, 0.4, 0.8)  # Sampling temperatures for multiple generations during evaluation
+    eval_temperatures: tuple[float, ...] = (0.1, 0.4, 0.8)  # Sampling temperatures for multiple generations during evaluation
     perplexity_window_size: Optional[int] = None  # Window size for smoothing per-token perplexity (None for no smoothing)
     min_steps_for_format_adherence: int = 2  # Minimum number of steps required for format adherence
 
