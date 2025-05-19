@@ -379,6 +379,9 @@
 - **Work done**:
   - added completion-only logic to policy model training (reward model unaffected because it works very differently)
   - started using CSCS Daint and wrote bash script to make Daint look like tik (file system wise)
+    - I first tried to get it working using a uenv and burst buffers ... didn't work
+    - Then I tried a podman container ... didn't work
+    - I spend hours (days) trying to get it to work and I just ended up giving up
   - integrated full solution generation into training pipeline to qualitatively evaluate the policy model
   - 
 

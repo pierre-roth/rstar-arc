@@ -1,6 +1,8 @@
 log-level: INFO
 round-number: 2
 
+validation-fraction: 0.03
+
 max-seq-len: 20480
 
 policy-model: "Qwen/Qwen2.5-Coder-1.5B"
