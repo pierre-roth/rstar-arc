@@ -272,11 +272,23 @@ def execute_code_with_task(code: str, input_grids: list[list[list[int]]],
         return execute_code_directly(code, input_grids, expected_outputs)
 
 
-def run_examples(task, code: str) -> (bool, bool, list[list[list[int]]]):
-    """Run code against all examples in a single process."""
+def run_examples(
+    task,
+    code: str,
+    test_test: bool = False,
+) -> (bool, bool, list[list[list[int]]]):
+    """
+    Run code against all examples in a single process.
+
+    By default, only training examples are validated. If test_test is True,
+    test examples are also checked against their expected outputs.
+    """
     input_grids = [example.input_grid.grid for example in task.training_examples + task.test_examples]
-    expected_outputs = [example.output_grid.grid for example in task.training_examples] + [None] * len(
-        task.test_examples)
+    expected_outputs = [example.output_grid.grid for example in task.training_examples]
+    if test_test:
+        expected_outputs += [example.output_grid.grid for example in task.test_examples]
+    else:
+        expected_outputs += [None] * len(task.test_examples)
     return execute_code_with_task(code, input_grids, expected_outputs)
 
 

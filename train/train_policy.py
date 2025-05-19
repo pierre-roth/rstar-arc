@@ -36,6 +36,9 @@ from transformers import (
     set_seed
 )
 
+import re
+from rstar_deepthink.tools.python_tool import remove_markers, run_examples
+
 from train_utils import maybe_peft_wrap
 
 # ------------------- project imports -------------------
@@ -49,6 +52,8 @@ from constants import (
     LOCAL_SCRATCH_PATH,
     NET_SCRATCH_PATH,
     CODE_PREFIX,
+    STEP_END,
+    CODE,
 )
 from utils import setup_logging
 from rstar_deepthink import Config
@@ -273,38 +278,125 @@ class WeightedTrainer(Trainer):
             metric_key_prefix=metric_key_prefix,
             **kwargs,
         )
-        # Qualitative evaluation: generate a few samples and log to WandB for eval only
-        try:
-            if config.report_to == "wandb" and metric_key_prefix == "eval":
-                # Use the original (un-tokenized) validation split
-                ds = dataset["validation"]
-                total = len(ds)
-                num_samples = min(3, total)
-                rng = random.Random(config.seed or 42)
-                indices = rng.sample(range(total), num_samples)
-                table = wandb.Table(columns=["task_name", "prompt", "generated_code"])
-                for idx in indices:
-                    row = ds[idx]
-                    task = ARCTask.from_dict(row["task_json"])
-                    prompt_body = task_to_prompt(task)
-                    # Construct full prompt: system + task + between + code prefix
-                    prompt = SFT_SYSTEM_PROMPT + prompt_body + SFT_IN_BETWEEN_PROMPT + CODE_PREFIX
-                    # Tokenize and generate
+        if config.report_to == "wandb" and metric_key_prefix == "eval":
+            # Comprehensive evaluation: sample validation prompts, generate multiple variants,
+            # execute step prefixes, check full solution correctness, classify errors, and log to WandB.
+            ds = dataset["validation"]
+            total = len(ds)
+            num_samples = min(config.num_validation_samples, total)
+            rng = random.Random(config.seed or 42)
+            name_to_indices: dict[str, list[int]] = {}
+            for i, row in enumerate(ds):
+                name = row.get("task_name")
+                name_to_indices.setdefault(name, []).append(i)
+            unique_names = list(name_to_indices.keys())
+            rng.shuffle(unique_names)
+            selected_names = unique_names[:num_samples]
+            indices = [rng.choice(name_to_indices[name]) for name in selected_names]
+            summary = wandb.Table(
+                columns=[
+                    "task_name",
+                    "temperature",
+                    "num_steps",
+                    "error_flag",
+                    "passed_train",
+                    "passed_test",
+                    "error_category",
+                ]
+            )
+            for idx in indices:
+                row = ds[idx]
+                task = ARCTask.from_dict(row["task_json"])
+                prompt_body = task_to_prompt(task)
+                prompt = SFT_SYSTEM_PROMPT + prompt_body + SFT_IN_BETWEEN_PROMPT + CODE_PREFIX
+                for temp in config.eval_temperatures:
                     inputs = tok(prompt, return_tensors="pt")
                     inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
                     gen_ids = self.model.generate(
                         **inputs,
                         do_sample=True,
-                        temperature=config.policy_temperature,
+                        temperature=temp,
                         top_p=config.top_p,
                         top_k=config.top_k if config.top_k > 0 else None,
                         max_new_tokens=config.max_tokens,
                     )
                     gen_text = tok.decode(gen_ids[0], skip_special_tokens=True)
-                    table.add_data(row.get("task_name", None), prompt, gen_text)
-                wandb.log({"qualitative_eval": table}, commit=False)
-        except Exception as e:
-            logger.warning(f"Qualitative evaluation failed: {e}")
+                    # Split into steps based on STEP_END marker
+                    raw_steps = re.split(f"{STEP_END}", gen_text)
+                    step_blocks = raw_steps
+                    num_steps = len(step_blocks)
+                    format_adherence = num_steps >= config.min_steps_for_format_adherence
+                    # Execute each step prefix to test code runs
+                    prefix_errors = []
+                    prefix_pass = []
+                    for k in range(1, num_steps + 1):
+                        code_prefix = "".join(step_blocks[:k])
+                        code_str = remove_markers(code_prefix)
+                        err, passed, _ = run_examples(task, code_str)
+                        prefix_errors.append(err)
+                        prefix_pass.append(passed)
+                    # Execute full code and check correctness
+                    full_code = remove_markers(gen_text)
+                    err_full, passed_train_full, results_full = run_examples(task, full_code)
+                    n_train = len(task.training_examples)
+                    test_results = results_full[n_train:]
+                    expected_test = [ex.output_grid.grid for ex in task.test_examples]
+                    passed_test = (
+                        len(test_results) == len(expected_test)
+                        and all(tr == et for tr, et in zip(test_results, expected_test))
+                    )
+                    # Classify error category
+                    if not format_adherence:
+                        category = "formatting"
+                    elif any(prefix_errors):
+                        category = "runtime"
+                    elif not (passed_train_full and passed_test):
+                        category = "semantics"
+                    else:
+                        category = "none"
+                    summary.add_data(
+                        row.get("task_name", None),
+                        temp,
+                        num_steps,
+                        err_full,
+                        passed_train_full,
+                        passed_test,
+                        category,
+                    )
+                    # Per-token perplexity analysis
+                    if config.perplexity_window_size is not None:
+                        with torch.no_grad():
+                            seq = gen_ids[0]
+                            input_len = inputs["input_ids"].shape[1]
+                            outputs = self.model(seq.unsqueeze(0)).logits
+                            shift_logits = outputs[..., :-1, :].contiguous()
+                            shift_labels = seq[1:].contiguous()
+                            loss_fct = torch.nn.CrossEntropyLoss(reduction="none")
+                            per_token_loss = loss_fct(
+                                shift_logits.view(-1, shift_logits.size(-1)),
+                                shift_labels.view(-1),
+                            ).view(shift_labels.size())
+                            gen_loss = per_token_loss[input_len - 1 :]
+                            perp = torch.exp(gen_loss).cpu().tolist()
+                        # Windowed smoothing
+                        if config.perplexity_window_size and config.perplexity_window_size > 1:
+                            window = config.perplexity_window_size
+                            smoothed = [
+                                sum(perp[max(0, i - window + 1) : i + 1]) / (min(i + 1, window))
+                                for i in range(len(perp))
+                            ]
+                        else:
+                            smoothed = perp
+                        perp_table = wandb.Table(
+                            columns=["token_index", "perplexity", "windowed_perplexity"]
+                        )
+                        for i, (p, w) in enumerate(zip(perp, smoothed)):
+                            perp_table.add_data(i, p, w)
+                        wandb.log(
+                            {f"perplexity/{row.get('task_name', None)}/{temp}": perp_table},
+                            commit=False,
+                        )
+            wandb.log({"eval_summary": summary}, commit=False)
         return metrics
 
 

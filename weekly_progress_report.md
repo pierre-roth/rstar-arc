@@ -366,7 +366,7 @@
   - 
 
 
-### Week 10 (05.05.2025)
+### Week 10 & 11 (05.05.2025)
 
 - **Work planned**:
   - try out CSCS
@@ -379,6 +379,7 @@
 - **Work done**:
   - added completion-only logic to policy model training (reward model unaffected because it works very differently)
   - started using CSCS Daint and wrote bash script to make Daint look like tik (file system wise)
+  - integrated full solution generation into training pipeline to qualitatively evaluate the policy model
   - 
 
 - **Issues and Questions**:

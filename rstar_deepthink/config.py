@@ -144,6 +144,12 @@ class Config:
     wandb_project: str = "deepthink-sft"
     wandb_entity: str | None = None  # optional team name
 
+    # Evaluation options
+    num_validation_samples: int = 3  # Number of validation prompts to sample for qualitative evaluation
+    eval_temperatures: tuple[float, ...] = (0.9,)  # Sampling temperatures for multiple generations during evaluation
+    perplexity_window_size: Optional[int] = None  # Window size for smoothing per-token perplexity (None for no smoothing)
+    min_steps_for_format_adherence: int = 2  # Minimum number of steps required for format adherence
+
     # reward
     reward_value_head_dropout: float = 0.1  # dropout for the value head
     reward_batch_size: int = 512
