@@ -20,6 +20,7 @@ from __future__ import annotations
 import logging
 import os
 import random
+import re
 import sys
 from typing import Any
 
@@ -36,11 +37,6 @@ from transformers import (
     set_seed
 )
 
-import re
-from rstar_deepthink.tools.python_tool import remove_markers, run_examples
-
-from train_utils import maybe_peft_wrap
-
 # ------------------- project imports -------------------
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if project_root not in sys.path:
@@ -53,12 +49,13 @@ from constants import (
     NET_SCRATCH_PATH,
     CODE_PREFIX,
     STEP_END,
-    CODE,
 )
 from utils import setup_logging
+from train_utils import maybe_peft_wrap
 from rstar_deepthink import Config
 from rstar_deepthink.arc_task import ARCTask
 from rstar_deepthink.arc_task.task_utils import task_to_prompt
+from rstar_deepthink.tools.python_tool import remove_markers, run_examples
 
 logger = logging.getLogger(__name__)
 
@@ -342,8 +339,8 @@ class WeightedTrainer(Trainer):
                     test_results = results_full[n_train:]
                     expected_test = [ex.output_grid.grid for ex in task.test_examples]
                     passed_test = (
-                        len(test_results) == len(expected_test)
-                        and all(tr == et for tr, et in zip(test_results, expected_test))
+                            len(test_results) == len(expected_test)
+                            and all(tr == et for tr, et in zip(test_results, expected_test))
                     )
                     # Classify error category
                     if not format_adherence:
@@ -376,13 +373,13 @@ class WeightedTrainer(Trainer):
                                 shift_logits.view(-1, shift_logits.size(-1)),
                                 shift_labels.view(-1),
                             ).view(shift_labels.size())
-                            gen_loss = per_token_loss[input_len - 1 :]
+                            gen_loss = per_token_loss[input_len - 1:]
                             perp = torch.exp(gen_loss).cpu().tolist()
                         # Windowed smoothing
                         if config.perplexity_window_size and config.perplexity_window_size > 1:
                             window = config.perplexity_window_size
                             smoothed = [
-                                sum(perp[max(0, i - window + 1) : i + 1]) / (min(i + 1, window))
+                                sum(perp[max(0, i - window + 1): i + 1]) / (min(i + 1, window))
                                 for i in range(len(perp))
                             ]
                         else:

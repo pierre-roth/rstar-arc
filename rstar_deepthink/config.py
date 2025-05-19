@@ -113,7 +113,7 @@ class Config:
 
     # training related
 
-    validation_fraction: float = 0.15  # Fraction of data to use for validation
+    validation_fraction: float = 0.03  # Fraction of data to use for validation
 
     # If true, skips LoRA adapters and fine-tunes all model parameters
     full_finetune: bool = False
