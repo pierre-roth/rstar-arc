@@ -111,7 +111,6 @@ class Config:
     reward_model_dir: Optional[str] = None  # Full path to reward model
     local_job_dir: Optional[str] = None  # Temporary path for the job
 
-
     # training related
 
     validation_fraction: float = 0.03  # Fraction of data to use for validation
@@ -150,8 +149,10 @@ class Config:
     # Evaluation options
     num_validation_samples: int = 5  # Number of validation prompts to sample for qualitative evaluation
     num_training_samples: int = 5  # Number of training prompts to sample for qualitative evaluation
-    eval_temperatures: tuple[float, ...] = (0.1, 0.4, 0.8)  # Sampling temperatures for multiple generations during evaluation
-    perplexity_window_size: Optional[int] = None  # Window size for smoothing per-token perplexity (None for no smoothing)
+    eval_temperatures: tuple[float, ...] = (0.1, 0.4,
+                                            0.8)  # Sampling temperatures for multiple generations during evaluation
+    perplexity_window_size: Optional[
+        int] = None  # Window size for smoothing per-token perplexity (None for no smoothing)
     min_steps_for_format_adherence: int = 2  # Minimum number of steps required for format adherence
 
     # reward

@@ -12,7 +12,8 @@ use-bf16: true
 full-finetune: true
 weight_decay: 0.1
 
-learning-rate: 0.000005
+learning-rate: 0.00001
+curriculum-learning: true
 
 per-device-train-batch-size: 1
 per-device-eval-batch-size: 1
