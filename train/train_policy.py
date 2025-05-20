@@ -33,8 +33,7 @@ from transformers import (
     AutoTokenizer,
     TrainingArguments,
     Trainer,
-    DataCollatorForLanguageModeling,
-    set_seed
+    set_seed,
 )
 
 # ------------------- project imports -------------------
@@ -56,6 +55,8 @@ from rstar_deepthink import Config
 from rstar_deepthink.arc_task import ARCTask
 from rstar_deepthink.arc_task.task_utils import task_to_prompt
 from rstar_deepthink.tools.python_tool import remove_markers, run_examples
+import math
+from train.data_utils import get_code_length
 
 logger = logging.getLogger(__name__)
 
@@ -222,8 +223,13 @@ else:
     val_ds = raw_val["validation"]
     dataset = DatasetDict({"train": train_ds, "validation": val_ds})
 
-# Shuffle training split
-dataset["train"] = dataset["train"].shuffle(seed=config.seed or 42)
+# Shuffle or sort training split
+if config.curriculum_learning:
+    logger.info("Curriculum learning enabled: sorting training examples by code length")
+    dataset["train"] = dataset["train"].map(lambda ex: {"code_length": get_code_length(ex["solution"])})
+    dataset["train"] = dataset["train"].sort("code_length")
+else:
+    dataset["train"] = dataset["train"].shuffle(seed=config.seed or 42)
 
 # Tokenize datasets
 tokenized_datasets = dataset.map(
@@ -233,25 +239,163 @@ tokenized_datasets = dataset.map(
     num_proc=max(1, os.cpu_count() // 2 if os.cpu_count() else 1),
 )
 logger.info("Tokenization complete.")
+# Count unique tasks per split (weight sum = number of tasks)
+train_weight_sum = sum(tokenized_datasets["train"]["weight"])
+val_weight_sum = sum(tokenized_datasets["validation"]["weight"])
+train_task_count = int(round(train_weight_sum))
+val_task_count = int(round(val_weight_sum))
+logger.info(f"Number of unique tasks — train: {train_task_count}, validation: {val_task_count}")
 
 
 # ------------------- data collator -------------------
-class WeightedCollator(DataCollatorForLanguageModeling):
-    def __call__(self, ex, **k) -> dict[str, Any]:
-        w = torch.tensor([e["weight"] for e in ex], dtype=torch.float32)
-        ex_wo = [{k2: v for k2, v in e.items() if k2 != "weight"} for e in ex]
-        batch = super().__call__(ex_wo)  # mlm=False inherited
-        batch["weight"] = w
+class WeightedCollator:
+    """
+    Data collator that dynamically pads inputs, preserves precomputed labels (masking prompt tokens),
+    and attaches per-example weights.
+    """
+
+    def __init__(self, tokenizer):
+        self.tokenizer = tokenizer
+
+    def __call__(self, features: list[dict[str, Any]]) -> dict[str, Any]:
+        # Extract weights and remove from inputs
+        weights = torch.tensor([f.pop("weight") for f in features], dtype=torch.float32)
+        # Pad dynamically, preserving labels
+        batch = self.tokenizer.pad(
+            features,
+            padding=True,
+            return_tensors="pt",
+        )
+        # Mask out padded label tokens
+        if "labels" in batch:
+            batch["labels"][batch["labels"] == self.tokenizer.pad_token_id] = -100
+        batch["weight"] = weights
         return batch
+
+
+# ------------------- qualitative logging helper -------------------
+_QUAL_TABLE_COLUMNS = [
+    "split",
+    "task_name",
+    "temperature",
+    "num_steps",
+    "error_flag",
+    "passed_train",
+    "passed_test",
+    "error_category",
+    "prompt_and_generation",
+]
+
+
+def _log_task_generations(
+        trainer: Any,
+        split: str,
+        indices: list[int],
+        ds: Any,
+        summary: wandb.Table,
+) -> None:
+    """Generate code for sampled tasks, log qualitative results and per-token perplexity."""
+    for idx in indices:
+        row = ds[idx]
+        task = ARCTask.from_dict(row["task_json"])
+        prompt_body = task_to_prompt(task)
+        prompt = SFT_SYSTEM_PROMPT + prompt_body + SFT_IN_BETWEEN_PROMPT + CODE_PREFIX
+        for temp in config.eval_temperatures:
+            inputs = tok(prompt, return_tensors="pt")
+            inputs = {k: v.to(trainer.model.device) for k, v in inputs.items()}
+            gen_ids = trainer.model.generate(
+                **inputs,
+                do_sample=True,
+                temperature=temp,
+                top_p=config.top_p,
+                top_k=config.top_k if config.top_k > 0 else None,
+                max_new_tokens=config.max_tokens,
+            )
+            gen_text = tok.decode(gen_ids[0], skip_special_tokens=True)
+            raw_steps = re.split(f"{STEP_END}", gen_text)
+            num_steps = len(raw_steps)
+            format_adherence = num_steps >= config.min_steps_for_format_adherence
+            prefix_errors: list[bool] = []
+            for k in range(1, num_steps + 1):
+                code_str = remove_markers("".join(raw_steps[:k]))
+                err, _, _ = run_examples(task, code_str)
+                prefix_errors.append(err)
+            err_full, passed_train_full, results_full = run_examples(task, remove_markers(gen_text))
+            n_train = len(task.training_examples)
+            test_results = results_full[n_train:]
+            expected_test = [ex.output_grid.grid for ex in task.test_examples]
+            passed_test = (
+                    len(test_results) == len(expected_test)
+                    and all(tr == et for tr, et in zip(test_results, expected_test))
+            )
+            if not format_adherence:
+                category = "formatting"
+            elif any(prefix_errors):
+                category = "runtime"
+            elif not (passed_train_full and passed_test):
+                category = "semantics"
+            else:
+                category = "none"
+            summary.add_data(
+                split,
+                row.get("task_name", None),
+                temp,
+                num_steps,
+                err_full,
+                passed_train_full,
+                passed_test,
+                category,
+                gen_text,
+            )
+            # Per-token perplexity analysis
+            if config.perplexity_window_size is not None:
+                with torch.no_grad():
+                    seq = gen_ids[0]
+                    input_len = inputs["input_ids"].shape[1]
+                    outputs = trainer.model(seq.unsqueeze(0)).logits
+                    shift_logits = outputs[..., :-1, :].contiguous()
+                    shift_labels = seq[1:].contiguous()
+                    loss_fct = torch.nn.CrossEntropyLoss(reduction="none")
+                    per_token_loss = loss_fct(
+                        shift_logits.view(-1, shift_logits.size(-1)),
+                        shift_labels.view(-1),
+                    ).view(shift_labels.size())
+                    gen_loss = per_token_loss[input_len - 1:]
+                    perp = torch.exp(gen_loss).cpu().tolist()
+                if config.perplexity_window_size and config.perplexity_window_size > 1:
+                    window = config.perplexity_window_size
+                    smoothed = [
+                        sum(perp[max(0, i - window + 1): i + 1]) / min(i + 1, window)
+                        for i in range(len(perp))
+                    ]
+                else:
+                    smoothed = perp
+                perp_table = wandb.Table(columns=["token_index", "perplexity", "windowed_perplexity"])
+                for i, (p, w) in enumerate(zip(perp, smoothed)):
+                    perp_table.add_data(i, p, w)
+                wandb.log(
+                    {f"perplexity/{row.get('task_name', None)}/{temp}": perp_table},
+                    step=trainer.state.global_step,
+                )
 
 
 # ------------------- trainer subclass -------------------
 class WeightedTrainer(Trainer):
-    def compute_loss(self, model, inputs, return_outputs=False, **_):
-        w = inputs.pop("weight")  # (B,)
+    def compute_loss(
+            self,
+            model,
+            inputs,
+            return_outputs: bool = False,
+            num_items_in_batch=None,
+    ):
+        """
+        Compute weighted loss for a batch based on per-example weights.
+        Overrides Trainer.compute_loss to apply per-sequence weighting.
+        """
+        weights = inputs.pop("weight")
+        labels = inputs.pop("labels")
         outputs = model(**inputs)
-        logits, labels = outputs.logits, inputs["labels"]
-
+        logits = outputs.logits if hasattr(outputs, "logits") else outputs[0]
         shift_logits = logits[..., :-1, :].contiguous()
         shift_labels = labels[..., 1:].contiguous()
         loss_fct = torch.nn.CrossEntropyLoss(reduction="none")
@@ -259,151 +403,87 @@ class WeightedTrainer(Trainer):
             shift_logits.view(-1, shift_logits.size(-1)),
             shift_labels.view(-1),
         ).view(shift_labels.size())
-
         active = shift_labels != -100
         per_seq = (per_token * active).sum(dim=1) / active.sum(dim=1).clamp_min(1)
-        loss = (per_seq * w.to(per_seq.device)).mean()
+        weight = weights.to(per_seq.device)
+        weighted_loss = (per_seq * weight).sum() / weight.sum().clamp_min(1e-8)
+        if return_outputs:
+            return weighted_loss, outputs
+        return weighted_loss
 
-        return (loss, outputs) if return_outputs else loss
+    def compute_weighted_loss(self, dataset):
+        """
+        Compute weighted average loss over the entire dataset, normalized by total task weight.
+        """
+        loader = self.get_eval_dataloader(dataset)
+        all_losses: list[torch.Tensor] = []
+        all_weights: list[torch.Tensor] = []
+        for inputs in loader:
+            w = inputs.pop("weight")
+            with torch.no_grad():
+                outputs = self.model(**inputs)
+            logits, labels = outputs.logits, inputs["labels"]
+            shift_logits = logits[..., :-1, :].contiguous()
+            shift_labels = labels[..., 1:].contiguous()
+            loss_fct = torch.nn.CrossEntropyLoss(reduction="none")
+            per_token = loss_fct(
+                shift_logits.view(-1, shift_logits.size(-1)),
+                shift_labels.view(-1),
+            ).view(shift_labels.size())
+            active = shift_labels != -100
+            per_seq = (per_token * active).sum(dim=1) / active.sum(dim=1).clamp_min(1)
+            all_losses.append(per_seq)
+            all_weights.append(w.to(per_seq.device))
+        all_losses = torch.cat(all_losses)
+        all_weights = torch.cat(all_weights)
+        denom = all_weights.sum().clamp_min(1e-8)
+        return (all_losses * all_weights).sum() / denom
 
     def evaluate(self, eval_dataset=None, ignore_keys=None, metric_key_prefix="eval", **kwargs):
-        """Override evaluate to include qualitative code generation logs."""
-        # Run standard evaluation
+        """Override evaluate to include qualitative code generation logs and exact loss normalization."""
+        # Run standard evaluation (e.g., logging generations)
         metrics = super().evaluate(
             eval_dataset=eval_dataset,
             ignore_keys=ignore_keys,
             metric_key_prefix=metric_key_prefix,
             **kwargs,
         )
+        # Recompute exact loss per task for eval/test to normalize by total tasks
+        if metric_key_prefix in ("eval", "test"):
+            ds = eval_dataset if eval_dataset is not None else self.eval_dataset
+            metrics[f"{metric_key_prefix}_loss"] = self.compute_weighted_loss(ds).item()
+            metrics[f"{metric_key_prefix}_perplexity"] = math.exp(metrics[f"{metric_key_prefix}_loss"])
+
         if config.report_to == "wandb" and metric_key_prefix == "eval":
-            # Comprehensive evaluation: sample validation and optional training prompts, generate multiple variants,
-            # execute step prefixes, check full solution correctness, classify errors, and log to WandB with split info.
-            rng = random.Random(config.seed or 42)
+            try:
+                rng = random.Random(config.seed or 42)
 
-            ds_train = dataset["train"]
-            total_train = len(ds_train)
-            num_train = min(config.num_training_samples, total_train)
-            name_to_train: dict[str, list[int]] = {}
-            for i, row in enumerate(ds_train):
-                name_to_train.setdefault(row.get("task_name"), []).append(i)
-            unique_train = list(name_to_train.keys())
-            rng.shuffle(unique_train)
-            train_indices = [rng.choice(name_to_train[name]) for name in unique_train[:num_train]]
+                ds_train = dataset["train"]
+                total_train = len(ds_train)
+                num_train = min(config.num_training_samples, total_train)
+                name_to_train: dict[str, list[int]] = {}
+                for i, row in enumerate(ds_train):
+                    name_to_train.setdefault(row.get("task_name"), []).append(i)
+                unique_train = list(name_to_train.keys())
+                rng.shuffle(unique_train)
+                train_indices = [rng.choice(name_to_train[name]) for name in unique_train[:num_train]]
 
-            ds_val = dataset["validation"]
-            total_val = len(ds_val)
-            num_val = min(config.num_validation_samples, total_val)
-            name_to_val: dict[str, list[int]] = {}
-            for i, row in enumerate(ds_val):
-                name_to_val.setdefault(row.get("task_name"), []).append(i)
-            unique_val = list(name_to_val.keys())
-            rng.shuffle(unique_val)
-            val_indices = [rng.choice(name_to_val[name]) for name in unique_val[:num_val]]
+                ds_val = dataset["validation"]
+                total_val = len(ds_val)
+                num_val = min(config.num_validation_samples, total_val)
+                name_to_val: dict[str, list[int]] = {}
+                for i, row in enumerate(ds_val):
+                    name_to_val.setdefault(row.get("task_name"), []).append(i)
+                unique_val = list(name_to_val.keys())
+                rng.shuffle(unique_val)
+                val_indices = [rng.choice(name_to_val[name]) for name in unique_val[:num_val]]
 
-            summary = wandb.Table(
-                columns=[
-                    "split",
-                    "task_name",
-                    "temperature",
-                    "num_steps",
-                    "error_flag",
-                    "passed_train",
-                    "passed_test",
-                    "error_category",
-                    "prompt_and_generation",
-                ]
-            )
-
-            def _log(split: str, indices: list[int], ds: Any):
-                for idx in indices:
-                    row = ds[idx]
-                    task = ARCTask.from_dict(row["task_json"])
-                    prompt_body = task_to_prompt(task)
-                    prompt = SFT_SYSTEM_PROMPT + prompt_body + SFT_IN_BETWEEN_PROMPT + CODE_PREFIX
-                    for temp in config.eval_temperatures:
-                        inputs = tok(prompt, return_tensors="pt")
-                        inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
-                        gen_ids = self.model.generate(
-                            **inputs,
-                            do_sample=True,
-                            temperature=temp,
-                            top_p=config.top_p,
-                            top_k=config.top_k if config.top_k > 0 else None,
-                            max_new_tokens=config.max_tokens,
-                        )
-                        gen_text = tok.decode(gen_ids[0], skip_special_tokens=True)
-                        raw_steps = re.split(f"{STEP_END}", gen_text)
-                        num_steps = len(raw_steps)
-                        format_adherence = num_steps >= config.min_steps_for_format_adherence
-                        prefix_errors = []
-                        for k in range(1, num_steps + 1):
-                            code_str = remove_markers("".join(raw_steps[:k]))
-                            err, _, _ = run_examples(task, code_str)
-                            prefix_errors.append(err)
-                        err_full, passed_train_full, results_full = run_examples(task, remove_markers(gen_text))
-                        n_train = len(task.training_examples)
-                        test_results = results_full[n_train:]
-                        expected_test = [ex.output_grid.grid for ex in task.test_examples]
-                        passed_test = (
-                            len(test_results) == len(expected_test)
-                            and all(tr == et for tr, et in zip(test_results, expected_test))
-                        )
-                        if not format_adherence:
-                            category = "formatting"
-                        elif any(prefix_errors):
-                            category = "runtime"
-                        elif not (passed_train_full and passed_test):
-                            category = "semantics"
-                        else:
-                            category = "none"
-                        summary.add_data(
-                            split,
-                            row.get("task_name", None),
-                            temp,
-                            num_steps,
-                            err_full,
-                            passed_train_full,
-                            passed_test,
-                            category,
-                            gen_text,
-                        )
-                        # Per-token perplexity analysis
-                        if config.perplexity_window_size is not None:
-                            with torch.no_grad():
-                                seq = gen_ids[0]
-                                input_len = inputs["input_ids"].shape[1]
-                                outputs = self.model(seq.unsqueeze(0)).logits
-                                shift_logits = outputs[..., :-1, :].contiguous()
-                                shift_labels = seq[1:].contiguous()
-                                loss_fct = torch.nn.CrossEntropyLoss(reduction="none")
-                                per_token_loss = loss_fct(
-                                    shift_logits.view(-1, shift_logits.size(-1)),
-                                    shift_labels.view(-1),
-                                ).view(shift_labels.size())
-                                gen_loss = per_token_loss[input_len - 1:]
-                                perp = torch.exp(gen_loss).cpu().tolist()
-                            if config.perplexity_window_size and config.perplexity_window_size > 1:
-                                window = config.perplexity_window_size
-                                smoothed = [
-                                    sum(perp[max(0, i - window + 1): i + 1]) / (min(i + 1, window))
-                                    for i in range(len(perp))
-                                ]
-                            else:
-                                smoothed = perp
-                            perp_table = wandb.Table(
-                                columns=["token_index", "perplexity", "windowed_perplexity"]
-                            )
-                            for i, (p, w) in enumerate(zip(perp, smoothed)):
-                                perp_table.add_data(i, p, w)
-                            wandb.log(
-                                {f"perplexity/{row.get('task_name', None)}/{temp}": perp_table},
-                                step=self.state.global_step,
-                            )
-            if config.num_training_samples > 0:
-                _log("train", train_indices, ds_train)
-            if config.num_validation_samples > 0:
-                _log("validation", val_indices, ds_val)
-            wandb.log({"eval_summary": summary}, step=self.state.global_step)
+                summary = wandb.Table(columns=_QUAL_TABLE_COLUMNS)
+                _log_task_generations(self, "train", train_indices, ds_train, summary)
+                _log_task_generations(self, "validation", val_indices, ds_val, summary)
+                wandb.log({"eval_summary": summary}, step=self.state.global_step)
+            except Exception as e:
+                logger.warning(f"Qualitative eval logging failed: {e}")
         return metrics
 
 
@@ -432,7 +512,8 @@ args = TrainingArguments(
     load_best_model_at_end=True,
     metric_for_best_model="eval_loss",
     greater_is_better=False,
-    weight_decay=config.weight_decay
+    weight_decay=config.weight_decay,
+    max_grad_norm=config.max_grad_norm
 )
 
 # ------------------- wandb (lightweight) -------------------
@@ -452,6 +533,8 @@ if config.report_to == "wandb":
             "train_samples": len(tokenized_datasets["train"]),
             "val_samples": len(tokenized_datasets["validation"]),
             "max_seq_len": config.max_seq_len,
+            "train_tasks": train_task_count,
+            "val_tasks": val_task_count,
         },
     )
 
@@ -462,7 +545,7 @@ trainer = WeightedTrainer(
     train_dataset=tokenized_datasets["train"],
     eval_dataset=tokenized_datasets["validation"],
     processing_class=tok,
-    data_collator=WeightedCollator(tokenizer=tok, mlm=False),
+    data_collator=WeightedCollator(tokenizer=tok),
 )
 
 logger.info("⇢ Starting training …")
@@ -470,13 +553,17 @@ trainer.train()
 trainer.save_model(OUT_DIR)  # saves LoRA adapter only
 metrics = trainer.evaluate()
 trainer.save_metrics("eval", metrics)
-logger.info("✓ Finished — final loss %.4f", metrics.get("eval_loss", 0.0))
+logger.info("✓ Finished — final loss %.4f, perplexity %.4f", metrics.get("eval_loss", 0.0),
+            metrics.get("eval_perplexity", 0.0))
 
 if config.report_to == "wandb":
-    wandb.log({"final_eval/loss": metrics.get("eval_loss")})
+    wandb.log({
+        "final_eval/loss": metrics.get("eval_loss"),
+        "final_eval/perplexity": metrics.get("eval_perplexity"),
+    })
 
+# ------------------- final test evaluation -------------------
 if config.validation_fraction > 0:
-    # ------------------- final test evaluation -------------------
     logger.info("Loading SFT test dataset …")
     raw_test = load_dataset(
         "json",
@@ -492,43 +579,33 @@ if config.validation_fraction > 0:
         num_proc=max(1, os.cpu_count() // 2 if os.cpu_count() else 1),
     )
     logger.info("Running final evaluation on test set …")
+    # Count unique tasks in test split (weight sum = number of tasks)
+    test_task_count = int(sum(tokenized_test["weight"]))
+    logger.info(f"Number of unique tasks in test set: {test_task_count}")
     # Use test prefix for metrics
     test_metrics = trainer.evaluate(eval_dataset=tokenized_test, metric_key_prefix="test")
     trainer.save_metrics("test", test_metrics)
-    logger.info("Test set evaluation complete — loss %.4f", test_metrics.get("test_loss", 0.0))
+    logger.info("Test set evaluation complete — loss %.4f, perplexity %.4f", test_metrics.get("test_loss", 0.0),
+                test_metrics.get("test_perplexity", 0.0))
     if config.report_to == "wandb":
-        # Log quantitative test loss
-        wandb.log({"test/loss": test_metrics.get("test_loss")})
-        # Qualitative evaluation on test set: generate sample solutions
-        try:
-            # Sample a few test examples
-            ds_test = raw_test["test"]  # original test dataset
-            total_test = len(ds_test)
-            num_samples_test = min(3, total_test)
-            rng_test = random.Random(config.seed or 42)
-            test_indices = rng_test.sample(range(total_test), num_samples_test)
-            table_test = wandb.Table(columns=["task_name", "prompt_and_generation"])
-            for tidx in test_indices:
-                row_test = ds_test[tidx]
-                task_obj = ARCTask.from_dict(row_test["task_json"])
-                prompt_body = task_to_prompt(task_obj)
-                # Construct full prompt: system + task + between + code prefix
-                prompt = SFT_SYSTEM_PROMPT + prompt_body + SFT_IN_BETWEEN_PROMPT + CODE_PREFIX
-                inputs = tok(prompt, return_tensors="pt")
-                inputs = {k: v.to(model.device) for k, v in inputs.items()}
-                gen_ids = model.generate(
-                    **inputs,
-                    do_sample=True,
-                    temperature=config.policy_temperature,
-                    top_p=config.top_p,
-                    top_k=config.top_k if config.top_k > 0 else None,
-                    max_new_tokens=config.max_tokens,
-                )
-                gen_text = tok.decode(gen_ids[0], skip_special_tokens=True)
-                table_test.add_data(row_test.get("task_name", None), gen_text)
-            wandb.log({"qualitative_test": table_test}, commit=False)
-        except Exception as e:
-            logger.warning(f"Qualitative test evaluation failed: {e}")
+        # Log quantitative test loss, perplexity and task count
+        wandb.log({
+            "test/loss": test_metrics.get("test_loss"),
+            "test/perplexity": test_metrics.get("test_perplexity"),
+            "test_tasks": test_task_count,
+        })
+    # Qualitative evaluation on test set: sample and log code generation and correctness
+    try:
+        ds_test = raw_test["test"]
+        total_test = len(ds_test)
+        num_test = min(config.num_validation_samples, total_test)
+        rng_test = random.Random(config.seed or 42)
+        test_indices = rng_test.sample(range(total_test), num_test)
+        table_test = wandb.Table(columns=_QUAL_TABLE_COLUMNS)
+        _log_task_generations(trainer, "test", test_indices, ds_test, table_test)
+        wandb.log({"qualitative_test": table_test}, commit=False)
+    except Exception as e:
+        logger.warning(f"Qualitative test evaluation failed: {e}")
 else:
     logger.info("Skipping final test evaluation because validation_fraction is 0")
 # Finalize wandb run after all evaluations

@@ -111,9 +111,11 @@ class Config:
     reward_model_dir: Optional[str] = None  # Full path to reward model
     local_job_dir: Optional[str] = None  # Temporary path for the job
 
+
     # training related
 
     validation_fraction: float = 0.03  # Fraction of data to use for validation
+    curriculum_learning: bool = False  # Whether to sort training examples by code length (curriculum learning)
 
     # If true, skips LoRA adapters and fine-tunes all model parameters
     full_finetune: bool = False
@@ -123,6 +125,7 @@ class Config:
     per_device_eval_batch_size: int = 1
     gradient_accumulation_steps: int = 16
     weight_decay: float = 0.0
+    max_grad_norm: float = 1.0  # Maximum gradient norm for gradient clipping
 
     logging_steps: int = 25
     eval_steps: int = 50

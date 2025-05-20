@@ -362,9 +362,6 @@
 - **Results**:
   - ??
 
-- **Visuals**:
-  - 
-
 
 ### Week 10 & 11 (05.05.2025)
 
@@ -386,11 +383,32 @@
   - 
 
 - **Issues and Questions**:
+  - I would actually like some help with the CSCS Daint setup, it is costing me an unreadable amount of time for something that is essentially only the setup of an appropriate environment or a container
+
+- **Results**:
+  - ??
+
+
+### Week 12 (19.05.2025)
+
+- **Work planned**:
+  - look into curriculum learning to enhance policy model training
+  - add gradient clipping to help with training stability
+  - track perplexity as a more intuitive metric
+  - I might need to change the format of the solutions slightly to reinforce more intuition and lake some of the focus away from the code
+    - this might help with training and generalization at inference time 
+  - A lot more testing (getting a model that can memoize)
+  - Getting high quality subset of training data
+  - 
+
+- **Work done**:
+  - 
+
+- **Issues and Questions**:
   - ??
 
 - **Results**:
   - ??
 
 - **Visuals**:
-  - 
-
+  -
