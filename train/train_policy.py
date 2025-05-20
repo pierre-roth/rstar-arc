@@ -228,6 +228,7 @@ if config.curriculum_learning:
     logger.info("Curriculum learning enabled: sorting training examples by code length")
     dataset["train"] = dataset["train"].map(lambda ex: {"code_length": get_code_length(ex["solution"])})
     dataset["train"] = dataset["train"].sort("code_length")
+    dataset["train"] = dataset["train"].remove_columns(["code_length"])
 else:
     dataset["train"] = dataset["train"].shuffle(seed=config.seed or 42)
 
