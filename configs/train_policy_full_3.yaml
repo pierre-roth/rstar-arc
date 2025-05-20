@@ -10,7 +10,7 @@ policy-model: "Qwen/Qwen2.5-Coder-1.5B"
 use-bf16: true
 
 full-finetune: true
-weight_decay: 0.1
+weight_decay: 0.01
 
 learning-rate: 0.00001
 curriculum-learning: true
