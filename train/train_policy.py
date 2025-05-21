@@ -79,7 +79,8 @@ if not config.full_finetune:
 else:
     dir_name = (
         f"ft-{config.policy_model.split('/')[-1]}-"
-        f"{config.max_seq_len}-{config.learning_rate}"
+        f"{config.max_seq_len}-{config.learning_rate}-"
+        f"{config.weight_decay}-{config.curriculum_learning}"
     )
 
 # The directory where checkpoints/adapters are stored – unchanged semantics.
