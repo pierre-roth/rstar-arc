@@ -59,9 +59,9 @@ Remember:
 """
 
 BOOTSTRAP_TASK_PROMPT = f"""Now it's your turn! Carefully look at the input-output examples to infer the transformation function.
-Then write correctly formatted Python code to implement the transformation function.\n"""
+Then write correctly formatted step-by-set Python code with natural language chain-of-thought comments to implement the transformation function.\n"""
 
-SFT_SYSTEM_PROMPT = """You are a powerful agent with broad problem solving skills, pattern matching abilities and great python programming expertise. Generate Python code step-by-step to solve the ARC task presented below. Implement the solution within a `solve(I)` function using the required markers. \n\n"""
-SFT_IN_BETWEEN_PROMPT = """\n\nSolution Code: \n\n"""
+SFT_SYSTEM_PROMPT = f"""You are a powerful agent with broad problem solving skills, pattern matching abilities and great python programming expertise. Generate step-by-step Python code to solve the ARC task presented below. Implement the solution within a `solve(I)` function using the required markers {STEP_END} to mark the end of a code step and {CODE_END} to mark the end of the code and thus the end of the solution. \n\n"""
+SFT_IN_BETWEEN_PROMPT = """\n\nStep-by-step Python code with natural language chain-of-thought comments: \n\n"""
 
 CODE_PREFIX = f"{CODE}\ndef solve(I):\n    "

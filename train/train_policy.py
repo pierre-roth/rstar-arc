@@ -25,6 +25,7 @@ import sys
 from typing import Any
 
 import torch
+import warnings
 import wandb
 from datasets import DatasetDict
 from datasets import load_dataset
@@ -94,12 +95,29 @@ tok = AutoTokenizer.from_pretrained(config.policy_model, trust_remote_code=True)
 tok.pad_token = tok.pad_token or tok.eos_token
 tok.padding_side = "right"
 
+# Suppress known HuggingFace warnings that are benign in our use case
+warnings.filterwarnings(
+    "ignore",
+    r"Sliding Window Attention is enabled but not implemented for `sdpa`; unexpected results may be encountered\.",
+)
+warnings.filterwarnings(
+    "ignore",
+    r"You're using a Qwen2TokenizerFast tokenizer\. Please note that with a fast tokenizer, using the `__call__` method is faster than using a method to encode the text followed by a call to the `pad` method to get a padded encoding\.",
+)
+warnings.filterwarnings(
+    "ignore",
+    r"Setting `pad_token_id` to `eos_token_id`:\d+ for open-end generation\.",
+)
+
 # ------------------- model -------------------
 model = AutoModelForCausalLM.from_pretrained(
     config.policy_model,
     torch_dtype=torch.bfloat16 if config.use_bf16 else torch.float16,
     trust_remote_code=True,
 )
+# ensure pad_token_id is set on the model to avoid fallback warning during generation
+if model.config.pad_token_id is None:
+    model.config.pad_token_id = model.config.eos_token_id
 # Multi-GPU training is handled via Accelerate launch
 model.config.use_cache = False
 model.gradient_checkpointing_enable()  # save memory
@@ -279,13 +297,12 @@ _QUAL_TABLE_COLUMNS = [
     "split",
     "task_name",
     "temperature",
-    "num_steps",
-    "error_flag",
-    "passed_train",
-    "passed_test",
-    "error_category",
-    "prompt_and_generation",
+    "pass@k",
+    "pass_rate",
+    "generations",
 ]
+
+_eval_counter = 0
 
 
 def _log_task_generations(
@@ -302,51 +319,68 @@ def _log_task_generations(
         prompt_body = task_to_prompt(task)
         prompt = SFT_SYSTEM_PROMPT + prompt_body + SFT_IN_BETWEEN_PROMPT + CODE_PREFIX
         for temp in config.eval_temperatures:
-            inputs = tok(prompt, return_tensors="pt")
-            inputs = {k: v.to(trainer.model.device) for k, v in inputs.items()}
-            gen_ids = trainer.model.generate(
-                **inputs,
-                do_sample=True,
-                temperature=temp,
-                top_p=config.top_p,
-                top_k=config.top_k if config.top_k > 0 else None,
-                max_new_tokens=config.max_tokens,
-            )
-            gen_text = tok.decode(gen_ids[0], skip_special_tokens=True)
-            raw_steps = re.split(f"{STEP_END}", gen_text)
-            num_steps = len(raw_steps)
-            format_adherence = num_steps >= config.min_steps_for_format_adherence
-            prefix_errors: list[bool] = []
-            for k in range(1, num_steps + 1):
-                code_str = remove_markers("".join(raw_steps[:k]))
-                err, _, _ = run_examples(task, code_str)
-                prefix_errors.append(err)
-            err_full, passed_train_full, results_full = run_examples(task, remove_markers(gen_text))
-            n_train = len(task.training_examples)
-            test_results = results_full[n_train:]
-            expected_test = [ex.output_grid.grid for ex in task.test_examples]
-            passed_test = (
+            gen_entries: list[tuple] = []
+            pass_count = 0
+            for _ in range(config.pass_k):
+                inputs = tok(prompt, return_tensors="pt")
+                inputs = {k: v.to(trainer.model.device) for k, v in inputs.items()}
+                gen_ids = trainer.model.generate(
+                    **inputs,
+                    do_sample=True,
+                    temperature=temp,
+                    top_p=config.top_p,
+                    top_k=config.top_k if config.top_k > 0 else None,
+                    max_new_tokens=config.max_tokens,
+                )
+                gen_text = tok.decode(gen_ids[0], skip_special_tokens=True)
+                raw_steps = re.split(f"{STEP_END}", gen_text)
+                num_steps = len(raw_steps)
+                format_adherence = num_steps >= config.min_steps_for_format_adherence
+                prefix_errors: list[bool] = []
+                for k_i in range(1, num_steps + 1):
+                    code_str = remove_markers("".join(raw_steps[:k_i]))
+                    err, _, _ = run_examples(task, code_str)
+                    prefix_errors.append(err)
+                err_full, passed_train_full, results_full = run_examples(
+                    task, remove_markers(gen_text)
+                )
+                n_train = len(task.training_examples)
+                test_results = results_full[n_train:]
+                expected_test = [ex.output_grid.grid for ex in task.test_examples]
+                passed_test = (
                     len(test_results) == len(expected_test)
                     and all(tr == et for tr, et in zip(test_results, expected_test))
-            )
-            if not format_adherence:
-                category = "formatting"
-            elif any(prefix_errors):
-                category = "runtime"
-            elif not (passed_train_full and passed_test):
-                category = "semantics"
-            else:
-                category = "none"
+                )
+                if not format_adherence:
+                    category = "formatting"
+                elif any(prefix_errors):
+                    category = "runtime"
+                elif not (passed_train_full and passed_test):
+                    category = "semantics"
+                else:
+                    category = "none"
+                gen_entries.append(
+                    (
+                        num_steps,
+                        passed_train_full,
+                        passed_test,
+                        err_full,
+                        category,
+                        prompt + gen_text,
+                    )
+                )
+                if passed_train_full and passed_test:
+                    pass_count += 1
+
+            pass_rate = pass_count / config.pass_k if config.pass_k > 0 else 0.0
+            pass_at_k = pass_count > 0
             summary.add_data(
                 split,
                 row.get("task_name", None),
                 temp,
-                num_steps,
-                err_full,
-                passed_train_full,
-                passed_test,
-                category,
-                gen_text,
+                pass_at_k,
+                pass_rate,
+                gen_entries,
             )
             # Per-token perplexity analysis
             if config.perplexity_window_size is not None:
@@ -399,7 +433,9 @@ class WeightedTrainer(Trainer):
         logits = outputs.logits if hasattr(outputs, "logits") else outputs[0]
         shift_logits = logits[..., :-1, :].contiguous()
         shift_labels = labels[..., 1:].contiguous()
-        loss_fct = torch.nn.CrossEntropyLoss(reduction="none")
+        loss_fct = torch.nn.CrossEntropyLoss(
+            reduction="none", label_smoothing=self.args.label_smoothing_factor
+        )
         per_token = loss_fct(
             shift_logits.view(-1, shift_logits.size(-1)),
             shift_labels.view(-1),
@@ -426,7 +462,9 @@ class WeightedTrainer(Trainer):
             logits, labels = outputs.logits, inputs["labels"]
             shift_logits = logits[..., :-1, :].contiguous()
             shift_labels = labels[..., 1:].contiguous()
-            loss_fct = torch.nn.CrossEntropyLoss(reduction="none")
+            loss_fct = torch.nn.CrossEntropyLoss(
+                reduction="none", label_smoothing=self.args.label_smoothing_factor
+            )
             per_token = loss_fct(
                 shift_logits.view(-1, shift_logits.size(-1)),
                 shift_labels.view(-1),
@@ -457,6 +495,9 @@ class WeightedTrainer(Trainer):
 
         if config.report_to == "wandb" and metric_key_prefix == "eval":
             try:
+                global _eval_counter
+                _eval_counter += 1
+                table_name = f"evaluation_{_eval_counter}"
                 rng = random.Random(config.seed or 42)
 
                 ds_train = dataset["train"]
@@ -482,7 +523,7 @@ class WeightedTrainer(Trainer):
                 summary = wandb.Table(columns=_QUAL_TABLE_COLUMNS)
                 _log_task_generations(self, "train", train_indices, ds_train, summary)
                 _log_task_generations(self, "validation", val_indices, ds_val, summary)
-                wandb.log({"eval_summary": summary}, step=self.state.global_step)
+                wandb.log({table_name: summary}, step=self.state.global_step)
             except Exception as e:
                 logger.warning(f"Qualitative eval logging failed: {e}")
         return metrics
@@ -514,7 +555,8 @@ args = TrainingArguments(
     metric_for_best_model="eval_loss",
     greater_is_better=False,
     weight_decay=config.weight_decay,
-    max_grad_norm=config.max_grad_norm
+    max_grad_norm=config.max_grad_norm,
+    label_smoothing_factor=config.label_smoothing_factor,
 )
 
 # ------------------- wandb (lightweight) -------------------
@@ -538,6 +580,7 @@ if config.report_to == "wandb":
             "val_tasks": val_task_count,
         },
     )
+    wandb.log({"Config": str(config)})
 
 # ------------------- train / eval -------------------
 trainer = WeightedTrainer(
@@ -604,7 +647,7 @@ if config.validation_fraction > 0:
         test_indices = rng_test.sample(range(total_test), num_test)
         table_test = wandb.Table(columns=_QUAL_TABLE_COLUMNS)
         _log_task_generations(trainer, "test", test_indices, ds_test, table_test)
-        wandb.log({"qualitative_test": table_test}, commit=False)
+        wandb.log({"qualitative_test": table_test})
     except Exception as e:
         logger.warning(f"Qualitative test evaluation failed: {e}")
 else:
