@@ -17,15 +17,18 @@ or
 
 from __future__ import annotations
 
+import json
 import logging
+import math
 import os
 import random
 import re
 import sys
+import warnings
+from dataclasses import asdict
 from typing import Any
 
 import torch
-import warnings
 import wandb
 from datasets import DatasetDict
 from datasets import load_dataset
@@ -56,7 +59,6 @@ from rstar_deepthink import Config
 from rstar_deepthink.arc_task import ARCTask
 from rstar_deepthink.arc_task.task_utils import task_to_prompt
 from rstar_deepthink.tools.python_tool import remove_markers, run_examples
-import math
 from train.data_utils import get_code_length
 
 logger = logging.getLogger(__name__)
@@ -350,8 +352,8 @@ def _log_task_generations(
                 test_results = results_full[n_train:]
                 expected_test = [ex.output_grid.grid for ex in task.test_examples]
                 passed_test = (
-                    len(test_results) == len(expected_test)
-                    and all(tr == et for tr, et in zip(test_results, expected_test))
+                        len(test_results) == len(expected_test)
+                        and all(tr == et for tr, et in zip(test_results, expected_test))
                 )
                 if not format_adherence:
                     category = "formatting"
@@ -376,13 +378,20 @@ def _log_task_generations(
 
             pass_rate = pass_count / config.pass_k if config.pass_k > 0 else 0.0
             pass_at_k = pass_count > 0
+
+            try:
+                gen_entries_json = json.dumps(gen_entries, indent=2)  # indent for readability if viewed raw
+            except TypeError as e:
+                logger.error(f"Could not serialize gen_entries to JSON for task {row.get('task_name', None)}: {e}")
+                gen_entries_json = str(gen_entries)  # Fallback to plain string representation
+
             summary.add_data(
                 split,
                 row.get("task_name", None),
                 temp,
                 pass_at_k,
                 pass_rate,
-                gen_entries,
+                gen_entries_json,
             )
             # Per-token perplexity analysis
             if config.perplexity_window_size is not None:
@@ -582,7 +591,13 @@ if config.report_to == "wandb":
             "val_tasks": val_task_count,
         },
     )
-    wandb.log({"Config": str(config)})
+
+    # Log full configuration as a W&B Table to preserve parameters in a structured format
+    cfg = asdict(config)
+    cfg_table = wandb.Table(columns=["parameter", "value"])
+    for key, val in cfg.items():
+        cfg_table.add_data(key, str(val))
+    wandb.log({"Config": cfg_table})
 
 # ------------------- train / eval -------------------
 trainer = WeightedTrainer(
