@@ -5,6 +5,7 @@ validation-fraction: 0.03
 
 max-seq-len: 20480
 max-tokens: 4096
+pass-k: 2
 
 policy-model: "Qwen/Qwen2.5-Coder-1.5B"
 use-bf16: true
