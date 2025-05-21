@@ -74,7 +74,8 @@ if not config.full_finetune:
     dir_name = (
         f"ft-{config.policy_model.split('/')[-1]}-"
         f"{config.max_seq_len}-{config.learning_rate}-"
-        f"{config.lora_rank}-{config.lora_alpha}"
+        f"{config.lora_rank}-{config.lora_alpha}-"
+        f"{config.weight_decay}-{config.curriculum_learning}"
     )
 else:
     dir_name = (
