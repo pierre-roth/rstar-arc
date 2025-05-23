@@ -323,7 +323,7 @@ def _log_task_generations(
         prompt_body = task_to_prompt(task)
         prompt = SFT_SYSTEM_PROMPT + prompt_body + SFT_IN_BETWEEN_PROMPT + CODE_PREFIX
         for temp in config.eval_temperatures:
-            gen_entries: list[tuple] = []
+            gen_entries: list[dict[str, Any]] = []
             pass_count = 0
             for _ in range(config.pass_k):
                 inputs = tok(prompt, return_tensors="pt")
@@ -363,16 +363,14 @@ def _log_task_generations(
                     category = "semantics"
                 else:
                     category = "none"
-                gen_entries.append(
-                    (
-                        num_steps,
-                        passed_train_full,
-                        passed_test,
-                        err_full,
-                        category,
-                        prompt + gen_text,
-                    )
-                )
+                gen_entries.append({
+                    "num_steps": num_steps,
+                    "passed_train": passed_train_full,
+                    "passed_test": passed_test,
+                    "error": err_full,
+                    "category": category,
+                    "generation": gen_text,
+                })
                 if passed_train_full and passed_test:
                     pass_count += 1
 
