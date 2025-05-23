@@ -112,6 +112,7 @@ class Config:
     local_job_dir: Optional[str] = None  # Temporary path for the job
 
     # training related
+    train_on_prompts: bool = False  # Whether to train on prompts
 
     validation_fraction: float = 0.03  # Fraction of data to use for validation
     curriculum_learning: bool = False  # Whether to sort training examples by code length (curriculum learning)

@@ -77,13 +77,16 @@ if not config.full_finetune:
         f"ft-{config.policy_model.split('/')[-1]}-"
         f"{config.max_seq_len}-{config.learning_rate}-"
         f"{config.lora_rank}-{config.lora_alpha}-"
-        f"{config.weight_decay}-{config.curriculum_learning}"
+        f"{config.lora_dropout}-"
+        f"{config.weight_decay}-{config.curriculum_learning}-"
+        f"{config.train_on_prompts}"
     )
 else:
     dir_name = (
         f"ft-{config.policy_model.split('/')[-1]}-"
         f"{config.max_seq_len}-{config.learning_rate}-"
-        f"{config.weight_decay}-{config.curriculum_learning}"
+        f"{config.weight_decay}-{config.curriculum_learning}-"
+        f"-{config.train_on_prompts}"
     )
 
 # The directory where checkpoints/adapters are stored – unchanged semantics.
@@ -150,7 +153,8 @@ def preprocess_prompt_and_completion(batch):
         texts,
         max_length=config.max_seq_len,
         truncation=True,
-        padding=False
+        padding=False,
+        return_attention_mask=True
     )
 
     model_inp["labels"] = model_inp["input_ids"].copy()
@@ -202,6 +206,11 @@ def preprocess_for_completion_only(batch):
     model_inputs["weight"] = [float(w) for w in batch["weight"]]
     return model_inputs
 
+
+if config.train_on_prompts:
+    preprocess = preprocess_prompt_and_completion
+else:
+    preprocess = preprocess_for_completion_only
 
 logger.info("Loading SFT training dataset …")
 raw_dataset = load_dataset(
@@ -256,7 +265,7 @@ else:
 
 # Tokenize datasets
 tokenized_datasets = dataset.map(
-    preprocess_for_completion_only,
+    preprocess,
     batched=True,
     remove_columns=[c for c in dataset["train"].column_names if c != "weight"],
     num_proc=max(1, os.cpu_count() // 2 if os.cpu_count() else 1),
@@ -632,7 +641,7 @@ if config.validation_fraction > 0:
     logger.info(f"Loaded {len(raw_test['test'])} examples for test evaluation from {VAL_PATH}")
     # Tokenize test dataset
     tokenized_test = raw_test["test"].map(
-        preprocess_for_completion_only,
+        preprocess,
         batched=True,
         remove_columns=[c for c in raw_test["test"].column_names if c != "weight"],
         num_proc=max(1, os.cpu_count() // 2 if os.cpu_count() else 1),
