@@ -202,6 +202,16 @@ def main():
     model.config.use_cache = False
     model = maybe_peft_wrap(model, config)
 
+    # log model parameters
+    total_params = sum(p.numel() for p in model.parameters())
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    logger.info(
+        "Trainable parameters: %d / %d (%.2f%%)",
+        trainable_params,
+        total_params,
+        100 * trainable_params / total_params,
+    )
+
     # ---------------- data loading & filtering ----------------
     train_path = os.path.join(
         NET_SCRATCH_PATH,
@@ -224,6 +234,13 @@ def main():
         desc_len = len(build_prompt(ex["task_json"], None))
         if desc_len <= config.max_task_description_chars:
             by_task[ex["task_name"]].append(ex)
+
+    tasks_before = len(set(ex["task_name"] for ex in raw))
+    logger.info(
+        "Tasks before description-length filter: %d, after: %d",
+        tasks_before,
+        len(by_task),
+    )
 
     # --- second filter: augmentation + min lines for splitting ---
     val_plus_test = config.val_examples_per_task + config.test_examples_per_task
@@ -257,6 +274,19 @@ def main():
         val_rows_by_task[task_name] = val_rows
         test_rows_by_task[task_name] = test_rows
         complexity_by_task[task_name] = get_code_length(rows[0]["solution"])
+
+    # --- dataset split summary ---
+    total_train = len(train_rows)
+    total_val = sum(len(v) for v in val_rows_by_task.values())
+    total_test = sum(len(v) for v in test_rows_by_task.values())
+    num_tasks = len(complexity_by_task)
+    logger.info(
+        "Dataset split into %d train, %d val, %d test examples across %d tasks",
+        total_train,
+        total_val,
+        total_test,
+        num_tasks,
+    )
 
     # --- curriculum order ---
     sorted_tasks = sorted(complexity_by_task, key=lambda x: complexity_by_task[x])
@@ -316,6 +346,13 @@ def main():
             logger.warning("Active set is empty – breaking out.")
             break
 
+        logger.info(
+            "Epoch %d: training on %d examples (active tasks=%d)",
+            epoch,
+            len(train_ds),
+            len(active_tasks),
+        )
+
         args = TrainingArguments(
             output_dir=os.path.join(NET_SCRATCH_PATH, "models", "tmp_curriculum"),
             per_device_train_batch_size=config.per_device_train_batch_size,
@@ -365,18 +402,32 @@ def main():
 
         # ----------   REFILL if active < threshold   ----------
         added_brand_new = 0
+        brand_new: list[str] = []
         while len(active_tasks) < config.min_active_tasks and next_task_idx < len(sorted_tasks):
             candidate = sorted_tasks[next_task_idx]
             next_task_idx += 1
             if candidate in active_tasks or candidate in learned_tasks:
                 continue  # skip already seen
             active_tasks.add(candidate)
+            brand_new.append(candidate)
             added_brand_new += 1
         # stagnation bookkeeping
         if added_brand_new == 0:
             stagnation_epochs += 1
         else:
             stagnation_epochs = 0
+
+        # per-epoch summary logging
+        logger.info(
+            "Epoch %d summary: newly_learned=%d, forgotten=%d, brand_new_added=%d, brand_new_tasks=%s, stagnation_epochs=%d",
+            epoch,
+            len(newly_learned),
+            len(forgotten),
+            added_brand_new,
+            brand_new,
+            stagnation_epochs,
+        )
+
         # wandb log
         if config.report_to == "wandb":
             wandb.log({
