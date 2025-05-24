@@ -141,7 +141,7 @@ def pass_k_for_examples(
     if not examples:
         return False, 1.0
 
-    temps = cfg.curriculum_eval_temperatures or [0.8]
+    temps = cfg.eval_temperatures
     per_temp = cfg.pass_k // len(temps)
     leftover = cfg.pass_k % len(temps)
 
@@ -339,9 +339,12 @@ def main():
             tokenizer=tok,
             data_collator=collator,
         )
-        trainer.train()
-        train_loss = trainer.state.log_history[-1]["loss"] if trainer.state.log_history else None
-        logger.info("epoch %d train‑loss %.4f", epoch, train_loss or -1)
+
+        train_output = trainer.train()
+        train_loss = train_output.training_loss  # Get average loss for the epoch
+        # Ensure train_loss is a float for logging, handle None if training somehow failed to produce loss
+        current_loss_for_log = train_loss if train_loss is not None else -1.0
+        logger.info("epoch %d train‑loss %.4f", epoch, current_loss_for_log)
 
         # ----------   VALIDATION   ----------
         device = trainer.args.device
