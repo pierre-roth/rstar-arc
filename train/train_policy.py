@@ -24,7 +24,6 @@ import os
 import random
 import re
 import sys
-import warnings
 from dataclasses import asdict
 from typing import Any
 
@@ -86,7 +85,7 @@ else:
         f"ft-{config.policy_model.split('/')[-1]}-"
         f"{config.max_seq_len}-{config.learning_rate}-"
         f"{config.weight_decay}-{config.curriculum_learning}-"
-        f"-{config.train_on_prompts}"
+        f"{config.train_on_prompts}"
     )
 
 # The directory where checkpoints/adapters are stored – unchanged semantics.
@@ -101,20 +100,6 @@ os.makedirs(OUT_DIR, exist_ok=True)
 tok = AutoTokenizer.from_pretrained(config.policy_model, trust_remote_code=True)
 tok.pad_token = tok.pad_token or tok.eos_token
 tok.padding_side = "right"
-
-# Suppress known HuggingFace warnings that are benign in our use case
-warnings.filterwarnings(
-    "ignore",
-    r"Sliding Window Attention is enabled but not implemented for `sdpa`; unexpected results may be encountered\.",
-)
-warnings.filterwarnings(
-    "ignore",
-    r"You're using a Qwen2TokenizerFast tokenizer\. Please note that with a fast tokenizer, using the `__call__` method is faster than using a method to encode the text followed by a call to the `pad` method to get a padded encoding\.",
-)
-warnings.filterwarnings(
-    "ignore",
-    r"Setting `pad_token_id` to `eos_token_id`:\d+ for open-end generation\.",
-)
 
 # ------------------- model -------------------
 model = AutoModelForCausalLM.from_pretrained(
