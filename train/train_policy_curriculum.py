@@ -44,10 +44,9 @@ import logging
 import os
 import random
 import sys
-import warnings
 from collections import defaultdict
 from dataclasses import asdict
-from typing import Any, Dict, List, Set, Tuple
+from typing import Any, dict, list, set, Tuple
 
 import torch
 import wandb
@@ -56,7 +55,8 @@ from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
     TrainingArguments,
-    Trainer
+    Trainer,
+    set_seed
 )
 
 # ---------------- project imports ----------------
@@ -84,7 +84,7 @@ logger = logging.getLogger(__name__)
 
 # ------------- preprocessing (prompt→tokens) -------------
 
-def build_prompt(task_json: Dict[str, Any], solution: str | None) -> str:
+def build_prompt(task_json: dict[str, Any], solution: str | None) -> str:
     """Return full training text (prompt + optional solution)."""
     base = (
             SFT_SYSTEM_PROMPT
@@ -101,7 +101,7 @@ class WeightedCollator:
     def __init__(self, tokenizer):
         self.tokenizer = tokenizer
 
-    def __call__(self, features: List[Dict[str, Any]]):
+    def __call__(self, features: list[dict[str, Any]]):
         weights = torch.tensor([f.pop("weight") for f in features], dtype=torch.float32)
         batch = self.tokenizer.pad(features, padding=True, return_tensors="pt")
         if "labels" in batch:
@@ -133,7 +133,7 @@ class WeightedTrainer(Trainer):
 def pass_k_for_examples(
         model,
         tok,
-        examples: List[Dict[str, Any]],
+        examples: list[dict[str, Any]],
         cfg: Config,
         device: torch.device,
 ) -> Tuple[bool, float]:
@@ -180,19 +180,19 @@ def pass_k_for_examples(
 # ------------- main curriculum routine -------------
 
 def main():
-    cfg = Config()
-    setup_logging(cfg.numeric_log_level)
-    logger.info("Using model %s", cfg.policy_model)
+    config = Config()
+    set_seed(config.seed or 42)
+    setup_logging(config.numeric_log_level)
+    logger.info("Using model %s", config.policy_model)
 
     # ---------------- tokenizer / model ----------------
-    tok = AutoTokenizer.from_pretrained(cfg.policy_model, trust_remote_code=True)
+    tok = AutoTokenizer.from_pretrained(config.policy_model, trust_remote_code=True)
     tok.pad_token = tok.pad_token or tok.eos_token
     tok.padding_side = "right"
-    warnings.filterwarnings("ignore", r"Setting `pad_token_id` to `eos_token_id`")
 
     model = AutoModelForCausalLM.from_pretrained(
-        cfg.policy_model,
-        torch_dtype=torch.bfloat16 if cfg.use_bf16 else torch.float16,
+        config.policy_model,
+        torch_dtype=torch.bfloat16 if config.use_bf16 else torch.float16,
         trust_remote_code=True,
     )
     if model.config.pad_token_id is None:
@@ -200,13 +200,13 @@ def main():
     model.gradient_checkpointing_enable()
     model.enable_input_require_grads()
     model.config.use_cache = False
-    model = maybe_peft_wrap(model, cfg)
+    model = maybe_peft_wrap(model, config)
 
     # ---------------- data loading & filtering ----------------
     train_path = os.path.join(
         NET_SCRATCH_PATH,
         "sft_data",
-        f"round_{cfg.round_number}",
+        f"round_{config.round_number}",
         "policy_dataset_training.jsonl",
     )
     raw = load_dataset(
@@ -216,18 +216,18 @@ def main():
     )["train"]
     logger.info("Loaded %d lines from %s", len(raw), train_path)
 
-    rng = random.Random(cfg.seed or 42)
+    rng = random.Random(config.seed or 42)
 
     # --- first filter: description length ---
-    by_task: Dict[str, List[Dict]] = defaultdict(list)
+    by_task: dict[str, list[dict]] = defaultdict(list)
     for ex in raw:
         desc_len = len(build_prompt(ex["task_json"], None))
-        if desc_len <= cfg.max_task_description_chars:
+        if desc_len <= config.max_task_description_chars:
             by_task[ex["task_name"]].append(ex)
 
     # --- second filter: augmentation + min lines for splitting ---
-    val_plus_test = cfg.val_examples_per_task + cfg.test_examples_per_task
-    kept_tasks: Dict[str, List[Dict]] = {}
+    val_plus_test = config.val_examples_per_task + config.test_examples_per_task
+    kept_tasks: dict[str, list[dict]] = {}
     for t, lst in by_task.items():
         if len(lst) >= 2 * val_plus_test:
             kept_tasks[t] = lst
@@ -236,15 +236,15 @@ def main():
         raise RuntimeError("No tasks remain after filtering – please loosen thresholds.")
 
     # --- per‑task split + complexity ---
-    train_rows: List[Dict] = []
-    val_rows_by_task: Dict[str, List[Dict]] = {}
-    test_rows_by_task: Dict[str, List[Dict]] = {}
-    complexity_by_task: Dict[str, int] = {}
+    train_rows: list[dict] = []
+    val_rows_by_task: dict[str, list[dict]] = {}
+    test_rows_by_task: dict[str, list[dict]] = {}
+    complexity_by_task: dict[str, int] = {}
 
     for task_name, rows in kept_tasks.items():
         rng.shuffle(rows)
-        v = cfg.val_examples_per_task
-        t = cfg.test_examples_per_task
+        v = config.val_examples_per_task
+        t = config.test_examples_per_task
         val_rows = rows[:v]
         test_rows = rows[v: v + t]
         train_rows_task = rows[v + t:]
@@ -267,7 +267,7 @@ def main():
         text = build_prompt(row["task_json"], row["solution"]) + tok.eos_token
         enc = tok(
             text,
-            max_length=cfg.max_seq_len,
+            max_length=config.max_seq_len,
             truncation=True,
             padding=False,
             return_attention_mask=True,
@@ -284,22 +284,22 @@ def main():
     collator = WeightedCollator(tok)
 
     # --- wandb ---
-    if cfg.report_to == "wandb":
+    if config.report_to == "wandb":
         os.environ["WANDB_SILENT"] = "true"
         wandb.init(
-            project=cfg.wandb_project,
-            entity=cfg.wandb_entity,
-            name=f"policy-curriculum-{cfg.policy_model.split('/')[-1]}",
-            config=asdict(cfg),
+            project=config.wandb_project,
+            entity=config.wandb_entity,
+            name=f"policy-curriculum-{config.policy_model.split('/')[-1]}",
+            config=asdict(config),
         )
 
     # --- curriculum state ---
-    active_tasks: Set[str] = set(sorted_tasks[: cfg.min_active_tasks])
-    learned_tasks: Set[str] = set()
-    next_task_idx = cfg.min_active_tasks
+    active_tasks: set[str] = set(sorted_tasks[: config.min_active_tasks])
+    learned_tasks: set[str] = set()
+    next_task_idx = config.min_active_tasks
     stagnation_epochs = 0
 
-    def make_dataset(task_set: Set[str]) -> Dataset:
+    def make_dataset(task_set: set[str]) -> Dataset:
         """Return HF Dataset built from encoded rows belonging to tasks in set."""
         rows = [encoded_rows[i] for i, t in enumerate(task_of_row) if t in task_set]
         return Dataset.from_list(rows)
@@ -318,17 +318,17 @@ def main():
 
         args = TrainingArguments(
             output_dir=os.path.join(NET_SCRATCH_PATH, "models", "tmp_curriculum"),
-            per_device_train_batch_size=cfg.per_device_train_batch_size,
-            gradient_accumulation_steps=cfg.gradient_accumulation_steps,
-            learning_rate=cfg.learning_rate,
+            per_device_train_batch_size=config.per_device_train_batch_size,
+            gradient_accumulation_steps=config.gradient_accumulation_steps,
+            learning_rate=config.learning_rate,
             num_train_epochs=1,
-            warmup_ratio=cfg.warmup_ratio,
-            lr_scheduler_type=cfg.lr_scheduler_type,
-            logging_steps=cfg.logging_steps,
+            warmup_ratio=config.warmup_ratio,
+            lr_scheduler_type=config.lr_scheduler_type,
+            logging_steps=config.logging_steps,
             save_strategy="no",
-            bf16=cfg.use_bf16,
-            fp16=not cfg.use_bf16,
-            gradient_checkpointing=cfg.gradient_checkpointing,
+            bf16=config.use_bf16,
+            fp16=not config.use_bf16,
+            gradient_checkpointing=config.gradient_checkpointing,
             report_to=[],
             remove_unused_columns=False,
         )
@@ -345,14 +345,14 @@ def main():
 
         # ----------   VALIDATION   ----------
         device = trainer.args.device
-        newly_learned: Set[str] = set()
-        forgotten: Set[str] = set()
+        newly_learned: set[str] = set()
+        forgotten: set[str] = set()
         to_check = active_tasks | learned_tasks
         for t in to_check:
-            passed, fail_frac = pass_k_for_examples(model, tok, val_rows_by_task[t], cfg, device)
+            passed, fail_frac = pass_k_for_examples(model, tok, val_rows_by_task[t], config, device)
             if passed and t in active_tasks:
                 newly_learned.add(t)
-            elif (not passed) and t in learned_tasks and fail_frac > cfg.task_forgetting_threshold:
+            elif (not passed) and t in learned_tasks and fail_frac > config.task_forgetting_threshold:
                 forgotten.add(t)
         # update sets
         active_tasks -= newly_learned
@@ -362,7 +362,7 @@ def main():
 
         # ----------   REFILL if active < threshold   ----------
         added_brand_new = 0
-        while len(active_tasks) < cfg.min_active_tasks and next_task_idx < len(sorted_tasks):
+        while len(active_tasks) < config.min_active_tasks and next_task_idx < len(sorted_tasks):
             candidate = sorted_tasks[next_task_idx]
             next_task_idx += 1
             if candidate in active_tasks or candidate in learned_tasks:
@@ -375,7 +375,7 @@ def main():
         else:
             stagnation_epochs = 0
         # wandb log
-        if cfg.report_to == "wandb":
+        if config.report_to == "wandb":
             wandb.log({
                 "epoch": epoch,
                 "train/loss": train_loss,
@@ -391,7 +391,7 @@ def main():
         if len(learned_tasks) == len(sorted_tasks):
             logger.info("All tasks learned – stopping.")
             break
-        if stagnation_epochs >= cfg.max_stagnation_epochs:
+        if stagnation_epochs >= config.max_stagnation_epochs:
             logger.warning("Stopping – no brand‑new tasks for %d epochs.", stagnation_epochs)
             break
 
@@ -399,12 +399,12 @@ def main():
     logger.info("\n===== Running final TEST evaluation =====")
     passed_tasks = 0
     for t, test_ex in test_rows_by_task.items():
-        passed, _ = pass_k_for_examples(model, tok, test_ex, cfg, trainer.args.device)
+        passed, _ = pass_k_for_examples(model, tok, test_ex, config, trainer.args.device)
         if passed:
             passed_tasks += 1
     logger.info("Test pass@k: %d / %d (%.2f%%)", passed_tasks, len(test_rows_by_task),
                 100 * passed_tasks / len(test_rows_by_task))
-    if cfg.report_to == "wandb":
+    if config.report_to == "wandb":
         wandb.log({"test/passed_tasks": passed_tasks, "test/total_tasks": len(test_rows_by_task)})
         wandb.finish()
 
