@@ -46,7 +46,7 @@ import random
 import sys
 from collections import defaultdict
 from dataclasses import asdict
-from typing import Any, dict, list, set, Tuple
+from typing import Any
 
 import torch
 import wandb
@@ -136,7 +136,7 @@ def pass_k_for_examples(
         examples: list[dict[str, Any]],
         cfg: Config,
         device: torch.device,
-) -> Tuple[bool, float]:
+) -> tuple[bool, float]:
     """Return (passed_all, fail_fraction)."""
     if not examples:
         return False, 1.0
