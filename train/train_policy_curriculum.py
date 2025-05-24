@@ -246,7 +246,7 @@ def main():
     val_plus_test = config.val_examples_per_task + config.test_examples_per_task
     kept_tasks: dict[str, list[dict]] = {}
     for t, lst in by_task.items():
-        if len(lst) >= 2 * val_plus_test:
+        if len(lst) >= 4 * val_plus_test:
             kept_tasks[t] = lst
     logger.info("Kept %d tasks after filtering", len(kept_tasks))
     if not kept_tasks:
