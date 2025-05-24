@@ -6,6 +6,8 @@ import sys
 from typing import Dict, List
 
 import torch
+import wandb
+from dataclasses import asdict
 from datasets import load_dataset
 from transformers import (
     AutoModelForCausalLM,
@@ -42,43 +44,36 @@ class WeightedTrainer(Trainer):
     def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
         """Compute weighted loss for examples."""
         # Extract weights if present
-        weights = inputs.pop("weight", None)
+        weights = inputs.pop("weight")
 
         # Forward pass
         outputs = model(**inputs)
-
-        # If no weights, return standard loss
-        if weights is None:
-            return (outputs.loss, outputs) if return_outputs else outputs.loss
 
         # Compute weighted loss
         logits = outputs.logits
         labels = inputs.get("labels")
 
-        if labels is not None:
-            # Shift for autoregressive loss
-            shift_logits = logits[..., :-1, :].contiguous()
-            shift_labels = labels[..., 1:].contiguous()
+        # Shift for autoregressive loss
+        shift_logits = logits[..., :-1, :].contiguous()
+        shift_labels = labels[..., 1:].contiguous()
 
-            # Compute per-token loss with label smoothing if configured
-            loss_fct = torch.nn.CrossEntropyLoss(
-                reduction='none',
-                label_smoothing=self.args.label_smoothing_factor
-            )
-            per_token_loss = loss_fct(
-                shift_logits.view(-1, shift_logits.size(-1)),
-                shift_labels.view(-1)
-            ).view(shift_labels.size())
+        # Compute per-token loss with label smoothing if configured
+        loss_fct = torch.nn.CrossEntropyLoss(
+            reduction='none',
+            label_smoothing=self.args.label_smoothing_factor
+        )
+        per_token_loss = loss_fct(
+            shift_logits.view(-1, shift_logits.size(-1)),
+            shift_labels.view(-1)
+        ).view(shift_labels.size())
 
-            # Mask padding tokens and compute per-example loss
-            mask = shift_labels != -100
-            per_example_loss = (per_token_loss * mask).sum(dim=1) / mask.sum(dim=1).clamp(min=1)
+        # Mask padding tokens and compute per-example loss
+        mask = shift_labels != -100
+        per_example_loss = (per_token_loss * mask).sum(dim=1) / mask.sum(dim=1).clamp(min=1)
 
-            # Apply weights
-            weighted_loss = (per_example_loss * weights).sum() / weights.sum().clamp(min=1e-8)
-            loss = weighted_loss
-        else:
-            loss = outputs.loss
+        # Apply weights
+        weighted_loss = (per_example_loss * weights).sum() / weights.sum().clamp(min=1e-8)
+        loss = weighted_loss
 
         return (loss, outputs) if return_outputs else loss
 
@@ -88,21 +83,14 @@ class WeightedDataCollator(DataCollatorForLanguageModeling):
 
     def __call__(self, features, return_tensors=None) -> Dict[str, torch.Tensor]:
         # Extract and temporarily remove weights
-        weights = [f["weight"] for f in features]
+        weights = [f.pop("weight") for f in features]
 
         # Use parent class to handle padding and create batch
-        batch = super().__call__(features)
+        batch = super().__call__(features, return_tensors=return_tensors)
 
         batch["weight"] = torch.tensor(weights, dtype=torch.float32)
 
         return batch
-
-
-def format_example(task_json: Dict, solution: str, tokenizer) -> str:
-    """Format a single training example."""
-    task = ARCTask.from_dict(task_json)
-    prompt = SFT_SYSTEM_PROMPT + task_to_prompt(task) + SFT_IN_BETWEEN_PROMPT
-    return prompt + solution + tokenizer.eos_token
 
 
 def preprocess_dataset(examples: Dict[str, List], tokenizer, max_length: int):
@@ -139,9 +127,7 @@ def preprocess_dataset(examples: Dict[str, List], tokenizer, max_length: int):
         labels[:prompt_length] = [-100] * prompt_length
         model_inputs["labels"].append(labels)
 
-    # Preserve weights if present
-    if "weight" in examples:
-        model_inputs["weight"] = examples["weight"]
+    model_inputs["weight"] = examples["weight"]
 
     return model_inputs
 
@@ -164,6 +150,17 @@ def main():
     run_name = f"policy-ft-{model_name}-lr{config.learning_rate}-wd{config.weight_decay}"
     output_dir = os.path.join(NET_SCRATCH_PATH, "models", "fine_tuned", "policy", run_name)
     os.makedirs(output_dir, exist_ok=True)
+
+    if config.report_to == "wandb":
+        # Convert Config object to dict if it has a method, or pass attributes manually
+        config_dict = asdict(config)
+        wandb.init(
+            project=config.wandb_project,  # Specify project name
+            entity=config.wandb_entity,
+            name=run_name,
+            config=config_dict,  # Log your config
+            dir=output_dir  # Optional: specify wandb dir
+        )
 
     logger.info(f"Model: {config.policy_model}")
     logger.info(f"Output directory: {output_dir}")
@@ -215,16 +212,12 @@ def main():
     logger.info(f"Train examples: {len(dataset['train'])}")
     logger.info(f"Validation examples: {len(dataset['validation'])}")
 
-    # Check if weights are present in the dataset
-    has_weights = "weight" in dataset["train"].column_names
-
     # Preprocess datasets
     logger.info("Preprocessing datasets...")
     preprocess_fn = lambda examples: preprocess_dataset(examples, tokenizer, config.max_seq_len)
 
     # Keep weight column if present
-    remove_columns = [col for col in dataset["train"].column_names if col != "weight"] if has_weights else dataset[
-        "train"].column_names
+    remove_columns = [col for col in dataset["train"].column_names if col != "weight"]
 
     tokenized_datasets = dataset.map(
         preprocess_fn,
@@ -235,20 +228,12 @@ def main():
     )
 
     # Create appropriate data collator
-    if has_weights:
-        data_collator = WeightedDataCollator(
-            tokenizer=tokenizer,
-            mlm=False,
-            pad_to_multiple_of=8,  # Efficient padding for mixed precision
-        )
-        trainer_class = WeightedTrainer
-    else:
-        data_collator = DataCollatorForLanguageModeling(
-            tokenizer=tokenizer,
-            mlm=False,
-            pad_to_multiple_of=8,
-        )
-        trainer_class = Trainer
+    data_collator = WeightedDataCollator(
+        tokenizer=tokenizer,
+        mlm=False,
+        pad_to_multiple_of=8,  # Efficient padding for mixed precision
+    )
+    trainer_class = WeightedTrainer
 
     # Training arguments
     training_args = TrainingArguments(
@@ -315,20 +300,10 @@ def main():
     trainer.save_metrics("eval", eval_metrics)
 
     logger.info("Training completed!")
-    logger.info(f"Final eval loss: {eval_metrics.get('eval_loss', 'N/A'):.4f}")
-
-    if "eval_perplexity" in eval_metrics:
-        logger.info(f"Final perplexity: {eval_metrics['eval_perplexity']:.4f}")
 
     # Log to wandb if configured
     if config.report_to == "wandb":
-        import wandb
-        if wandb.run is not None:
-            wandb.log({
-                "final_eval_loss": eval_metrics.get("eval_loss"),
-                "final_eval_perplexity": eval_metrics.get("eval_perplexity", None),
-            })
-            wandb.finish()
+        wandb.finish()
 
 
 if __name__ == "__main__":
