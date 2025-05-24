@@ -21,7 +21,7 @@ Key features
    * After each epoch we run *pass@k* on **all tasks the model should know**
      (active∪learned).  A task is *learned* when it passes **all** its val
      examples at `pass@k`.
-   * If a previously learned task’s failure‑fraction exceeds
+   * If a previously learned task's failure‑fraction exceeds
      `task_forgetting_threshold`, it is re‑added to the active set.
    * When the active set becomes smaller than `min_active_tasks` (after the
      learned/forgotten update) we *fill it back up* with harder tasks in
@@ -292,6 +292,12 @@ def main():
     sorted_tasks = sorted(complexity_by_task, key=lambda x: complexity_by_task[x])
     logger.info("Curriculum order prepared with %d tasks", len(sorted_tasks))
 
+    # Log complexity distribution
+    complexities = [complexity_by_task[t] for t in sorted_tasks]
+    logger.info("Complexity range: min=%d, max=%d, median=%d",
+                min(complexities), max(complexities),
+                complexities[len(complexities) // 2])
+
     # --- tokenise *once* all training rows ---
     def encode_row(row):
         text = build_prompt(row["task_json"], row["solution"]) + tok.eos_token
@@ -329,6 +335,18 @@ def main():
     next_task_idx = config.min_active_tasks
     stagnation_epochs = 0
 
+    # Log initial curriculum state
+    logger.info("=" * 80)
+    logger.info("CURRICULUM INITIALIZATION")
+    logger.info("=" * 80)
+    logger.info("Initial active tasks: %d", len(active_tasks))
+    logger.info("Active task names: %s", sorted(list(active_tasks)))
+    logger.info("Active task complexities: %s", [complexity_by_task[t] for t in sorted(active_tasks)])
+    logger.info("Min active tasks threshold: %d", config.min_active_tasks)
+    logger.info("Max stagnation epochs: %d", config.max_stagnation_epochs)
+    logger.info("Task forgetting threshold: %.2f", config.task_forgetting_threshold)
+    logger.info("=" * 80)
+
     def make_dataset(task_set: set[str]) -> Dataset:
         """Return HF Dataset built from encoded rows belonging to tasks in set."""
         rows = [encoded_rows[i] for i, t in enumerate(task_of_row) if t in task_set]
@@ -337,8 +355,12 @@ def main():
     epoch = 0
     while True:
         epoch += 1
-        logger.info("\n===== Curriculum Epoch %d | active=%d learned=%d =====", epoch, len(active_tasks),
-                    len(learned_tasks))
+        logger.info("\n" + "=" * 80)
+        logger.info("CURRICULUM EPOCH %d STARTING", epoch)
+        logger.info("=" * 80)
+        logger.info("Active tasks: %d, Learned tasks: %d", len(active_tasks), len(learned_tasks))
+        logger.info("Current active tasks: %s", sorted(list(active_tasks)))
+        logger.info("Current learned tasks: %s", sorted(list(learned_tasks)))
 
         # ----------   FINE‑TUNE for 1 epoch on active set   ----------
         train_ds = make_dataset(active_tasks)
@@ -347,7 +369,7 @@ def main():
             break
 
         logger.info(
-            "Epoch %d: training on %d examples (active tasks=%d)",
+            "Epoch %d: training on %d examples from %d active tasks",
             epoch,
             len(train_ds),
             len(active_tasks),
@@ -378,22 +400,72 @@ def main():
         )
 
         train_output = trainer.train()
-        train_loss = train_output.training_loss  # Get average loss for the epoch
-        # Ensure train_loss is a float for logging, handle None if training somehow failed to produce loss
+        train_loss = train_output.training_loss
         current_loss_for_log = train_loss if train_loss is not None else -1.0
-        logger.info("epoch %d train‑loss %.4f", epoch, current_loss_for_log)
+
+        # Enhanced training completion logging
+        logger.info("-" * 60)
+        logger.info("EPOCH %d TRAINING COMPLETE", epoch)
+        logger.info("-" * 60)
+        logger.info("Training Loss: %.4f", current_loss_for_log)
+        logger.info("Training Examples: %d", len(train_ds))
+        logger.info("Steps per epoch: %d", len(trainer.get_train_dataloader()))
+        logger.info("Effective batch size: %d",
+                    config.per_device_train_batch_size * config.gradient_accumulation_steps)
+        logger.info("Learning Rate: %e", config.learning_rate)
 
         # ----------   VALIDATION   ----------
         device = trainer.args.device
         newly_learned: set[str] = set()
         forgotten: set[str] = set()
         to_check = active_tasks | learned_tasks
+
+        logger.info("\n" + "-" * 60)
+        logger.info("EPOCH %d VALIDATION RESULTS", epoch)
+        logger.info("-" * 60)
+        logger.info("Evaluating %d tasks (pass@%d)", len(to_check), config.pass_k)
+
+        validation_results = {}
+        total_passed = 0
+        total_tasks_checked = len(to_check)
+
         for t in to_check:
             passed, fail_frac = pass_k_for_examples(model, tok, val_rows_by_task[t], config, device)
-            if passed and t in active_tasks:
-                newly_learned.add(t)
-            elif (not passed) and t in learned_tasks and fail_frac > config.task_forgetting_threshold:
-                forgotten.add(t)
+            pass_rate = (1.0 - fail_frac) * 100
+            status = "ACTIVE" if t in active_tasks else "LEARNED"
+
+            validation_results[t] = {
+                'passed': passed,
+                'fail_fraction': fail_frac,
+                'pass_rate': pass_rate,
+                'status': status,
+                'complexity': complexity_by_task[t]
+            }
+
+            if passed:
+                total_passed += 1
+                if t in active_tasks:
+                    newly_learned.add(t)
+                    logger.info("PASS %s [%s->LEARNED] Pass Rate: %.1f%% (complexity: %d)",
+                                t, status, pass_rate, complexity_by_task[t])
+                else:
+                    logger.info("PASS %s [%s] Pass Rate: %.1f%% (complexity: %d)",
+                                t, status, pass_rate, complexity_by_task[t])
+            else:
+                if t in learned_tasks and fail_frac > config.task_forgetting_threshold:
+                    forgotten.add(t)
+                    logger.info(
+                        "FAIL %s [%s->FORGOTTEN] Pass Rate: %.1f%% (complexity: %d) - FAIL RATE %.1f%% > %.1f%%",
+                        t, status, pass_rate, complexity_by_task[t],
+                        fail_frac * 100, config.task_forgetting_threshold * 100)
+                else:
+                    logger.info("FAIL %s [%s] Pass Rate: %.1f%% (complexity: %d)",
+                                t, status, pass_rate, complexity_by_task[t])
+
+        logger.info("-" * 40)
+        logger.info("VALIDATION SUMMARY: %d/%d tasks passed (%.1f%%)",
+                    total_passed, total_tasks_checked, (total_passed / total_tasks_checked) * 100)
+
         # update sets
         active_tasks -= newly_learned
         learned_tasks |= newly_learned
@@ -417,16 +489,63 @@ def main():
         else:
             stagnation_epochs = 0
 
-        # per-epoch summary logging
-        logger.info(
-            "Epoch %d summary: newly_learned=%d, forgotten=%d, brand_new_added=%d, brand_new_tasks=%s, stagnation_epochs=%d",
-            epoch,
-            len(newly_learned),
-            len(forgotten),
-            added_brand_new,
-            brand_new,
-            stagnation_epochs,
-        )
+        # COMPREHENSIVE EPOCH SUMMARY
+        logger.info("\n" + "=" * 80)
+        logger.info("EPOCH %d COMPREHENSIVE SUMMARY", epoch)
+        logger.info("=" * 80)
+
+        # Task progression
+        logger.info("TASK PROGRESSION:")
+        logger.info("  Learned this epoch: %d tasks %s", len(newly_learned),
+                    sorted(list(newly_learned)) if newly_learned else "[]")
+        logger.info("  Forgotten this epoch: %d tasks %s", len(forgotten),
+                    sorted(list(forgotten)) if forgotten else "[]")
+        logger.info("  New tasks added: %d tasks %s", added_brand_new,
+                    sorted(brand_new) if brand_new else "[]")
+
+        # Current state
+        logger.info("\nCURRENT STATE:")
+        logger.info("  Active tasks: %d/%d", len(active_tasks), config.min_active_tasks)
+        logger.info("  Learned tasks: %d", len(learned_tasks))
+        logger.info("  Total progress: %d/%d tasks (%.1f%%)",
+                    len(learned_tasks), len(sorted_tasks), (len(learned_tasks) / len(sorted_tasks)) * 100)
+        logger.info("  Stagnation epochs: %d/%d", stagnation_epochs, config.max_stagnation_epochs)
+
+        # Curriculum progress
+        if next_task_idx < len(sorted_tasks):
+            logger.info("  Curriculum position: %d/%d (%.1f%% through)",
+                        next_task_idx, len(sorted_tasks), (next_task_idx / len(sorted_tasks)) * 100)
+            logger.info("  Next task complexity: %d", complexity_by_task[sorted_tasks[next_task_idx]])
+        else:
+            logger.info("  Curriculum: COMPLETED - all tasks seen")
+
+        # Performance breakdown by complexity
+        if validation_results:
+            complexities = [validation_results[t]['complexity'] for t in validation_results]
+            min_complexity = min(complexities)
+            max_complexity = max(complexities)
+            avg_complexity = sum(complexities) / len(complexities)
+
+            logger.info("\nCOMPLEXITY ANALYSIS:")
+            logger.info("  Complexity range: %d - %d (avg: %.1f)", min_complexity, max_complexity, avg_complexity)
+
+            # Breakdown by complexity buckets
+            low_tasks = [t for t, r in validation_results.items() if r['complexity'] <= avg_complexity]
+            high_tasks = [t for t, r in validation_results.items() if r['complexity'] > avg_complexity]
+
+            low_passed = sum(1 for t in low_tasks if validation_results[t]['passed'])
+            high_passed = sum(1 for t in high_tasks if validation_results[t]['passed'])
+
+            if low_tasks:
+                logger.info("  Low complexity (<=%.1f): %d/%d passed (%.1f%%)",
+                            avg_complexity, low_passed, len(low_tasks),
+                            (low_passed / len(low_tasks) * 100))
+            if high_tasks:
+                logger.info("  High complexity (>%.1f): %d/%d passed (%.1f%%)",
+                            avg_complexity, high_passed, len(high_tasks),
+                            (high_passed / len(high_tasks) * 100))
+
+        logger.info("=" * 80)
 
         # wandb log
         if config.report_to == "wandb":
@@ -439,6 +558,9 @@ def main():
                 "forgotten": len(forgotten),
                 "brand_new_added": added_brand_new,
                 "stagnation_epochs": stagnation_epochs,
+                "total_progress_pct": (len(learned_tasks) / len(sorted_tasks)) * 100,
+                "curriculum_progress_pct": (next_task_idx / len(sorted_tasks)) * 100,
+                "validation_pass_rate": (total_passed / total_tasks_checked) * 100,
             })
 
         # ----------   TERMINATION   ----------
@@ -450,16 +572,104 @@ def main():
             break
 
     # ---------------- final test ----------------
-    logger.info("\n===== Running final TEST evaluation =====")
+    logger.info("\n" + "=" * 80)
+    logger.info("FINAL TEST EVALUATION")
+    logger.info("=" * 80)
+    logger.info("Evaluating on test sets with pass@%d", config.pass_k)
+
+    test_results = {}
     passed_tasks = 0
+    total_test_examples = 0
+    passed_test_examples = 0
+
     for t, test_ex in test_rows_by_task.items():
-        passed, _ = pass_k_for_examples(model, tok, test_ex, config, trainer.args.device)
+        passed, fail_frac = pass_k_for_examples(model, tok, test_ex, config, trainer.args.device)
+        pass_rate = (1.0 - fail_frac) * 100
+
+        test_results[t] = {
+            'passed': passed,
+            'pass_rate': pass_rate,
+            'num_examples': len(test_ex),
+            'complexity': complexity_by_task[t],
+            'was_learned': t in learned_tasks
+        }
+
+        total_test_examples += len(test_ex)
+        passed_test_examples += int(pass_rate * len(test_ex) / 100)
+
         if passed:
             passed_tasks += 1
-    logger.info("Test pass@k: %d / %d (%.2f%%)", passed_tasks, len(test_rows_by_task),
+            logger.info("PASS %s: %.1f%% (%d examples, complexity: %d) %s",
+                        t, pass_rate, len(test_ex), complexity_by_task[t],
+                        "[LEARNED]" if t in learned_tasks else "[NOT LEARNED]")
+        else:
+            logger.info("FAIL %s: %.1f%% (%d examples, complexity: %d) %s",
+                        t, pass_rate, len(test_ex), complexity_by_task[t],
+                        "[LEARNED]" if t in learned_tasks else "[NOT LEARNED]")
+
+    # Final statistics
+    logger.info("-" * 80)
+    logger.info("FINAL TEST RESULTS:")
+    logger.info("  Tasks passed: %d/%d (%.2f%%)", passed_tasks, len(test_rows_by_task),
                 100 * passed_tasks / len(test_rows_by_task))
+    logger.info("  Examples passed (approx): %d/%d (%.2f%%)", passed_test_examples, total_test_examples,
+                100 * passed_test_examples / total_test_examples)
+
+    # Breakdown by learned vs not learned
+    learned_test_results = {t: r for t, r in test_results.items() if r['was_learned']}
+    not_learned_test_results = {t: r for t, r in test_results.items() if not r['was_learned']}
+
+    if learned_test_results:
+        learned_passed = sum(1 for r in learned_test_results.values() if r['passed'])
+        logger.info("  Learned tasks: %d/%d passed (%.1f%%)",
+                    learned_passed, len(learned_test_results),
+                    (learned_passed / len(learned_test_results) * 100))
+
+    if not_learned_test_results:
+        not_learned_passed = sum(1 for r in not_learned_test_results.values() if r['passed'])
+        logger.info("  Not learned tasks: %d/%d passed (%.1f%%)",
+                    not_learned_passed, len(not_learned_test_results),
+                    (not_learned_passed / len(not_learned_test_results) * 100))
+
+    # Complexity breakdown for test results
+    if test_results:
+        test_complexities = [r['complexity'] for r in test_results.values()]
+        avg_test_complexity = sum(test_complexities) / len(test_complexities)
+
+        low_test_tasks = {t: r for t, r in test_results.items() if r['complexity'] <= avg_test_complexity}
+        high_test_tasks = {t: r for t, r in test_results.items() if r['complexity'] > avg_test_complexity}
+
+        if low_test_tasks:
+            low_test_passed = sum(1 for r in low_test_tasks.values() if r['passed'])
+            logger.info("  Low complexity tasks: %d/%d passed (%.1f%%)",
+                        low_test_passed, len(low_test_tasks),
+                        (low_test_passed / len(low_test_tasks) * 100))
+
+        if high_test_tasks:
+            high_test_passed = sum(1 for r in high_test_tasks.values() if r['passed'])
+            logger.info("  High complexity tasks: %d/%d passed (%.1f%%)",
+                        high_test_passed, len(high_test_tasks),
+                        (high_test_passed / len(high_test_tasks) * 100))
+
+    logger.info("=" * 80)
+
     if config.report_to == "wandb":
-        wandb.log({"test/passed_tasks": passed_tasks, "test/total_tasks": len(test_rows_by_task)})
+        wandb.log({
+            "test/passed_tasks": passed_tasks,
+            "test/total_tasks": len(test_rows_by_task),
+            "test/task_pass_rate": 100 * passed_tasks / len(test_rows_by_task),
+            "test/example_pass_rate": 100 * passed_test_examples / total_test_examples,
+        })
+        if learned_test_results:
+            learned_passed = sum(1 for r in learned_test_results.values() if r['passed'])
+            wandb.log({
+                "test/learned_tasks_pass_rate": (learned_passed / len(learned_test_results) * 100)
+            })
+        if not_learned_test_results:
+            not_learned_passed = sum(1 for r in not_learned_test_results.values() if r['passed'])
+            wandb.log({
+                "test/not_learned_tasks_pass_rate": (not_learned_passed / len(not_learned_test_results) * 100)
+            })
         wandb.finish()
 
     # save final adapter / model
