@@ -7,13 +7,12 @@ Curriculum‑aware fine‑tuning script for the ARC **policy** model
 Key features
 ------------
 1. **Per‑task split** –for every ARC task we create **train / validation / test** splits *within the training JSONL*:
-   * tasks with < `min_augmentation_threshold` lines **or** < `2×(val+test)` lines are dropped.
+   * tasks with < `2×(val+test)` lines are dropped.
    * `val_examples_per_task` + `test_examples_per_task` examples are sliced off first, the rest form the training subset.
 2. **Task filtering** – tasks whose textual description length exceeds
    `max_task_description_chars` are removed *before* all other filtering.
-3. **Curriculum order** – remaining tasks are sorted by code‑complexity, either
-   *non‑comment lines* or *non‑comment characters* (configurable via
-   `task_complexity_metric`).
+3. **Curriculum order** – remaining tasks are sorted by code‑complexity, which in this case is defined as the number of
+   *non‑comment lines*
 4. **Dynamic training loop**
    * Start with the `min_active_tasks` easiest tasks.
    * **Epoch = one full pass** over *only* the training examples of the current
@@ -30,24 +29,6 @@ Key features
    * **Early‑stop** when either all tasks are learned or **no brand‑new task has
      been added** for `max_stagnation_epochs` consecutive epochs.
 5. **End‑of‑run test** – pass@k on the per‑task test slice.
-
-Add the following fields to your `Config` yaml if they are not present already:
-```
-# curriculum settings
-min_augmentation_threshold: 4            # filtered if < this (after desc filter)
-val_examples_per_task: 2
-test_examples_per_task: 2
-max_task_description_chars: 4096
-task_complexity_metric: "lines"          # "lines" | "chars"
-min_active_tasks: 4                      # trigger refill when active set < this
-max_stagnation_epochs: 5
-pass_k: 5                                # k for pass@k
-curriculum_eval_temperatures: [0.8, 0.2] # tried in round‑robin
-top_p: 0.95
-top_k: 50
-max_tokens: 512
-task_forgetting_threshold: 0.2           # > this fraction failing ⇒ re‑learn
-```
 
 The script can be launched exactly like the old `train_policy.py`, e.g.:
 ```bash
@@ -75,6 +56,7 @@ from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
     TrainingArguments,
+    Trainer
 )
 
 # ---------------- project imports ----------------
@@ -129,9 +111,6 @@ class WeightedCollator:
 
 
 # ------------- Trainer subclass with weighted loss -------------
-from transformers import Trainer
-
-
 class WeightedTrainer(Trainer):
     def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
         w = inputs.pop("weight")
@@ -170,7 +149,6 @@ def pass_k_for_examples(
     for ex in examples:
         task = ARCTask.from_dict(ex["task_json"])
         prompt = build_prompt(ex["task_json"], solution=None)
-        prompt += ""  # ensure str
         passed_once = False
         for i, t in enumerate(temps):
             attempts = per_temp + (1 if i < leftover else 0)
@@ -251,7 +229,7 @@ def main():
     val_plus_test = cfg.val_examples_per_task + cfg.test_examples_per_task
     kept_tasks: Dict[str, List[Dict]] = {}
     for t, lst in by_task.items():
-        if len(lst) >= cfg.min_augmentation_threshold and len(lst) >= 2 * val_plus_test:
+        if len(lst) >= 2 * val_plus_test:
             kept_tasks[t] = lst
     logger.info("Kept %d tasks after filtering", len(kept_tasks))
     if not kept_tasks:
@@ -270,7 +248,7 @@ def main():
         val_rows = rows[:v]
         test_rows = rows[v: v + t]
         train_rows_task = rows[v + t:]
-        # renormalise weights (sum=1 per task)
+        # renormalize weights (sum=1 per task)
         w = 1.0 / len(train_rows_task)
         for r in train_rows_task:
             r["weight"] = w

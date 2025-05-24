@@ -151,9 +151,19 @@ class Config:
     # Evaluation options
     num_validation_samples: int = 5  # Number of validation prompts to sample for qualitative evaluation
     num_training_samples: int = 5  # Number of training prompts to sample for qualitative evaluation
-    pass_k: int = 1  # Number of generations per task to sample for pass@k evaluation
+    pass_k: int = 5 # Number of generations per task to sample for pass@k evaluation
     eval_temperatures: tuple[float, ...] = (0.1, 0.4,
                                             0.8)  # Sampling temperatures for multiple generations during evaluation
+
+    # curriculum settings
+    val_examples_per_task: int = 2
+    test_examples_per_task: int = 2
+    max_task_description_chars: int = 2048
+    min_active_tasks: int = 5  # trigger refill when active set < this
+    max_stagnation_epochs: int = 5
+    curriculum_eval_temperatures: list[float] = field(default_factory=lambda: [0.2, 0.8])  # tried in round‑robin
+    task_forgetting_threshold: float = 0.5
+
     perplexity_window_size: Optional[
         int] = None  # Window size for smoothing per-token perplexity (None for no smoothing)
     min_steps_for_format_adherence: int = 2  # Minimum number of steps required for format adherence
