@@ -259,7 +259,7 @@ def main():
 
         # Logging and evaluation
         logging_steps=config.logging_steps,
-        evaluation_strategy="steps",
+        eval_strategy="steps",
         eval_steps=config.eval_steps,
 
         # Checkpointing
