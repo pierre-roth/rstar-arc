@@ -8,6 +8,7 @@ max-tokens: 4096
 
 policy-model: "Qwen/Qwen2.5-Coder-1.5B"
 use-bf16: true
+train-on-prompts: false
 
 full-finetune: true
 weight_decay: 0.01

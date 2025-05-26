@@ -306,15 +306,33 @@ def main():
 
     # --- tokenise *once* all training rows ---
     def encode_row(row):
-        text = build_prompt(row["task_json"], row["solution"]) + tok.eos_token
+        full_text = build_prompt(row["task_json"], row["solution"]) + tok.eos_token
+
+        # Tokenize full text
         enc = tok(
-            text,
+            full_text,
             max_length=config.max_seq_len,
             truncation=True,
             padding=False,
             return_attention_mask=True,
         )
-        enc["labels"] = enc["input_ids"].copy()
+
+        if config.train_on_prompts:
+            # Train on entire sequence (prompt + completion)
+            enc["labels"] = enc["input_ids"].copy()
+        else:
+            # Train only on completion (mask prompt tokens)
+            prompt_text = build_prompt(row["task_json"], None)
+            prompt_tokens = tok(prompt_text, add_special_tokens=False).input_ids
+            prompt_length = len(prompt_tokens)
+
+            # Create labels with prompt tokens masked
+            labels = enc["input_ids"].copy()
+            for i in range(min(prompt_length, len(labels))):
+                labels[i] = -100
+
+            enc["labels"] = labels
+
         enc["weight"] = row["weight"]
         return enc
 
