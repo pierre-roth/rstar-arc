@@ -47,6 +47,7 @@ import sys
 from collections import defaultdict
 from dataclasses import asdict
 from typing import Any
+from datetime import datetime
 
 import torch
 import wandb
@@ -700,7 +701,7 @@ def main():
         wandb.finish()
 
     # save final adapter / model
-    out_dir = os.path.join(NET_SCRATCH_PATH, "models", "fine_tuned", "policy", "curriculum_final")
+    out_dir = os.path.join(NET_SCRATCH_PATH, "models", "fine_tuned", "policy", f"curriculum_final_{datetime.now().strftime('%Y%m%d-%H%M%S')}")
     os.makedirs(out_dir, exist_ok=True)
     model.save_pretrained(out_dir)
     tok.save_pretrained(out_dir)
