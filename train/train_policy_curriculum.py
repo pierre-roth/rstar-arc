@@ -258,7 +258,7 @@ def main():
     kept_tasks: dict[str, list[dict]] = {}
     for t, lst in by_task.items():
         if len(lst) >= 2 * val_plus_test:
-            kept_tasks[t] = lst[:config.max_train_examples_per_task]
+            kept_tasks[t] = lst
     logger.info("Kept %d tasks after filtering", len(kept_tasks))
     if not kept_tasks:
         raise RuntimeError("No tasks remain after filtering – please loosen thresholds.")

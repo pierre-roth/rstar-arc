@@ -155,7 +155,6 @@ class Config:
     eval_temperatures: tuple[float, ...] = (0.1, 0.4, 0.8)  # Sampling temperatures for multiple generations during evaluation
 
     # curriculum settings
-    max_train_examples_per_task: int = 16  # Maximum number of training examples per task
     val_examples_per_task: int = 2
     test_examples_per_task: int = 2
     max_task_description_chars: int = 2048
