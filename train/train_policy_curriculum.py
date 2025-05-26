@@ -165,7 +165,8 @@ def pass_k_for_examples(
                         top_p=cfg.top_p,
                         top_k=cfg.top_k if cfg.top_k > 0 else None,
                         max_new_tokens=cfg.max_tokens,
-                        pad_token_id=tok.pad_token_id
+                        pad_token_id=tok.pad_token_id,
+                        repetition_penalty=cfg.repetition_penalty
                     )
                 gen_text = tok.decode(gen_ids[0], skip_special_tokens=True)
                 code = remove_markers(gen_text[len(prompt):])  # strip prompt prefix
