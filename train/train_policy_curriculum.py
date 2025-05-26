@@ -145,10 +145,7 @@ def pass_k_for_examples(
     per_temp = cfg.pass_k // len(temps)
     leftover = cfg.pass_k % len(temps)
 
-    # Temporarily disable gradient checkpointing for generation
-    gradient_checkpointing_was_enabled = model.config.gradient_checkpointing
-    if gradient_checkpointing_was_enabled:
-        model.gradient_checkpointing_disable()
+    model.gradient_checkpointing_disable()
 
     fails = 0
     for ex in examples:
@@ -180,9 +177,7 @@ def pass_k_for_examples(
         if not passed_once:
             fails += 1
 
-    # Re-enable gradient checkpointing if it was enabled
-    if gradient_checkpointing_was_enabled:
-        model.gradient_checkpointing_enable()
+    model.gradient_checkpointing_enable()
 
     total = len(examples)
     return fails == 0, fails / total
