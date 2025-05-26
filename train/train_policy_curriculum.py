@@ -361,16 +361,16 @@ def main():
     stagnation_epochs = 0
 
     # Log initial curriculum state
-    logger.info("=" * 80)
+    logger.info("=" * 40)
     logger.info("CURRICULUM INITIALIZATION")
-    logger.info("=" * 80)
+    logger.info("=" * 40)
     logger.info("Initial active tasks: %d", len(active_tasks))
     logger.info("Active task names: %s", sorted(list(active_tasks)))
     logger.info("Active task complexities: %s", [complexity_by_task[t] for t in sorted(active_tasks)])
     logger.info("Min active tasks threshold: %d", config.min_active_tasks)
     logger.info("Max stagnation epochs: %d", config.max_stagnation_epochs)
     logger.info("Task forgetting threshold: %.2f", config.task_forgetting_threshold)
-    logger.info("=" * 80)
+    logger.info("=" * 40)
 
     def make_dataset(task_set: set[str]) -> Dataset:
         """Return HF Dataset built from encoded rows belonging to tasks in set."""
@@ -380,9 +380,9 @@ def main():
     epoch = 0
     while True:
         epoch += 1
-        logger.info("\n" + "=" * 80)
+        logger.info("\n" + "=" * 30)
         logger.info("CURRICULUM EPOCH %d STARTING", epoch)
-        logger.info("=" * 80)
+        logger.info("=" * 30)
         logger.info("Active tasks: %d, Learned tasks: %d", len(active_tasks), len(learned_tasks))
         logger.info("Current active tasks: %s", sorted(list(active_tasks)))
         logger.info("Current learned tasks: %s", sorted(list(learned_tasks)))
@@ -432,9 +432,9 @@ def main():
         current_loss_for_log = train_loss if train_loss is not None else -1.0
 
         # Enhanced training completion logging
-        logger.info("-" * 60)
+        logger.info("=" * 30)
         logger.info("EPOCH %d TRAINING COMPLETE", epoch)
-        logger.info("-" * 60)
+        logger.info("=" * 30)
         logger.info("Training Loss: %.4f", current_loss_for_log)
         logger.info("Training Examples: %d", len(train_ds))
         logger.info("Steps per epoch: %d", len(trainer.get_train_dataloader()))
@@ -448,9 +448,9 @@ def main():
         forgotten: set[str] = set()
         to_check = active_tasks | learned_tasks
 
-        logger.info("\n" + "-" * 60)
+        logger.info("\n" + "=" * 30)
         logger.info("EPOCH %d VALIDATION RESULTS", epoch)
-        logger.info("-" * 60)
+        logger.info("=" * 30)
         logger.info("Evaluating %d tasks (pass@%d)", len(to_check), config.pass_k)
 
         validation_results = {}
@@ -490,7 +490,7 @@ def main():
                     logger.info("FAIL %s [%s] Pass Rate: %.1f%% (complexity: %d)",
                                 t, status, pass_rate, complexity_by_task[t])
 
-        logger.info("-" * 40)
+        logger.info("=" * 30)
         logger.info("VALIDATION SUMMARY: %d/%d tasks passed (%.1f%%)",
                     total_passed, total_tasks_checked, (total_passed / total_tasks_checked) * 100)
 
@@ -518,9 +518,9 @@ def main():
             stagnation_epochs = 0
 
         # COMPREHENSIVE EPOCH SUMMARY
-        logger.info("\n" + "=" * 80)
+        logger.info("\n" + "=" * 30)
         logger.info("EPOCH %d COMPREHENSIVE SUMMARY", epoch)
-        logger.info("=" * 80)
+        logger.info("=" * 30)
 
         # Task progression
         logger.info("TASK PROGRESSION:")
@@ -573,7 +573,7 @@ def main():
                             avg_complexity, high_passed, len(high_tasks),
                             (high_passed / len(high_tasks) * 100))
 
-        logger.info("=" * 80)
+        logger.info("=" * 30)
 
         # wandb log
         if config.report_to == "wandb":
@@ -600,9 +600,9 @@ def main():
             break
 
     # ---------------- final test ----------------
-    logger.info("\n" + "=" * 80)
+    logger.info("\n" + "=" * 40)
     logger.info("FINAL TEST EVALUATION")
-    logger.info("=" * 80)
+    logger.info("=" * 40)
     logger.info("Evaluating on test sets with pass@%d", config.pass_k)
 
     test_results = {}
@@ -636,7 +636,7 @@ def main():
                         "[LEARNED]" if t in learned_tasks else "[NOT LEARNED]")
 
     # Final statistics
-    logger.info("-" * 80)
+    logger.info("=" * 40)
     logger.info("FINAL TEST RESULTS:")
     logger.info("  Tasks passed: %d/%d (%.2f%%)", passed_tasks, len(test_rows_by_task),
                 100 * passed_tasks / len(test_rows_by_task))
@@ -679,7 +679,7 @@ def main():
                         high_test_passed, len(high_test_tasks),
                         (high_test_passed / len(high_test_tasks) * 100))
 
-    logger.info("=" * 80)
+    logger.info("=" * 40)
 
     if config.report_to == "wandb":
         wandb.log({
