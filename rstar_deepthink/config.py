@@ -151,7 +151,7 @@ class Config:
     # Evaluation options
     num_validation_samples: int = 5  # Number of validation prompts to sample for qualitative evaluation
     num_training_samples: int = 5  # Number of training prompts to sample for qualitative evaluation
-    pass_k: int = 5 # Number of generations per task to sample for pass@k evaluation
+    pass_k: int = 8  # Number of generations per task to sample for pass@k evaluation
     eval_temperatures: tuple[float, ...] = (0.1, 0.4, 0.8)  # Sampling temperatures for multiple generations during evaluation
 
     # curriculum settings
