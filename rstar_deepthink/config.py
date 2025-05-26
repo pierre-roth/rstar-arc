@@ -155,11 +155,12 @@ class Config:
     eval_temperatures: tuple[float, ...] = (0.1, 0.4, 0.8)  # Sampling temperatures for multiple generations during evaluation
 
     # curriculum settings
+    max_train_examples_per_task: int = 16  # Maximum number of training examples per task
     val_examples_per_task: int = 2
     test_examples_per_task: int = 2
     max_task_description_chars: int = 2048
-    min_active_tasks: int = 10  # trigger refill when active set < this
-    max_stagnation_epochs: int = 5
+    min_active_tasks: int = 8  # trigger refill when active set < this
+    max_stagnation_epochs: int = 16
     curriculum_eval_temperatures: list[float] = field(default_factory=lambda: [0.2, 0.8])  # tried in round‑robin
     task_forgetting_threshold: float = 0.5
 

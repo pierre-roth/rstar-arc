@@ -258,7 +258,7 @@ def main():
     kept_tasks: dict[str, list[dict]] = {}
     for t, lst in by_task.items():
         if len(lst) >= 4 * val_plus_test:
-            kept_tasks[t] = lst
+            kept_tasks[t] = lst[:config.max_train_examples_per_task]
     logger.info("Kept %d tasks after filtering", len(kept_tasks))
     if not kept_tasks:
         raise RuntimeError("No tasks remain after filtering – please loosen thresholds.")
@@ -391,7 +391,7 @@ def main():
             per_device_train_batch_size=config.per_device_train_batch_size,
             gradient_accumulation_steps=config.gradient_accumulation_steps,
             learning_rate=config.learning_rate,
-            num_train_epochs=1,
+            num_train_epochs=config.num_train_epochs,
             warmup_ratio=config.warmup_ratio,
             lr_scheduler_type=config.lr_scheduler_type,
             logging_steps=config.logging_steps,
@@ -401,6 +401,9 @@ def main():
             gradient_checkpointing=config.gradient_checkpointing,
             report_to=[],
             remove_unused_columns=False,
+            weight_decay=config.weight_decay,
+            max_grad_norm=config.max_grad_norm,
+            label_smoothing_factor=config.label_smoothing_factor
         )
         trainer = WeightedTrainer(
             model=model,
