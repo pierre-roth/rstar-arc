@@ -145,6 +145,11 @@ def pass_k_for_examples(
     per_temp = cfg.pass_k // len(temps)
     leftover = cfg.pass_k % len(temps)
 
+    # Temporarily disable gradient checkpointing for generation
+    gradient_checkpointing_was_enabled = model.config.gradient_checkpointing
+    if gradient_checkpointing_was_enabled:
+        model.gradient_checkpointing_disable()
+
     fails = 0
     for ex in examples:
         task = ARCTask.from_dict(ex["task_json"])
@@ -162,6 +167,7 @@ def pass_k_for_examples(
                         top_p=cfg.top_p,
                         top_k=cfg.top_k if cfg.top_k > 0 else None,
                         max_new_tokens=cfg.max_tokens,
+                        pad_token_id=tok.pad_token_id
                     )
                 gen_text = tok.decode(gen_ids[0], skip_special_tokens=True)
                 code = remove_markers(gen_text[len(prompt):])  # strip prompt prefix
@@ -173,6 +179,11 @@ def pass_k_for_examples(
                 break
         if not passed_once:
             fails += 1
+
+    # Re-enable gradient checkpointing if it was enabled
+    if gradient_checkpointing_was_enabled:
+        model.gradient_checkpointing_enable()
+
     total = len(examples)
     return fails == 0, fails / total
 
@@ -395,7 +406,7 @@ def main():
             model=model,
             args=args,
             train_dataset=train_ds,
-            tokenizer=tok,
+            processing_class=tok,
             data_collator=collator,
         )
 
