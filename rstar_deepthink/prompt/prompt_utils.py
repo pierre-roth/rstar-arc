@@ -15,7 +15,7 @@ def task_to_prompt(task: ARCTask) -> str:
         prompt.append(f"Input shape: {example.input_grid.rows} x {example.input_grid.columns}")
         prompt.append("Input:\n")
         prompt.append(str(example.input_grid) + "\n")
-        prompt.append(f"Output shape: {example.input_grid.rows} x {example.input_grid.columns}")
+        prompt.append(f"Output shape: {example.output_grid.rows} x {example.output_grid.columns}")
         prompt.append("Output:\n")
         prompt.append(str(example.output_grid) + "\n\n")
 
