@@ -7,6 +7,7 @@ import torch
 from torch import nn
 
 # Heavy frameworks (PEFT, Transformers) are imported inside methods to keep module import light
+from constants import SPECIAL_TOKENS
 from rstar_deepthink.config import Config
 
 logger = logging.getLogger(__name__)
@@ -81,6 +82,14 @@ class RewardModelModule(nn.Module):
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
             logger.info(f"Tokenizer pad_token was None, set to eos_token: {self.tokenizer.eos_token}")
+
+        added = self.tokenizer.add_special_tokens({"additional_special_tokens": SPECIAL_TOKENS})
+        if added > 0:
+            logger.info(f"Added {added} special tokens to tokenizer")
+            try:
+                self.backbone.resize_token_embeddings(len(self.tokenizer))
+            except Exception as e:
+                logger.warning(f"Could not resize token embeddings: {e}")
 
         self.eval()  # Set model to evaluation mode by default
 

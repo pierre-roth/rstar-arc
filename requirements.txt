@@ -24,3 +24,4 @@ scipy
 peft
 wandb
 questionary
+pytest

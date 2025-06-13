@@ -51,6 +51,7 @@ from constants import (
     NET_SCRATCH_PATH,
     CODE_PREFIX,
     STEP_END,
+    SPECIAL_TOKENS
 )
 from utils import setup_logging
 from train_utils import maybe_peft_wrap
@@ -101,12 +102,21 @@ tok = AutoTokenizer.from_pretrained(config.policy_model, trust_remote_code=True)
 tok.pad_token = tok.pad_token or tok.eos_token
 tok.padding_side = "right"
 
+added_tokens = tok.add_special_tokens({"additional_special_tokens": SPECIAL_TOKENS})
+if added_tokens > 0:
+    logger.info(f"Added {added_tokens} special tokens to tokenizer")
+
 # ------------------- model -------------------
 model = AutoModelForCausalLM.from_pretrained(
     config.policy_model,
     torch_dtype=torch.bfloat16 if config.use_bf16 else torch.float16,
     trust_remote_code=True,
 )
+
+# Resize embeddings if we added new tokens
+if added_tokens > 0:
+    model.resize_token_embeddings(len(tok))
+
 # ensure pad_token_id is set on the model to avoid fallback warning during generation
 if model.config.pad_token_id is None:
     model.config.pad_token_id = model.config.eos_token_id
@@ -604,6 +614,7 @@ trainer = WeightedTrainer(
 logger.info("⇢ Starting training …")
 trainer.train()
 trainer.save_model(OUT_DIR)  # saves LoRA adapter only
+tok.save_pretrained(OUT_DIR)
 metrics = trainer.evaluate()
 trainer.save_metrics("eval", metrics)
 logger.info("✓ Finished — final loss %.4f, perplexity %.4f", metrics.get("eval_loss", 0.0),

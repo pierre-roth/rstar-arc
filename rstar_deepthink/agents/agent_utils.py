@@ -75,9 +75,7 @@ def temperature_lerp(current_rollout, max_rollouts, min_temp, max_temp):
     if max_rollouts == 1:
         return (min_temp + max_temp) / 2
 
-    # TODO: fix formula to account for few calls to temperature changing function!
-
-    return min_temp + (max_temp - min_temp) * (current_rollout / max_rollouts)
+    return min_temp + (max_temp - min_temp) * (current_rollout / (max_rollouts - 1))
 
 
 def temperature_beta_cdf(current_rollout, max_rollouts, min_temp, max_temp, target_fraction=0.5, concentration=0.75):

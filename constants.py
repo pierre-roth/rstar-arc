@@ -31,6 +31,7 @@ TERMINAL_SUBTREE_TERMINAL = "Subtree terminal"  # Terminal marker for subtree te
 STEP_END = "<end_of_step>"  # Marks the end of a reasoning step
 CODE = "<beginning_of_code>"  # Begins a code section
 CODE_END = "<end_of_code>"  # Ends a code section
+SPECIAL_TOKENS = [CODE, CODE_END, STEP_END]
 
 BOOTSTRAP_SYSTEM_PROMPT = f"""You are a powerful agent with broad problem solving skills, pattern matching abilities and great python programming expertise. You need to write Python code to solve an ARC (Abstraction and Reasoning Corpus) task, or more specifically implement the transformation function that can transform the input grids into their corresponding output grids.
 

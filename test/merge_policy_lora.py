@@ -126,9 +126,9 @@ def merge_lora_adapter(
         sys.exit(1)
 
     # --- Load Tokenizer ---
-    logger.info(f"Loading tokenizer for base model: {base_model_id}...")
+    logger.info(f"Loading tokenizer from adapter path: {lora_adapter_path}...")
     try:
-        tokenizer = AutoTokenizer.from_pretrained(base_model_id, trust_remote_code=True)
+        tokenizer = AutoTokenizer.from_pretrained(lora_adapter_path, trust_remote_code=True)
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
             logger.info("Set tokenizer pad_token to eos_token.")

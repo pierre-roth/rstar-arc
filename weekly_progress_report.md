@@ -412,3 +412,25 @@
 
 - **Visuals**:
   -
+
+
+### Week 15 (09.06.2025)
+
+- **Work planned**:
+  - ??
+
+- **Work done**:
+  - ??
+
+- **Issues and Questions**:
+  - ??
+
+- **Results**:
+  - ??
+
+- **Visuals**:
+  -
+
+
+
+

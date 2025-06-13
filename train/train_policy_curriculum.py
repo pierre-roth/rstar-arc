@@ -70,6 +70,7 @@ from constants import (
     SFT_IN_BETWEEN_PROMPT,
     LOCAL_SCRATCH_PATH,
     NET_SCRATCH_PATH,
+    SPECIAL_TOKENS
 )
 from utils import setup_logging
 from train_utils import maybe_peft_wrap
@@ -198,11 +199,20 @@ def main():
     tok.pad_token = tok.pad_token or tok.eos_token
     tok.padding_side = "right"
 
+    added_tokens = tok.add_special_tokens({"additional_special_tokens": SPECIAL_TOKENS})
+    if added_tokens > 0:
+        logger.info(f"Added {added_tokens} special tokens to tokenizer")
+
     model = AutoModelForCausalLM.from_pretrained(
         config.policy_model,
         torch_dtype=torch.bfloat16 if config.use_bf16 else torch.float16,
         trust_remote_code=True,
+        use_cache=False
     )
+
+    if added_tokens > 0:
+        model.resize_token_embeddings(len(tok))
+
     if model.config.pad_token_id is None:
         model.config.pad_token_id = model.config.eos_token_id
     model.gradient_checkpointing_enable()

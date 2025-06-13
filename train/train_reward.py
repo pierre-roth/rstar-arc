@@ -46,7 +46,13 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from train_utils import maybe_peft_wrap  # Assuming train_utils.py is in the same directory or accessible
-from constants import NET_SCRATCH_PATH, LOCAL_SCRATCH_PATH, SFT_SYSTEM_PROMPT, SFT_IN_BETWEEN_PROMPT  # Project-specific constants
+from constants import (
+    NET_SCRATCH_PATH,
+    LOCAL_SCRATCH_PATH,
+    SFT_SYSTEM_PROMPT,
+    SFT_IN_BETWEEN_PROMPT,
+    SPECIAL_TOKENS,
+)
 from rstar_deepthink import Config  # Project-specific Config class
 from utils import setup_logging  # Project-specific logging setup
 from rstar_deepthink.llms.reward import RewardModelModule  # The model being trained
@@ -98,6 +104,12 @@ tok: PreTrainedTokenizerBase = AutoTokenizer.from_pretrained(
     config.reward_model,
     trust_remote_code=True
 )
+
+# Add custom special tokens if needed
+added_tokens = tok.add_special_tokens({"additional_special_tokens": SPECIAL_TOKENS})
+if added_tokens > 0:
+    logger.info(f"Added {added_tokens} special tokens to tokenizer")
+
 # Ensure pad_token is set
 if tok.pad_token is None:
     tok.pad_token = tok.eos_token
@@ -113,7 +125,12 @@ base_model = AutoModelForCausalLM.from_pretrained(
     config.reward_model,
     torch_dtype=dtype,
     trust_remote_code=True,
+    use_cache=False
 )
+
+if added_tokens > 0:
+    logger.info(f"Resizing model embeddings to {len(tok)} tokens")
+    base_model.resize_token_embeddings(len(tok))
 
 # Configure model for training
 base_model.config.use_cache = False  # Disable cache for gradient checkpointing compatibility

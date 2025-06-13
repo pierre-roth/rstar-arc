@@ -28,6 +28,7 @@ from constants import (
     NET_SCRATCH_PATH,
     SFT_IN_BETWEEN_PROMPT,
     SFT_SYSTEM_PROMPT,
+    SPECIAL_TOKENS
 )
 from rstar_deepthink import Config
 from rstar_deepthink.arc_task import ARCTask
@@ -171,6 +172,10 @@ def main():
         tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "right"
 
+    added_tokens = tokenizer.add_special_tokens({"additional_special_tokens": SPECIAL_TOKENS})
+    if added_tokens > 0:
+        logger.info(f"Added {added_tokens} special tokens to tokenizer")
+
     # Initialize model
     model = AutoModelForCausalLM.from_pretrained(
         config.policy_model,
@@ -178,6 +183,9 @@ def main():
         trust_remote_code=True,
         use_cache=False,  # Disable cache for training
     )
+
+    if added_tokens > 0:
+        model.resize_token_embeddings(len(tokenizer))
 
     # Set pad_token_id to avoid warnings
     if model.config.pad_token_id is None:
@@ -292,6 +300,7 @@ def main():
 
     # Save final model
     trainer.save_model()
+    tokenizer.save_pretrained(output_dir)
     trainer.save_state()
 
     # Evaluate
