@@ -92,97 +92,90 @@ def build_graph_from_nodes(nodes):
     return G
 
 
-def visualize_tree(json_filename, open_website=True):
-    # Load nodes from file.
-    nodes = load_nodes(json_filename)
-    if not nodes:
-        print("No nodes loaded.")
-        return
-
-    # Build graph from nodes.
-    G = build_graph_from_nodes(nodes)
-
-    # Compute a tree layout. The Reingold-Tilford layout is appropriate for trees.
+def compute_layout(G):
+    """Return layout positions and edge coordinates for the tree graph."""
     layout = G.layout("rt")
     positions = {idx: layout[idx] for idx in range(len(G.vs))}
-    Y = [layout[idx][1] for idx in range(len(G.vs))]
-    M = max(Y)
+    y_coords = [layout[idx][1] for idx in range(len(G.vs))]
+    max_y = max(y_coords)
 
     Xn = [positions[idx][0] for idx in positions]
-    Yn = [2 * M - positions[idx][1] for idx in positions]
+    Yn = [2 * max_y - positions[idx][1] for idx in positions]
 
-    Xe = []
-    Ye = []
+    Xe, Ye = [], []
     for edge in G.es:
         start, end = edge.tuple
         Xe += [positions[start][0], positions[end][0], None]
-        Ye += [2 * M - positions[start][1], 2 * M - positions[end][1], None]
+        Ye += [2 * max_y - positions[start][1], 2 * max_y - positions[end][1], None]
 
-    # Create figure
-    fig = go.Figure()
+    return Xn, Yn, Xe, Ye
 
-    # Add edges
-    fig.add_trace(go.Scatter(
-        x=Xe,
-        y=Ye,
-        mode='lines',
-        line=dict(color='rgb(210,210,210)', width=1),
-        hoverinfo='none',
-        name='edges'
-    ))
 
-    # Create two node traces - one for normal hover and one for shift hover
+def _add_scatter_nodes(fig, G, nodes, Xn, Yn):
+    size = 18 if len(nodes) < 64 else (12 if len(nodes) < 256 else 6)
+    marker = dict(symbol="circle-dot", size=size,
+                  color=[G.vs[idx]["color"] for idx in range(len(G.vs))],
+                  line=dict(color="rgb(50,50,50)", width=1))
+
     normal_node_trace = go.Scatter(
         x=Xn,
         y=Yn,
-        mode='markers',
-        marker=dict(
-            symbol='circle-dot',
-            size=18 if len(nodes) < 64 else (12 if len(nodes) < 256 else 6),
-            color=[G.vs[idx]["color"] for idx in range(len(G.vs))],
-            line=dict(color='rgb(50,50,50)', width=1)
-        ),
+        mode="markers",
+        marker=marker,
         text=[G.vs[idx]["normal_hovertext"] for idx in range(len(G.vs))],
-        hoverinfo='text',
-        hovertemplate='%{text}<extra></extra>',
+        hoverinfo="text",
+        hovertemplate="%{text}<extra></extra>",
         opacity=0.8,
-        name='normal_nodes',
-        visible=True
+        name="normal_nodes",
+        visible=True,
     )
 
     shift_node_trace = go.Scatter(
         x=Xn,
         y=Yn,
-        mode='markers',
-        marker=dict(
-            symbol='circle-dot',
-            size=18 if len(nodes) < 64 else (12 if len(nodes) < 256 else 6),
-            color=[G.vs[idx]["color"] for idx in range(len(G.vs))],
-            line=dict(color='rgb(50,50,50)', width=1)
-        ),
+        mode="markers",
+        marker=marker,
         text=[G.vs[idx]["shift_hovertext"] for idx in range(len(G.vs))],
-        hoverinfo='text',
-        hovertemplate='%{text}<extra></extra>',
+        hoverinfo="text",
+        hovertemplate="%{text}<extra></extra>",
         opacity=0.8,
-        name='shift_nodes',
-        visible=False  # Initially hidden
+        name="shift_nodes",
+        visible=False,
     )
 
     fig.add_trace(normal_node_trace)
     fig.add_trace(shift_node_trace)
 
+
+def create_figure(G, nodes, Xn, Yn, Xe, Ye):
+    """Create Plotly figure for the given tree graph."""
+    fig = go.Figure()
+
+    fig.add_trace(
+        go.Scatter(
+            x=Xe,
+            y=Ye,
+            mode="lines",
+            line=dict(color="rgb(210,210,210)", width=1),
+            hoverinfo="none",
+            name="edges",
+        )
+    )
+
+    _add_scatter_nodes(fig, G, nodes, Xn, Yn)
+
     axis = dict(showline=False, zeroline=False, showgrid=False, showticklabels=False)
     fig.update_layout(
-        title='Tree Visualization (Press Shift to see alternative hover text)',
+        title="Tree Visualization (Press Shift to see alternative hover text)",
         font_size=12,
         showlegend=False,
         xaxis=axis,
         yaxis=axis,
         margin=dict(l=40, r=40, b=85, t=100),
-        hovermode='closest',
-        plot_bgcolor='rgb(30,30,30)',
-        paper_bgcolor='rgb(30,30,30)',
-        font_color='white',
+        hovermode="closest",
+        plot_bgcolor="rgb(30,30,30)",
+        paper_bgcolor="rgb(30,30,30)",
+        font_color="white",
         hoverlabel=dict(
             bgcolor="black",
             font_size=12,
@@ -190,9 +183,24 @@ def visualize_tree(json_filename, open_website=True):
             font_color="white",
             align="left",
             bordercolor="#333333",
-            namelength=-1
-        )
+            namelength=-1,
+        ),
     )
+
+    return fig
+
+
+def visualize_tree(json_filename, open_website=True):
+    """Visualize a serialized node tree using Plotly."""
+    nodes = load_nodes(json_filename)
+    if not nodes:
+        print("No nodes loaded.")
+        return
+
+    graph = build_graph_from_nodes(nodes)
+    Xn, Yn, Xe, Ye = compute_layout(graph)
+
+    fig = create_figure(graph, nodes, Xn, Yn, Xe, Ye)
 
     # Add a custom JavaScript to switch trace visibility on shift key press
     custom_js = """
