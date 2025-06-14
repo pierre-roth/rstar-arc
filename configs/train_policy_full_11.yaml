@@ -1,0 +1,32 @@
+log-level: INFO
+round-number: 2
+
+task-validation-fraction: 0.05
+example-validation-fraction: 0.05
+
+max-seq-len: 12288
+max-tokens: 4096
+
+policy-model: "Qwen/Qwen2.5-Coder-1.5B"
+use-bf16: true
+
+full-finetune: true
+weight_decay: 0.00005
+
+learning-rate: 0.00001
+curriculum-learning: false
+
+per-device-train-batch-size: 1
+per-device-eval-batch-size: 1
+gradient-accumulation-steps: 32
+num-train-epochs: 2
+lr-scheduler-type: "cosine"
+warmup-ratio: 0.03
+logging-steps: 25
+eval-steps: 50
+save-steps: 50
+save-total-limit: 3
+gradient-checkpointing: true
+
+report-to: "wandb"
+
