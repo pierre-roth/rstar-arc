@@ -45,7 +45,7 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from train_utils import maybe_peft_wrap  # Assuming train_utils.py is in the same directory or accessible
+from train_utils import maybe_peft_wrap, renormalize_task_weights  # Utility helpers
 from constants import (
     NET_SCRATCH_PATH,
     LOCAL_SCRATCH_PATH,
@@ -323,37 +323,49 @@ raw_dataset = load_dataset(
 logger.info(f"Loaded {len(raw_dataset['train'])} examples from {TRAIN_PATH}")
 
 # Split dataset into training and validation
-if config.validation_fraction > 0:
-    # Split by task names to create a validation set
-    task_names = list({ex["task_name"] for ex in raw_dataset["train"]})
+if config.task_validation_fraction > 0 or config.example_validation_fraction > 0:
     rng = random.Random(config.seed or 42)
-    rng.shuffle(task_names)
-    val_count = int(len(task_names) * config.validation_fraction)
-    val_tasks = set(task_names[:val_count])
-    train_tasks = set(task_names[val_count:])
+    task_to_indices: dict[str, list[int]] = {}
+    for idx, ex in enumerate(raw_dataset["train"]):
+        task_to_indices.setdefault(ex["task_name"], []).append(idx)
+
+    all_tasks = list(task_to_indices.keys())
+    rng.shuffle(all_tasks)
+    val_task_count = int(len(all_tasks) * config.task_validation_fraction)
+    val_tasks = set(all_tasks[:val_task_count])
+
+    train_indices: list[int] = []
+    val_indices: list[int] = []
+    for task, indices in task_to_indices.items():
+        indices = list(indices)
+        rng.shuffle(indices)
+        if task in val_tasks:
+            val_indices.extend(indices)
+        else:
+            n_val = int(len(indices) * config.example_validation_fraction)
+            val_indices.extend(indices[:n_val])
+            train_indices.extend(indices[n_val:])
+
     logger.info(
-        f"Splitting {len(task_names)} tasks into {len(train_tasks)} train and {len(val_tasks)} validation tasks "
-        f"(validation fraction={config.validation_fraction})"
+        f"Split {len(all_tasks)} tasks with {len(val_tasks)} held-out tasks and {len(val_indices)} validation examples "
+        f"(task fraction={config.task_validation_fraction}, example fraction={config.example_validation_fraction})"
     )
-    # Filter examples by task membership
-    train_ds = raw_dataset["train"].filter(lambda ex: ex["task_name"] in train_tasks)
-    val_ds = raw_dataset["train"].filter(lambda ex: ex["task_name"] in val_tasks)
+
+    train_ds = renormalize_task_weights(raw_dataset["train"].select(train_indices))
+    val_ds = renormalize_task_weights(raw_dataset["train"].select(val_indices))
     raw_datasets = DatasetDict({"train": train_ds, "validation": val_ds})
 else:
-    # Use static validation dataset as validation split, no test evaluation
     logger.info(
-        "validation_fraction is 0: using static validation dataset from %s and skipping test evaluation",
+        "No validation split configured: using static validation dataset from %s and skipping test evaluation",
         VAL_PATH,
     )
-    # Training set is the full dataset
-    train_ds = raw_dataset["train"]
-    # Load static validation dataset
+    train_ds = renormalize_task_weights(raw_dataset["train"])
     raw_val = load_dataset(
         "json",
         data_files={"validation": VAL_PATH},
         cache_dir=os.path.join(LOCAL_SCRATCH_PATH, ".cache/huggingface/datasets"),
     )
-    val_ds = raw_val["validation"]
+    val_ds = renormalize_task_weights(raw_val["validation"])
     raw_datasets = DatasetDict({"train": train_ds, "validation": val_ds})
 
 # Columns to remove after tokenization (original text columns)
@@ -475,7 +487,7 @@ if config.report_to == "wandb":
 
 logger.info(f"Script finished. Model and validation metrics saved in {OUT_DIR}")
 
-if config.validation_fraction > 0:
+if config.task_validation_fraction > 0 or config.example_validation_fraction > 0:
     # ------------------- final test evaluation -------------------
     logger.info("Loading test preference pairs for evaluation from: %s", VAL_PATH)
     raw_test = load_dataset(
@@ -507,7 +519,7 @@ if config.validation_fraction > 0:
 
     logger.info(f"Script finished. All metrics and model components saved in {OUT_DIR}")
 else:
-    logger.info("Skipping final test evaluation because validation_fraction is 0")
+    logger.info("Skipping final test evaluation because no validation split was configured")
 
 # ------------------- wrap-up -------------------
 if config.report_to == "wandb":

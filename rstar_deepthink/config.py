@@ -114,7 +114,16 @@ class Config:
     # training related
     train_on_prompts: bool = False  # Whether to train on prompts
 
-    validation_fraction: float = 0.03  # Fraction of data to use for validation
+    # Validation split configuration
+    # task_validation_fraction controls what fraction of tasks are held out
+    # completely from the training set. For the remaining tasks
+    # example_validation_fraction controls the fraction of examples that are
+    # moved to the validation split.  This allows evaluation of both
+    # generalization to unseen tasks and memorisation within seen tasks.
+    task_validation_fraction: float = 0.03
+    example_validation_fraction: float = 0.0
+    # Deprecated alias kept for backwards compatibility
+    validation_fraction: float = 0.03
     curriculum_learning: bool = False  # Whether to sort training examples by code length (curriculum learning)
 
     # If true, skips LoRA adapters and fine-tunes all model parameters
@@ -208,6 +217,10 @@ class Config:
 
         self.search_mode = self.search_mode.lower()
 
+        # provide backward compatibility for the old validation_fraction field
+        # by mirroring task_validation_fraction
+        self.validation_fraction = self.task_validation_fraction
+
         # limit the number of examples and choose them randomly (with replacement)
         if self.num_examples > 0:
             self.example_names = sample(self.example_names, k=self.num_examples)
@@ -237,8 +250,14 @@ class Config:
             with open(os.path.join(PROJECT_PATH, self.config_file), 'r') as f:
                 config_data = yaml.safe_load(f) or {}
 
+
             # Convert kebab-case keys to snake_case for Python compatibility
             config_data = {k.replace('-', '_'): v for k, v in config_data.items()}
+
+            # Map deprecated `validation_fraction` to the new
+            # `task_validation_fraction` field if provided
+            if 'validation_fraction' in config_data and 'task_validation_fraction' not in config_data:
+                config_data['task_validation_fraction'] = config_data.pop('validation_fraction')
 
             # Update instance attributes with values from config file
             for key, value in config_data.items():
