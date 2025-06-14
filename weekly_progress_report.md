@@ -417,7 +417,14 @@
 ### Week 15 (09.06.2025)
 
 - **Work planned**:
-  - ??
+  - make sure the added special tokens work correctly and get generated correctly during evaluation
+  - write better sft prompt (and test whether it makes a difference)
+  - write even better "during training" evaluation to really see how the model is doing
+  - make a full training run without regularization (or very, very little) and with a better prompt (potentially for multiple epochs) with the goal of trying to overfit
+  - rewrite task generators to generate tasks solved by the more restrictive solutions being fine-tuned on
+  - potentially fine tune only selected layers to reduce memory consumption
+  - 
+  - 
 
 - **Work done**:
   - ??
@@ -430,7 +437,5 @@
 
 - **Visuals**:
   - ??
-
-
 
 
