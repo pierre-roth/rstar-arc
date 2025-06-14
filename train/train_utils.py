@@ -2,7 +2,9 @@
 Utility functions for training scripts (policy & reward).
 """
 import logging
+from collections import defaultdict
 
+from datasets import Dataset
 from peft import LoraConfig, get_peft_model
 
 
@@ -49,3 +51,16 @@ def maybe_peft_wrap(model, config):
     )
     # Wrap model with PEFT LoRA adapters
     return get_peft_model(model, lora_cfg)
+
+
+def renormalize_task_weights(ds: Dataset) -> Dataset:
+    """Ensure per-task weights in the dataset sum to 1."""
+    totals = defaultdict(float)
+    for row in ds:
+        totals[row["task_name"]] += float(row.get("weight", 0.0))
+
+    def _scale(ex, totals=totals):
+        total = totals.get(ex["task_name"], 1.0)
+        return {"weight": float(ex["weight"]) / total if total else 0.0}
+
+    return ds.map(_scale)
