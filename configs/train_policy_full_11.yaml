@@ -12,6 +12,7 @@ use-bf16: true
 
 full-finetune: true
 weight_decay: 0.00005
+train-on-prompts: false
 
 learning-rate: 0.00001
 curriculum-learning: false
