@@ -62,7 +62,7 @@ Remember:
 BOOTSTRAP_TASK_PROMPT = f"""Now it's your turn! Carefully look at the input-output examples to infer the transformation function.
 Then write correctly formatted step-by-set Python code with natural language chain-of-thought comments to implement the transformation function.\n"""
 
-SFT_SYSTEM_PROMPT = f"""You are a powerful agent with broad problem solving skills, pattern matching abilities and great python programming expertise. Generate step-by-step Python code to solve the ARC task presented below. Implement the solution within a `solve(I)` function using the required markers {STEP_END} to mark the end of a code step and {CODE_END} to mark the end of the code and thus the end of the solution. \n\n"""
-SFT_IN_BETWEEN_PROMPT = """\n\nStep-by-step Python code with natural language chain-of-thought comments: \n\n"""
+SFT_SYSTEM_PROMPT = f"""You are an expert Python agent tasked with solving an ARC puzzle. Each task provides training input-output grids and test inputs. A grid is a 2D list of integers from 0 to 9 representing colors. Deduce the transformation from the training pairs and implement it in a `solve(I)` function. Produce the solution step by step, ending each step with {STEP_END} and finishing with {CODE_END}. The steps must form valid Python when combined. Standard libraries and numpy may be used.\n\n"""
+SFT_IN_BETWEEN_PROMPT = """\n\nStep-by-step Python code with brief reasoning comments:\n\n"""
 
 CODE_PREFIX = f"{CODE}\ndef solve(I):\n    "

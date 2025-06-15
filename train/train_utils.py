@@ -4,8 +4,10 @@ Utility functions for training scripts (policy & reward).
 import logging
 from collections import defaultdict
 
+import torch
 from datasets import Dataset
 from peft import LoraConfig, get_peft_model
+from transformers import PreTrainedTokenizerBase
 
 
 def maybe_peft_wrap(model, config):
@@ -64,3 +66,18 @@ def renormalize_task_weights(ds: Dataset) -> Dataset:
         return {"weight": float(ex["weight"]) / total if total else 0.0}
 
     return ds.map(_scale)
+
+
+class WeightedCollator:
+    """Pad dynamically and preserve per-example weights."""
+
+    def __init__(self, tokenizer: PreTrainedTokenizerBase):
+        self.tokenizer = tokenizer
+
+    def __call__(self, features: list[dict]):
+        weights = torch.tensor([f.pop("weight") for f in features], dtype=torch.float32)
+        batch = self.tokenizer.pad(features, padding=True, return_tensors="pt")
+        if "labels" in batch:
+            batch["labels"][batch["labels"] == self.tokenizer.pad_token_id] = -100
+        batch["weight"] = weights
+        return batch

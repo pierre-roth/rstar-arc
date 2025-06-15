@@ -423,7 +423,8 @@
   - make a full training run without regularization (or very, very little) and with a better prompt (potentially for multiple epochs) with the goal of trying to overfit
   - rewrite task generators to generate tasks solved by the more restrictive solutions being fine-tuned on
   - potentially fine tune only selected layers to reduce memory consumption
-  - 
+  - Try larger models
+  - Test memorization by training on singular tasks (without reARC variations) 
   - 
 
 - **Work done**:

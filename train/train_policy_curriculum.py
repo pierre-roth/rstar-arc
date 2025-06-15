@@ -46,8 +46,8 @@ import random
 import sys
 from collections import defaultdict
 from dataclasses import asdict
-from typing import Any
 from datetime import datetime
+from typing import Any
 
 import torch
 import wandb
@@ -73,7 +73,7 @@ from constants import (
     SPECIAL_TOKENS
 )
 from utils import setup_logging
-from train_utils import maybe_peft_wrap
+from train_utils import maybe_peft_wrap, WeightedCollator
 from rstar_deepthink import Config
 from rstar_deepthink.arc_task import ARCTask
 from rstar_deepthink.arc_task.task_utils import task_to_prompt
@@ -94,22 +94,6 @@ def build_prompt(task_json: dict[str, Any], solution: str | None) -> str:
             + SFT_IN_BETWEEN_PROMPT
     )
     return base + (solution if solution is not None else "")
-
-
-# Tokeniser and collator are created *after* Config is loaded ----------------
-class WeightedCollator:
-    """Pads dynamically and keeps per‑row weight tensor."""
-
-    def __init__(self, tokenizer):
-        self.tokenizer = tokenizer
-
-    def __call__(self, features: list[dict[str, Any]]):
-        weights = torch.tensor([f.pop("weight") for f in features], dtype=torch.float32)
-        batch = self.tokenizer.pad(features, padding=True, return_tensors="pt")
-        if "labels" in batch:
-            batch["labels"][batch["labels"] == self.tokenizer.pad_token_id] = -100
-        batch["weight"] = weights
-        return batch
 
 
 # ------------- Trainer subclass with weighted loss -------------
@@ -712,7 +696,8 @@ def main():
         wandb.finish()
 
     # save final adapter / model
-    out_dir = os.path.join(NET_SCRATCH_PATH, "models", "fine_tuned", "policy", f"curriculum_final_{datetime.now().strftime('%Y%m%d-%H%M%S')}")
+    out_dir = os.path.join(NET_SCRATCH_PATH, "models", "fine_tuned", "policy",
+                           f"curriculum_final_{datetime.now().strftime('%Y%m%d-%H%M%S')}")
     os.makedirs(out_dir, exist_ok=True)
     model.save_pretrained(out_dir)
     tok.save_pretrained(out_dir)

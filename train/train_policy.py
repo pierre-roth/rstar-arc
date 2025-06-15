@@ -54,7 +54,11 @@ from constants import (
     SPECIAL_TOKENS
 )
 from utils import setup_logging
-from train_utils import maybe_peft_wrap, renormalize_task_weights
+from train_utils import (
+    maybe_peft_wrap,
+    renormalize_task_weights,
+    WeightedCollator,
+)
 from rstar_deepthink import Config
 from rstar_deepthink.arc_task import ARCTask
 from rstar_deepthink.arc_task.task_utils import task_to_prompt
@@ -285,33 +289,6 @@ val_weight_sum = sum(tokenized_datasets["validation"]["weight"])
 train_task_count = int(round(train_weight_sum))
 val_task_count = int(round(val_weight_sum))
 logger.info(f"Number of unique tasks — train: {train_task_count}, validation: {val_task_count}")
-
-
-# ------------------- data collator -------------------
-class WeightedCollator:
-    """
-    Data collator that dynamically pads inputs, preserves precomputed labels (masking prompt tokens),
-    and attaches per-example weights.
-    """
-
-    def __init__(self, tokenizer):
-        self.tokenizer = tokenizer
-
-    def __call__(self, features: list[dict[str, Any]]) -> dict[str, Any]:
-        # Extract weights and remove from inputs
-        weights = torch.tensor([f.pop("weight") for f in features], dtype=torch.float32)
-        # Pad dynamically, preserving labels
-        batch = self.tokenizer.pad(
-            features,
-            padding=True,
-            return_tensors="pt",
-        )
-        # Mask out padded label tokens
-        if "labels" in batch:
-            batch["labels"][batch["labels"] == self.tokenizer.pad_token_id] = -100
-        batch["weight"] = weights
-        return batch
-
 
 # ------------------- qualitative logging helper -------------------
 _QUAL_TABLE_COLUMNS = [
