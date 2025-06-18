@@ -51,6 +51,7 @@ from constants import (
     NET_SCRATCH_PATH,
     CODE_PREFIX,
     STEP_END,
+    CODE_END,
     SPECIAL_TOKENS
 )
 from utils import setup_logging
@@ -219,6 +220,30 @@ raw_dataset = load_dataset(
 )
 logger.info(f"Loaded {len(raw_dataset['train'])} examples from {TRAIN_PATH}")
 
+
+def _within_max_len(example):
+    text = (
+            SFT_SYSTEM_PROMPT
+            + task_to_prompt(ARCTask.from_dict(example["task_json"]))
+            + SFT_IN_BETWEEN_PROMPT
+            + example["solution"]
+            + tok.eos_token
+    )
+    return len(tok.encode(text)) <= config.max_seq_len
+
+
+orig_train_len = len(raw_dataset["train"])
+raw_dataset["train"] = raw_dataset["train"].filter(
+    _within_max_len,
+    num_proc=max(1, os.cpu_count() // 2 if os.cpu_count() else 1),
+)
+logger.info(
+    "Filtered training dataset to %d/%d examples with max_seq_len=%d",
+    len(raw_dataset["train"]),
+    orig_train_len,
+    config.max_seq_len,
+)
+
 # Split into training and validation sets
 if config.task_validation_fraction > 0 or config.example_validation_fraction > 0:
     rng = random.Random(config.seed or 42)
@@ -263,6 +288,19 @@ else:
         data_files={"validation": VAL_PATH},
         cache_dir=os.path.join(LOCAL_SCRATCH_PATH, ".cache/huggingface/datasets"),
     )
+
+    orig_val_len = len(raw_val["validation"])
+    raw_val["validation"] = raw_val["validation"].filter(
+        _within_max_len,
+        num_proc=max(1, os.cpu_count() // 2 if os.cpu_count() else 1),
+    )
+    logger.info(
+        "Filtered validation dataset to %d/%d examples with max_seq_len=%d",
+        len(raw_val["validation"]),
+        orig_val_len,
+        config.max_seq_len,
+    )
+
     val_ds = renormalize_task_weights(raw_val["validation"])
     dataset = DatasetDict({"train": train_ds, "validation": val_ds})
 
@@ -330,10 +368,10 @@ def _log_task_generations(
                     top_k=config.top_k if config.top_k > 0 else None,
                     max_new_tokens=config.max_tokens,
                 )
-                gen_text = tok.decode(gen_ids[0], skip_special_tokens=True)
+                gen_text = tok.decode(gen_ids[0], skip_special_tokens=False)
                 raw_steps = re.split(f"{STEP_END}", gen_text)
                 num_steps = len(raw_steps)
-                format_adherence = num_steps >= config.min_steps_for_format_adherence
+                format_adherence = CODE_END in gen_text and num_steps >= config.min_steps_for_format_adherence
                 prefix_errors: list[bool] = []
                 for k_i in range(1, num_steps + 1):
                     code_str = remove_markers("".join(raw_steps[:k_i]))
@@ -625,6 +663,19 @@ if config.task_validation_fraction > 0 or config.example_validation_fraction > 0
         cache_dir=os.path.join(LOCAL_SCRATCH_PATH, ".cache/huggingface/datasets"),
     )
     logger.info(f"Loaded {len(raw_test['test'])} examples for test evaluation from {VAL_PATH}")
+
+    orig_test_len = len(raw_test["test"])
+    raw_test["test"] = raw_test["test"].filter(
+        _within_max_len,
+        num_proc=max(1, os.cpu_count() // 2 if os.cpu_count() else 1),
+    )
+    logger.info(
+        "Filtered test dataset to %d/%d examples with max_seq_len=%d",
+        len(raw_test["test"]),
+        orig_test_len,
+        config.max_seq_len,
+    )
+
     # Tokenize test dataset
     tokenized_test = raw_test["test"].map(
         preprocess,

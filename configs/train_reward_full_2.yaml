@@ -1,25 +1,16 @@
 log-level: INFO
 round-number: 2
 
-top-p: 0.95
-task-validation-fraction: 0.05
-example-validation-fraction: 0.05
-num-training-samples: 2
-num-validation-samples: 2
-pass-k: 4
-
 max-seq-len: 12288
-max-tokens: 4096
 
-policy-model: "Qwen/Qwen2.5-Coder-1.5B"
+reward-model: "Qwen/Qwen2.5-Coder-1.5B"
 use-bf16: true
 
 full-finetune: true
-weight_decay: 0.00005
-train-on-prompts: false
+reward-value-head-dropout: 0.1
 
 learning-rate: 0.00001
-curriculum-learning: false
+weight_decay: 0.05
 
 per-device-train-batch-size: 1
 per-device-eval-batch-size: 1
@@ -34,4 +25,5 @@ save-total-limit: 3
 gradient-checkpointing: true
 
 report-to: "wandb"
+
 
