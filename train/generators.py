@@ -1,7 +1,7 @@
 from random import choice, sample, randint, shuffle
 
 from dsl import *
-from train.rearc_utils import unifint
+from rearc_utils import unifint
 
 
 def generate_dbc1a6ce(diff_lb: float, diff_ub: float) -> dict:
@@ -45,13 +45,10 @@ def generate_2281f1f4(diff_lb: float, diff_ub: float) -> dict:
     tp = sample(interval(0, w - 1, 1), numtop)
     rp = sample(interval(1, h, 1), numright)
     res = combine(apply(lbind(astuple, 0), tp), apply(rbind(astuple, w - 1), rp))
-    bgc = choice(colopts)
-    dc = choice(remove(bgc, colopts))
+    bgc = 0
+    dc = 5
     gi = fill(canvas(bgc, (h, w)), dc, res)
     go = fill(gi, 2, product(rp, tp))
-    rotf = choice((identity, rot90, rot180, rot270))
-    gi = rotf(gi)
-    go = rotf(go)
     return {'input': gi, 'output': go}
 
 
@@ -819,11 +816,10 @@ def generate_5168d44c(diff_lb: float, diff_ub: float) -> dict:
 
 
 def generate_a9f96cdd(diff_lb: float, diff_ub: float) -> dict:
-    cols = difference(interval(0, 10, 1), (3, 6, 7, 8))
     h = unifint(diff_lb, diff_ub, (3, 30))
     w = unifint(diff_lb, diff_ub, (3, 30))
-    bgc = choice(cols)
-    fgc = choice(remove(bgc, cols))
+    bgc = 0
+    fgc = 2
     gi = canvas(bgc, (h, w))
     go = canvas(bgc, (h, w))
     locs = asindices(gi)
@@ -3040,7 +3036,7 @@ def generate_aabf363d(diff_lb: float, diff_ub: float) -> dict:
     cols = interval(0, 10, 1)
     h = unifint(diff_lb, diff_ub, (3, 28))
     w = unifint(diff_lb, diff_ub, (3, 28))
-    bgc = choice(cols)
+    bgc = 0
     remcols = remove(bgc, cols)
     cola = choice(remcols)
     remcols = remove(cola, remcols)
@@ -3058,7 +3054,7 @@ def generate_aabf363d(diff_lb: float, diff_ub: float) -> dict:
     c2 = canvas(bgc, (h + 2, w + 2))
     gi = fill(c2, cola, shp)
     go = fill(c2, colb, shp)
-    gi = fill(gi, colb, {choice(totuple(ofcolor(gi, bgc)))})
+    gi = fill(gi, colb, {(h + 1, 0)})
     return {'input': gi, 'output': go}
 
 
@@ -4224,9 +4220,9 @@ def generate_3618c87e(diff_lb: float, diff_ub: float) -> dict:
     cols = interval(0, 10, 1)
     h = unifint(diff_lb, diff_ub, (4, 30))
     w = unifint(diff_lb, diff_ub, (4, 30))
-    bgc, linc, dotc = sample(cols, 3)
+    bgc, linc, dotc = 0, 5, 1
     c = canvas(bgc, (h, w))
-    ln = connect((0, 0), (0, w - 1))
+    ln = connect((h-1, 0), (h-1, w - 1))
     nlocs = unifint(diff_lb, diff_ub, (1, w // 2))
     locs = []
     opts = interval(0, w, 1)
@@ -4238,19 +4234,15 @@ def generate_3618c87e(diff_lb: float, diff_ub: float) -> dict:
         opts = remove(ch, opts)
         opts = remove(ch - 1, opts)
         opts = remove(ch + 1, opts)
-    nlocs = len(opts)
     gi = fill(c, linc, ln)
     go = fill(c, linc, ln)
     for j in locs:
-        hh = randint(1, h - 3)
-        lnx = connect((0, j), (hh, j))
+        hh = 1
+        lnx = connect((h-1, j), (h-1-hh, j))
         gi = fill(gi, linc, lnx)
         go = fill(go, linc, lnx)
-        gi = fill(gi, dotc, {(hh + 1, j)})
-        go = fill(go, dotc, {(0, j)})
-    rotf = choice((identity, rot90, rot180, rot270))
-    gi = rotf(gi)
-    go = rotf(go)
+        gi = fill(gi, dotc, {(h-1-hh - 1, j)})
+        go = fill(go, dotc, {(h-1, j)})
     return {'input': gi, 'output': go}
 
 
@@ -6018,12 +6010,11 @@ def generate_a3df8b1e(diff_lb: float, diff_ub: float) -> dict:
     cols = interval(0, 10, 1)
     w = unifint(diff_lb, diff_ub, (2, 10))
     h = unifint(diff_lb, diff_ub, (w + 1, 30))
-    bgc, linc = sample(cols, 2)
+    bgc, linc = 0, 1
     c = canvas(bgc, (h, w))
     sp = (h - 1, 0)
     gi = fill(c, linc, {sp})
     go = tuple(e for e in gi)
-    changing = True
     direc = 1
     while True:
         sp = add(sp, (-1, direc))
@@ -9335,30 +9326,23 @@ def generate_d4469b4b(diff_lb: float, diff_ub: float) -> dict:
 
 
 def generate_bdad9b1f(diff_lb: float, diff_ub: float) -> dict:
-    cols = remove(4, interval(0, 10, 1))
+    cols = (0, 1, 3, 5, 6, 7, 9)
     h = unifint(diff_lb, diff_ub, (4, 30))
     w = unifint(diff_lb, diff_ub, (4, 30))
-    numh = unifint(diff_lb, diff_ub, (1, h // 2 - 1))
-    numw = unifint(diff_lb, diff_ub, (1, w // 2 - 1))
+    numh = 1
+    numw = 1
     hlocs = sample(interval(2, h - 1, 1), numh)
     wlocs = sample(interval(2, w - 1, 1), numw)
-    numcols = unifint(diff_lb, diff_ub, (2, 8))
     bgc = choice(cols)
-    remcols = remove(bgc, cols)
-    ccols = sample(remcols, numcols)
     gi = canvas(bgc, (h, w))
     go = canvas(bgc, (h, w))
-    fc = -1
     for ii in sorted(hlocs):
-        col = choice(remove(fc, ccols))
-        fc = col
+        col = 2
         objw = randint(2, ii)
         gi = fill(gi, col, connect((ii, 0), (ii, objw - 1)))
         go = fill(go, col, connect((ii, 0), (ii, w - 1)))
-    fc = -1
     for jj in sorted(wlocs):
-        col = choice(remove(fc, ccols))
-        fc = col
+        col = 8
         objh = randint(2, jj)
         gi = fill(gi, col, connect((0, jj), (objh - 1, jj)))
         go = fill(go, col, connect((0, jj), (h - 1, jj)))
@@ -11602,10 +11586,9 @@ def generate_d90796e8(diff_lb: float, diff_ub: float) -> dict:
 
 
 def generate_a68b268e(diff_lb: float, diff_ub: float) -> dict:
-    cols = interval(0, 10, 1)
     h = unifint(diff_lb, diff_ub, (2, 14))
     w = unifint(diff_lb, diff_ub, (2, 4))
-    bgc, linc, c1, c2, c3, c4 = sample(cols, 6)
+    bgc, linc, c1, c2, c3, c4 = 0, 1, 6, 8, 4, 7
     canv = canvas(bgc, (h, w))
     inds = asindices(canv)
     nc1d = unifint(diff_lb, diff_ub, (0, (h * w) // 2))
@@ -11681,12 +11664,11 @@ def generate_e179c5f4(diff_lb: float, diff_ub: float) -> dict:
     cols = remove(8, interval(0, 10, 1))
     w = unifint(diff_lb, diff_ub, (2, 10))
     h = unifint(diff_lb, diff_ub, (w + 1, 30))
-    bgc, linc = sample(cols, 2)
+    bgc, linc = choice(remove(1, cols)), 1
     c = canvas(bgc, (h, w))
     sp = (h - 1, 0)
     gi = fill(c, linc, {sp})
     go = tuple(e for e in gi)
-    changing = True
     direc = 1
     while True:
         sp = add(sp, (-1, direc))
@@ -11696,23 +11678,6 @@ def generate_e179c5f4(diff_lb: float, diff_ub: float) -> dict:
         if go2 == go:
             break
         go = go2
-    mfs = (identity, dmirror, cmirror, vmirror, hmirror, rot90, rot180, rot270)
-    nmfs = choice((1, 2))
-    for fn in sample(mfs, nmfs):
-        gi = fn(gi)
-        go = fn(go)
-    gix = tuple(e for e in gi)
-    gox = tuple(e for e in go)
-    numlins = unifint(diff_lb, diff_ub, (1, 4))
-    if numlins > 1:
-        gi = fill(gi, linc, ofcolor(hmirror(gix), linc))
-        go = fill(go, linc, ofcolor(hmirror(gox), linc))
-    if numlins > 2:
-        gi = fill(gi, linc, ofcolor(vmirror(gix), linc))
-        go = fill(go, linc, ofcolor(vmirror(gox), linc))
-    if numlins > 3:
-        gi = fill(gi, linc, ofcolor(hmirror(vmirror(gix)), linc))
-        go = fill(go, linc, ofcolor(hmirror(vmirror(gox)), linc))
     go = replace(go, bgc, 8)
     return {'input': gi, 'output': go}
 

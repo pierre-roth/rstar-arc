@@ -532,7 +532,7 @@ class WeightedTrainer(Trainer):
             metrics[f"{metric_key_prefix}_loss"] = self.compute_weighted_loss(ds).item()
             metrics[f"{metric_key_prefix}_perplexity"] = math.exp(metrics[f"{metric_key_prefix}_loss"])
 
-        if config.report_to == "wandb" and metric_key_prefix == "eval":
+        if config.qualitative_eval and config.report_to == "wandb" and metric_key_prefix == "eval":
             try:
                 global _eval_counter
                 _eval_counter += 1
@@ -694,19 +694,21 @@ if config.task_validation_fraction > 0 or config.example_validation_fraction > 0
             "test_tasks": test_task_count,
         })
     # Qualitative evaluation on test set: sample and log code generation and correctness
-    try:
-        ds_test = raw_test["test"]
-        total_test = len(ds_test)
-        num_test = min(config.num_validation_samples, total_test)
-        rng_test = random.Random(config.seed or 42)
-        test_indices = rng_test.sample(range(total_test), num_test)
-        table_test = wandb.Table(columns=_QUAL_TABLE_COLUMNS)
-        _log_task_generations(trainer, "test", test_indices, ds_test, table_test)
-        wandb.log({"qualitative_test": table_test})
-    except Exception as e:
-        logger.warning(f"Qualitative test evaluation failed: {e}")
+    if config.qualitative_eval:
+        try:
+            ds_test = raw_test["test"]
+            total_test = len(ds_test)
+            num_test = min(config.num_validation_samples, total_test)
+            rng_test = random.Random(config.seed or 42)
+            test_indices = rng_test.sample(range(total_test), num_test)
+            table_test = wandb.Table(columns=_QUAL_TABLE_COLUMNS)
+            _log_task_generations(trainer, "test", test_indices, ds_test, table_test)
+            wandb.log({"qualitative_test": table_test})
+        except Exception as e:
+            logger.warning(f"Qualitative test evaluation failed: {e}")
 else:
     logger.info("Skipping final test evaluation because no validation split was configured")
+
 # Finalize wandb run after all evaluations
 if config.report_to == "wandb":
     wandb.finish()

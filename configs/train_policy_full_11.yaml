@@ -1,6 +1,8 @@
 log-level: INFO
 round-number: 2
 
+qualitative-eval: false
+
 repetition-penalty: 1.05
 task-validation-fraction: 0.05
 example-validation-fraction: 0.05
@@ -15,7 +17,7 @@ policy-model: "Qwen/Qwen2.5-Coder-1.5B"
 use-bf16: true
 
 full-finetune: true
-weight_decay: 0.00005
+weight_decay: 0.0001
 train-on-prompts: false
 
 learning-rate: 0.00001

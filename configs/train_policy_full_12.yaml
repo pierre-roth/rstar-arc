@@ -1,9 +1,11 @@
 log-level: INFO
 round-number: 2
 
-top-p: 0.95
-task-validation-fraction: 0.05
-example-validation-fraction: 0.05
+qualitative-eval: false
+
+repetition-penalty: 1.05
+task-validation-fraction: 0
+example-validation-fraction: 0.02
 num-training-samples: 2
 num-validation-samples: 2
 pass-k: 4
