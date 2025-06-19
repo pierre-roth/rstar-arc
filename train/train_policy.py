@@ -105,6 +105,7 @@ os.makedirs(OUT_DIR, exist_ok=True)
 # ------------------- tokenizer -------------------
 tok = AutoTokenizer.from_pretrained(config.policy_model, trust_remote_code=True)
 tok.pad_token = tok.pad_token or tok.eos_token
+tok.pad_token_id = tok.pad_token_id or tok.eos_token_id
 tok.padding_side = "right"
 
 added_tokens = tok.add_special_tokens({"additional_special_tokens": SPECIAL_TOKENS})
@@ -127,7 +128,7 @@ if added_tokens > 0:
 
 # ensure pad_token_id is set on the model to avoid fallback warning during generation
 if model.config.pad_token_id is None:
-    model.config.pad_token_id = model.config.eos_token_id
+    model.config.pad_token_id = tok.pad_token_id
 # Multi-GPU training is handled via Accelerate launch
 model.config.use_cache = False
 model.gradient_checkpointing_enable()  # save memory
@@ -240,7 +241,7 @@ def _within_max_len(example):
 orig_train_len = len(raw_dataset["train"])
 raw_dataset["train"] = raw_dataset["train"].filter(
     _within_max_len,
-    num_proc=max(1, os.cpu_count() // 2 if os.cpu_count() else 1),
+    num_proc=max(1, config.cpus - 1 if config.cpus > 1 else config.cpus),
 )
 logger.info(
     f"Filtered training dataset to {len(raw_dataset['train'])}/{orig_train_len} examples with max_seq_len={config.max_seq_len}"
@@ -292,7 +293,7 @@ else:
     orig_val_len = len(raw_val["validation"])
     raw_val["validation"] = raw_val["validation"].filter(
         _within_max_len,
-        num_proc=max(1, os.cpu_count() // 2 if os.cpu_count() else 1),
+        num_proc=max(1, config.cpus - 1 if config.cpus > 1 else config.cpus),
     )
     logger.info(
         f"Filtered validation dataset to {len(raw_val['validation'])}/{orig_val_len} examples with max_seq_len={config.max_seq_len}")
@@ -314,7 +315,7 @@ tokenized_datasets = dataset.map(
     preprocess,
     batched=True,
     remove_columns=[c for c in dataset["train"].column_names if c != "weight"],
-    num_proc=max(1, os.cpu_count() // 2 if os.cpu_count() else 1),
+    num_proc=max(1, config.cpus - 1 if config.cpus > 1 else config.cpus),
 )
 logger.info("Tokenization complete.")
 # Count unique tasks per split (weight sum = number of tasks)
@@ -665,7 +666,7 @@ if config.task_validation_fraction > 0 or config.example_validation_fraction > 0
     orig_test_len = len(raw_test["test"])
     raw_test["test"] = raw_test["test"].filter(
         _within_max_len,
-        num_proc=max(1, os.cpu_count() // 2 if os.cpu_count() else 1),
+        num_proc=max(1, config.cpus - 1 if config.cpus > 1 else config.cpus),
     )
     logger.info(
         f"Filtered test dataset to {len(raw_test['test'])}/{orig_test_len} examples with max_seq_len={config.max_seq_len}")
@@ -675,7 +676,7 @@ if config.task_validation_fraction > 0 or config.example_validation_fraction > 0
         preprocess,
         batched=True,
         remove_columns=[c for c in raw_test["test"].column_names if c != "weight"],
-        num_proc=max(1, os.cpu_count() // 2 if os.cpu_count() else 1),
+        num_proc=max(1, config.cpus - 1 if config.cpus > 1 else config.cpus),
     )
     logger.info("Running final evaluation on test set …")
     # Count unique tasks in test split (weight sum = number of tasks)

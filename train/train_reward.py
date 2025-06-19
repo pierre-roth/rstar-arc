@@ -111,9 +111,9 @@ if added_tokens > 0:
     logger.info(f"Added {added_tokens} special tokens to tokenizer")
 
 # Ensure pad_token is set
-if tok.pad_token is None:
-    tok.pad_token = tok.eos_token
-    logger.info(f"Tokenizer pad_token was None, set to eos_token: {tok.eos_token}")
+tok.pad_token = tok.eos_token
+tok.pad_token_id = tok.pad_token_id or tok.eos_token_id
+logger.info(f"Tokenizer pad_token was None, set to eos_token: {tok.eos_token}")
 # Use right-padding so that the final token in each sequence is the last real token
 tok.padding_side = "right"
 logger.info(f"Tokenizer padding side set to: {tok.padding_side}")
@@ -378,7 +378,7 @@ tokenized_datasets = raw_datasets.map(
     preprocess_fn,
     batched=True,
     remove_columns=columns_to_remove,
-    num_proc=max(1, os.cpu_count() // 2 if os.cpu_count() else 1),  # Ensure at least 1 proc
+    num_proc=max(1, config.cpus - 1 if config.cpus > 1 else config.cpus),
     desc="Running tokenizer on dataset",
 )
 logger.info(f"Dataset tokenization complete. Train examples: {len(tokenized_datasets['train'])}, "
@@ -506,7 +506,7 @@ if config.task_validation_fraction > 0 or config.example_validation_fraction > 0
         preprocess_fn,
         batched=True,
         remove_columns=test_columns_to_remove,
-        num_proc=max(1, os.cpu_count() // 2 if os.cpu_count() else 1),
+        num_proc=max(1, config.cpus - 1 if config.cpus > 1 else config.cpus),
         desc="Running tokenizer on test dataset",
     )
     logger.info("Running final evaluation on test set …")
