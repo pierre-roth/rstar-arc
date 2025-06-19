@@ -72,7 +72,7 @@ logger = logging.getLogger(__name__)
 config = Config()
 set_seed(config.seed or 42)
 setup_logging(config.numeric_log_level)
-logger.info("Using model: %s", config.policy_model)
+logger.info(f"Using model: {config.policy_model}")
 
 TRAIN_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{config.round_number}", "policy_dataset_training.jsonl")
 VAL_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{config.round_number}", "policy_dataset_validation.jsonl")
@@ -111,6 +111,9 @@ added_tokens = tok.add_special_tokens({"additional_special_tokens": SPECIAL_TOKE
 if added_tokens > 0:
     logger.info(f"Added {added_tokens} special tokens to tokenizer")
 
+# Generation should stop on either regular EOS or CODE_END
+EOS_TOKEN_IDS = [tok.eos_token_id, tok.convert_tokens_to_ids(CODE_END)]
+
 # ------------------- model -------------------
 model = AutoModelForCausalLM.from_pretrained(
     config.policy_model,
@@ -137,7 +140,9 @@ model = maybe_peft_wrap(model, config)
 # log trainable params
 trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
 total = sum(p.numel() for p in model.parameters())
-logger.info("Trainable params: %.1f M / %.1f M (%.2f%%)", trainable / 1e6, total / 1e6, 100 * trainable / total)
+logger.info(
+    f"Trainable params: {trainable / 1e6:.1f} M / {total / 1e6:.1f} M ({100 * trainable / total:.2f}%)"
+)
 
 
 # ------------------- preprocessing -------------------
@@ -238,10 +243,7 @@ raw_dataset["train"] = raw_dataset["train"].filter(
     num_proc=max(1, os.cpu_count() // 2 if os.cpu_count() else 1),
 )
 logger.info(
-    "Filtered training dataset to %d/%d examples with max_seq_len=%d",
-    len(raw_dataset["train"]),
-    orig_train_len,
-    config.max_seq_len,
+    f"Filtered training dataset to {len(raw_dataset['train'])}/{orig_train_len} examples with max_seq_len={config.max_seq_len}"
 )
 
 # Split into training and validation sets
@@ -279,9 +281,7 @@ if config.task_validation_fraction > 0 or config.example_validation_fraction > 0
 else:
     # Use static validation dataset as validation split, no test evaluation
     logger.info(
-        "No validation split configured: using static validation dataset from %s and skipping test evaluation",
-        VAL_PATH,
-    )
+        f"No validation split configured: using static validation dataset from {VAL_PATH} and skipping test evaluation")
     train_ds = renormalize_task_weights(raw_dataset["train"])
     raw_val = load_dataset(
         "json",
@@ -295,11 +295,7 @@ else:
         num_proc=max(1, os.cpu_count() // 2 if os.cpu_count() else 1),
     )
     logger.info(
-        "Filtered validation dataset to %d/%d examples with max_seq_len=%d",
-        len(raw_val["validation"]),
-        orig_val_len,
-        config.max_seq_len,
-    )
+        f"Filtered validation dataset to {len(raw_val['validation'])}/{orig_val_len} examples with max_seq_len={config.max_seq_len}")
 
     val_ds = renormalize_task_weights(raw_val["validation"])
     dataset = DatasetDict({"train": train_ds, "validation": val_ds})
@@ -367,6 +363,8 @@ def _log_task_generations(
                     top_p=config.top_p,
                     top_k=config.top_k if config.top_k > 0 else None,
                     max_new_tokens=config.max_tokens,
+                    repetition_penalty=config.repetition_penalty,
+                    eos_token_id=EOS_TOKEN_IDS,
                 )
                 gen_text = tok.decode(gen_ids[0], skip_special_tokens=False)
                 raw_steps = re.split(f"{STEP_END}", gen_text)
@@ -645,8 +643,8 @@ trainer.save_model(OUT_DIR)  # saves LoRA adapter only
 tok.save_pretrained(OUT_DIR)
 metrics = trainer.evaluate()
 trainer.save_metrics("eval", metrics)
-logger.info("✓ Finished — final loss %.4f, perplexity %.4f", metrics.get("eval_loss", 0.0),
-            metrics.get("eval_perplexity", 0.0))
+logger.info(
+    f"✓ Finished — final loss {metrics.get('eval_loss', 0.0):.4f}, perplexity {metrics.get('eval_perplexity', 0.0):.4f}")
 
 if config.report_to == "wandb":
     wandb.log({
@@ -670,11 +668,7 @@ if config.task_validation_fraction > 0 or config.example_validation_fraction > 0
         num_proc=max(1, os.cpu_count() // 2 if os.cpu_count() else 1),
     )
     logger.info(
-        "Filtered test dataset to %d/%d examples with max_seq_len=%d",
-        len(raw_test["test"]),
-        orig_test_len,
-        config.max_seq_len,
-    )
+        f"Filtered test dataset to {len(raw_test['test'])}/{orig_test_len} examples with max_seq_len={config.max_seq_len}")
 
     # Tokenize test dataset
     tokenized_test = raw_test["test"].map(
@@ -690,8 +684,8 @@ if config.task_validation_fraction > 0 or config.example_validation_fraction > 0
     # Use test prefix for metrics
     test_metrics = trainer.evaluate(eval_dataset=tokenized_test, metric_key_prefix="test")
     trainer.save_metrics("test", test_metrics)
-    logger.info("Test set evaluation complete — loss %.4f, perplexity %.4f", test_metrics.get("test_loss", 0.0),
-                test_metrics.get("test_perplexity", 0.0))
+    logger.info(
+        f"Test set evaluation complete — loss {test_metrics.get('test_loss', 0.0):.4f}, perplexity {test_metrics.get('test_perplexity', 0.0):.4f}")
     if config.report_to == "wandb":
         # Log quantitative test loss, perplexity and task count
         wandb.log({

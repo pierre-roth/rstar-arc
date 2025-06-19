@@ -1,7 +1,7 @@
 log-level: INFO
 round-number: 2
 
-top-p: 0.95
+repetition-penalty: 1.05
 task-validation-fraction: 0.05
 example-validation-fraction: 0.05
 num-training-samples: 2

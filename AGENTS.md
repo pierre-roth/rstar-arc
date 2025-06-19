@@ -20,7 +20,7 @@ The aim of this project is to apply **Self-play muTuAl Reasoning (rStar)** to th
 │   ├── solver.py            # Orchestrates multi-step search using agents and LLMs
 │   └── tools/               # Helper tools (code execution, similarity tests)
 ├── train/                   # Scripts to generate and train policy/reward models
-├── test/                    # Scripts for merging fine-tuned adapters (LoRA)
+├── test/                    # Unit tests, helper scripts and scripts for merging fine-tuned adapters (LoRA)
 ├── main.py                  # Entry point for running ARC-solving experiments
 ├── run.py                   # Helper for interactive or SLURM job submission
 ├── tree_visualizer.py       # Visualize agent search-tree outputs
@@ -38,9 +38,11 @@ class Agent:
     def has_expanded(self) -> bool: ...
     def create_prompts(self, is_value_only: bool = False) -> list[str]: ...
     def generate_next_step(self, outputs) -> None: ...
-    def select_next_step(self,
-                         scores: Optional[list[float]] = None,
-                         from_root: bool = False) -> None: ...
+    def select_next_step(
+        self,
+        scores: Optional[list[float]] = None,
+        from_root: bool = False,
+    ) -> None: ...
     def get_nodes(self) -> list[Node]: ...
 ```
 【F:rstar_deepthink/agents/base_agent.py†L16-L24】【F:rstar_deepthink/agents/base_agent.py†L51-L68】【F:rstar_deepthink/agents/base_agent.py†L79-L88】【F:rstar_deepthink/agents/base_agent.py†L90-L97】【F:rstar_deepthink/agents/base_agent.py†L98-L110】【F:rstar_deepthink/agents/base_agent.py†L112-L118】
@@ -91,6 +93,15 @@ python run.py --config-file configs/custom.yaml
 ```
 【F:run.py†L38-L50】
 
+
+## Training and Evaluation
+Training scripts live in the `train/` folder and use the same `Config` system as the solver. For example, to fine‑tune the policy model with LoRA adapters:
+```bash
+python train/train_policy.py --config-file configs/train_policy_full_1.yaml
+```
+Validation datasets and LoRA merging utilities are provided under `test/`.
+
+
 ## Visualization and Debugging
 - Enable `save_for_visualization: true` in your config to dump `nodes.json` files.
 - Visualize saved trees using:
@@ -99,6 +110,15 @@ python run.py --config-file configs/custom.yaml
   ```
   【F:tree_visualizer.py†L261-L270】
 
+## Running the Unit Tests
+A small `pytest` suite ensures that utilities behave as expected. Run the tests from the repository root:
+```bash
+pytest -q
+```
+All tests should pass (see `test/test_core.py`).
+If you come across functionality that is not covered, please add a test case to `test/test_core.py` or create a new test file in the `test/` directory.
+
+
 ## Extending the Agent Framework
 To add a new search agent:
 1. Create a subclass of `Agent` in `rstar_deepthink/agents/`.
@@ -106,4 +126,4 @@ To add a new search agent:
 3. Register your new agent in the `main.py` mapping.
 
 ---
-*For more details on the overall methodology and system architecture, see* `CLAUDE.md` *and* `README.md`.
+For general project information see `README.md`. Historical notes are kept in `weekly_progress_report.md`.
