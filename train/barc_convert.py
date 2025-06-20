@@ -103,6 +103,7 @@ I have a Python function that solves a small visual reasoning puzzle. The origin
 
 7. **Non standard functions:**
     * There are some helper functions used. Assume the code works as is and you shouldn't need to change them.
+    * Don't change the way the functions are used and called as you cannot know exactly what they do.
 
 **EXAMPLE OF DESIRED OUTPUT STRUCTURE:**
 
