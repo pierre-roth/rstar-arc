@@ -232,16 +232,17 @@ def process_item(args: Tuple[int, Dict], client: OpenAI, processed_tasks: Set[st
         success, _, err_full, passed_full, _ = verify_prefixes_and_code(
             solution_code, input_grids, expected_outputs
         )
-        if not (success and not err_full and passed_full):
-            return False, {"task_name": task_name, "error": "Verification failed"}
 
-        # 5. Assemble the final JSON object
         final_data = {
             "task_name": task_name,
             "solution_code": solution_code,
             "examples": formatted_examples,
             "generator": generator_code,
         }
+
+        if not (success and not err_full and passed_full):
+            return False, final_data
+
         return True, final_data
 
     except Exception as e:
@@ -303,25 +304,29 @@ def main():
                     done, pending_futures = wait(pending_futures, return_when=FIRST_COMPLETED)
                     for fut in done:
                         success, result_data = fut.result()
+                        # print(success, result_data)
                         if success:
                             write_batch_data(OUTPUT_FILE, [result_data])
                             processed_tasks.add(result_data['task_name'])
                             save_processed_task(result_data['task_name'], PROCESSED_TASKS_FILE)
                             processed_count += 1
-                            logger.info(f"Converted {processed_count}/{total_tasks} tasks")
-                        pbar.update(1)
+                            pbar.update(1)
+                            logger.info(f"Successfully converted task: {result_data['task_name']}")
+                        else:
+                            logger.info(f"Failed to convert task: {result_data['task_name']}")
 
             # Handle any remaining futures
-            for fut in as_completed(pending_futures):
+            for fut in done:
                 success, result_data = fut.result()
                 if success:
                     write_batch_data(OUTPUT_FILE, [result_data])
                     processed_tasks.add(result_data['task_name'])
                     save_processed_task(result_data['task_name'], PROCESSED_TASKS_FILE)
                     processed_count += 1
-                    logger.info(f"Converted {processed_count}/{total_tasks} tasks")
-
-                pbar.update(1)
+                    pbar.update(1)
+                    logger.info(f"Successfully converted task: {result_data['task_name']}")
+                else:
+                    logger.info(f"Failed to convert task: {result_data['task_name']}")
 
     logger.info("--- Script finished successfully! ---")
 
