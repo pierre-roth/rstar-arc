@@ -351,6 +351,11 @@ def verify_prefixes_and_code(code: str, input_grids: list[list[list[int]]],
     import re
 
     steps = re.split(f"{STEP_END}", code)
+
+    if len(steps) < 3:
+        logger.debug("Insufficient steps! The code must contain at least two steps!")
+        return False, [], True, False, []
+
     prefix_errors: list[bool] = []
 
     for k in range(1, len(steps) + 1):

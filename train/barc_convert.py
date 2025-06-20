@@ -1,7 +1,7 @@
 import logging
 import os
 import sys
-from concurrent.futures import ThreadPoolExecutor, as_completed, wait, FIRST_COMPLETED
+from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 from typing import Any, Dict, List, Set, Tuple
 
 from datasets import load_dataset
@@ -23,9 +23,10 @@ logger = logging.getLogger(__name__)
 # --- CONFIGURATION ---
 # Hardcode configuration variables for easy modification.
 DATASET_NAME = "barc0/200k_HEAVY_gpt4o-description-gpt4omini-code_generated_problems"
-MODEL_NAME = "o4-mini"
+# MODEL_NAME = "o4-mini"
+MODEL_NAME = "gpt-4.1"
 REASONING_EFFORT = "low"  # "low", "medium", or "high"
-MAX_WORKERS = 1  # Number of parallel requests to the API
+MAX_WORKERS = 8  # Number of parallel requests to the API
 OUTPUT_FILE = "/Users/piroth/Downloads/output_dataset.jsonl"
 PROCESSED_TASKS_FILE = "/Users/piroth/Downloads/processed_tasks.txt"
 
@@ -219,7 +220,7 @@ def process_item(args: Tuple[int, Dict], client: OpenAI, processed_tasks: Set[st
             model=MODEL_NAME,
             input=messages,
             text_format=LLMSolution,
-            reasoning={"effort": REASONING_EFFORT}
+            reasoning={"effort": REASONING_EFFORT} if MODEL_NAME.startswith("o") else None,
         )
 
         # The .parse() helper automatically checks for refusals and other issues.

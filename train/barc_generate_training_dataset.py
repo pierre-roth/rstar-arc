@@ -49,10 +49,13 @@ def main(config: Config):
     setup_logging(config.numeric_log_level)
     logger.info("Creating policy training dataset from BARC data…")
 
-    sft_data_dir = os.path.join(config.sft_data_dir, f"round_{config.round_number}")
-    os.makedirs(sft_data_dir, exist_ok=True)
-    input_path = os.path.join(sft_data_dir, "barc_converted.jsonl")
-    output_path = os.path.join(sft_data_dir, "policy_dataset_training_barc.jsonl")
+    # sft_data_dir = os.path.join(config.sft_data_dir, f"round_{config.round_number}")
+    # os.makedirs(sft_data_dir, exist_ok=True)
+    # input_path = os.path.join(sft_data_dir, "barc_converted.jsonl")
+    # output_path = os.path.join(sft_data_dir, "policy_dataset_training_barc.jsonl")
+
+    input_path = "/Users/piroth/Downloads/output_dataset.jsonl"
+    output_path = "/Users/piroth/Downloads/barc_dataset.jsonl"
 
     # --- Pass 1: determine total output entries per task ---
     entries_per_task: dict[str, int] = {}

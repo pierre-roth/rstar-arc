@@ -1526,16 +1526,17 @@ def detect_objects(grid, _=None, predicate=None, background=Color.BLACK, monochr
                                       np.sum(obj != background)), reverse=True)
         overlap_matrix = np.full((len(objects), len(objects)), False)
         object_masks = [obj != background for obj in objects]
-
-        # inside the double‐loop over object_masks:
+        object_bounding_boxes = [bounding_box(obj, background=background) for obj in object_masks]
         for i, obj1 in enumerate(object_masks):
-            for j in range(i + 1, len(object_masks)):
-                obj2 = object_masks[j]
-                # semantically equivalent to the old “if True or …” path:
-                overlap = np.any(obj1 & obj2)
-                overlap_matrix[i, j] = overlap
-                overlap_matrix[j, i] = overlap
-
+            for j, obj2 in enumerate(object_masks):
+                if i < j:
+                    # check if the bounding boxes overlap
+                    # FIXME: this doesn't work
+                    x1, y1, n1, m1 = object_bounding_boxes[i]
+                    x2, y2, n2, m2 = object_bounding_boxes[j]
+                    if True or x1 + n1 <= x2 or x2 + n2 <= x1 or y1 + m1 <= y2 or y2 + m2 <= y1:
+                        overlap_matrix[i, j] = np.any(obj1 & obj2)
+                        overlap_matrix[j, i] = overlap_matrix[i, j]
         # print("time to compute overlaps", time.time() - start)
         start = time.time()
 
