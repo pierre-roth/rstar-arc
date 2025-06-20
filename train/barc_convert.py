@@ -106,7 +106,6 @@ I have a Python function that solves a small visual reasoning puzzle. The origin
 
 **EXAMPLE OF DESIRED OUTPUT STRUCTURE:**
 
-```python
 {CODE}
 def solve(I):
     # Step 1: Convert the input list to a numpy array for easier manipulation.
@@ -127,16 +126,26 @@ def solve(I):
     # Step 4: Return the final grid as a list of lists.
     return O.tolist()
 {CODE_END}
-```
+
+Obviously the output is expected in a single line JSON object. Only unfolded, it would look like above. 
 
 **YOUR TASK:**
 
 Rewrite the following Python code according to all the instructions above. Respond ONLY with a JSON object containing the 'solution_code' key.
 
+The original code might additionally contain imports at the top level and also comments explaining the logic in more detail. 
+Ignore the imports if they are part of these: 
+from common import *
+import numpy as np
+from typing import *
+
+Otherwise, move them inside the `solve` function, and ensure they are valid Python code.
+
+Use the additional comments to write better comments in the rewritten code, but do not include comments not linked to a step in the final output.
+
+
 **Original Code to Rewrite:**
-```python
 {{original_code}}
-```
 """
 
 
