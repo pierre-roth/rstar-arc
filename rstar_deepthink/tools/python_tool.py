@@ -329,3 +329,22 @@ def test_correct(node) -> (bool, bool, list[list[list[int]]]):
     except Exception as e:
         logger.error(f"Unexpected error during correctness test: {e}", exc_info=True)
         return True, False, []
+
+
+def verify_prefixes_and_code(code: str, input_grids: list[list[list[int]]],
+                             expected_outputs: list | None) -> tuple[bool, list[bool], bool, bool, list]:
+    """Execute each code prefix and the full code, returning aggregated results."""
+
+    import re
+
+    steps = re.split(f"{STEP_END}", code)
+    prefix_errors: list[bool] = []
+
+    for k in range(1, len(steps) + 1):
+        prefix_code = remove_markers("".join(steps[:k]))
+        err, _, _ = execute_code_with_task(prefix_code, input_grids, [None] * len(input_grids))
+        prefix_errors.append(err)
+
+    err_full, passed_full, results_full = execute_code_with_task(remove_markers(code), input_grids, expected_outputs)
+    success = not any(prefix_errors) and not err_full and passed_full
+    return success, prefix_errors, err_full, passed_full, results_full

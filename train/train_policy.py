@@ -63,7 +63,7 @@ from train_utils import (
 from rstar_deepthink import Config
 from rstar_deepthink.arc_task import ARCTask
 from rstar_deepthink.arc_task.task_utils import task_to_prompt
-from rstar_deepthink.tools.python_tool import remove_markers, run_examples
+from rstar_deepthink.tools.python_tool import verify_prefixes_and_code
 from train.data_utils import get_code_length
 
 logger = logging.getLogger(__name__)
@@ -371,14 +371,19 @@ def _log_task_generations(
                 raw_steps = re.split(f"{STEP_END}", gen_text)
                 num_steps = len(raw_steps)
                 format_adherence = CODE_END in gen_text and num_steps >= config.min_steps_for_format_adherence
-                prefix_errors: list[bool] = []
-                for k_i in range(1, num_steps + 1):
-                    code_str = remove_markers("".join(raw_steps[:k_i]))
-                    err, _, _ = run_examples(task, code_str)
-                    prefix_errors.append(err)
-                err_full, passed_train_full, results_full = run_examples(
-                    task, remove_markers(gen_text)
-                )
+
+                input_grids = [ex.input_grid.grid for ex in task.training_examples + task.test_examples]
+                expected_outputs = [ex.output_grid.grid for ex in task.training_examples] + [None] * len(
+                    task.test_examples)
+
+                (
+                    _success,
+                    prefix_errors,
+                    err_full,
+                    passed_train_full,
+                    results_full,
+                ) = verify_prefixes_and_code(gen_text, input_grids, expected_outputs)
+
                 n_train = len(task.training_examples)
                 test_results = results_full[n_train:]
                 expected_test = [ex.output_grid.grid for ex in task.test_examples]
