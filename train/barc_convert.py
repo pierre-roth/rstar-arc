@@ -1,5 +1,6 @@
 import logging
 import os
+import random
 import sys
 from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 from typing import Any, Dict, List, Set, Tuple
@@ -24,11 +25,15 @@ logger = logging.getLogger(__name__)
 # Hardcode configuration variables for easy modification.
 DATASET_NAME = "barc0/200k_HEAVY_gpt4o-description-gpt4omini-code_generated_problems"
 # MODEL_NAME = "o4-mini"
-MODEL_NAME = "gpt-4.1"
+# MODEL_NAME = "gpt-4.1"
+MODEL_NAME = "mistralai/devstral-small"
+# MODEL_NAME = ""
 REASONING_EFFORT = "low"  # "low", "medium", or "high"
-MAX_WORKERS = 8  # Number of parallel requests to the API
+MAX_WORKERS = 16  # Number of parallel requests to the API
 OUTPUT_FILE = "/Users/piroth/Downloads/output_dataset.jsonl"
 PROCESSED_TASKS_FILE = "/Users/piroth/Downloads/processed_tasks.txt"
+
+OPENAI_MODELS = ["o4-mini", "gpt-4.1"]
 
 
 # --- Pydantic Schema for OpenAI Structured Output ---
@@ -215,18 +220,32 @@ def process_item(args: Tuple[int, Dict], client: OpenAI, processed_tasks: Set[st
             {"role": "user", "content": prompt}
         ]
 
-        # 3. Call the OpenAI API using the structured output feature
-        response = client.responses.parse(
-            model=MODEL_NAME,
-            input=messages,
-            text_format=LLMSolution,
-            reasoning={"effort": REASONING_EFFORT} if MODEL_NAME.startswith("o") else None,
-        )
+        if MODEL_NAME in OPENAI_MODELS:
+            # 3. Call the OpenAI API using the structured output feature
+            response = client.responses.parse(
+                model=MODEL_NAME,
+                input=messages,
+                text_format=LLMSolution,
+                reasoning={"effort": REASONING_EFFORT} if MODEL_NAME.startswith("o") else None,
+            )
 
-        # The .parse() helper automatically checks for refusals and other issues.
-        # If we get here, response.output_parsed is a valid LLMSolution object.
-        parsed_output = response.output_parsed
-        solution_code = parsed_output.solution_code
+            # The .parse() helper automatically checks for refusals and other issues.
+            # If we get here, response.output_parsed is a valid LLMSolution object.
+            parsed_output = response.output_parsed
+            solution_code = parsed_output.solution_code
+        else:
+            response = client.chat.completions.create(
+                model=MODEL_NAME,
+                messages=messages,
+                response_format={"type": "json_object"},
+            )
+
+            # Extract the JSON string from the standard response format
+            json_string = response.choices[0].message.content
+
+            # Manually parse the JSON string using the Pydantic model
+            parsed_output = LLMSolution.model_validate_json(json_string)
+            solution_code = parsed_output.solution_code
 
         # 4. Verify the generated code with prefix checks
         input_grids = [ex["input"] for ex in formatted_examples]
@@ -264,11 +283,13 @@ def main():
     logger.info("--- Starting Dataset Reformatting Script ---")
 
     # Load API key from environment
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        logger.error("Error: OPENAI_API_KEY environment variable not set.")
-        return
-    client = OpenAI(api_key=api_key)
+    openai_api_key = os.getenv("OPENAI_API_KEY")
+    openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
+
+    if MODEL_NAME in OPENAI_MODELS:
+        client = OpenAI(api_key=openai_api_key)
+    else:
+        client = OpenAI(api_key=openrouter_api_key, base_url="https://openrouter.ai/api/v1")
 
     # Load the dataset in streaming mode to avoid holding everything in memory
     logger.info(f"Loading dataset: {DATASET_NAME} ...")
@@ -295,7 +316,7 @@ def main():
             for index, item in enumerate(ds):
                 task_name = f"{index:08x}"
 
-                if task_name in processed_tasks:
+                if task_name in processed_tasks or random.random() > 0.25:
                     pbar.update(1)
                     continue
 
