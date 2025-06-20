@@ -1,10 +1,9 @@
-import json
+import logging
 import os
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import List, Dict, Tuple, Any, Set
+from typing import Any, Dict, List, Set, Tuple
 
-import numpy as np
 from datasets import load_dataset
 from openai import OpenAI
 from pydantic import BaseModel, Field
@@ -15,6 +14,11 @@ if project_root not in sys.path:
     sys.path.append(project_root)
 
 from constants import CODE, CODE_END, STEP_END
+from utils import setup_logging
+from data_utils import write_batch_data
+from rstar_deepthink.tools import verify_prefixes_and_code
+
+logger = logging.getLogger(__name__)
 
 # --- CONFIGURATION ---
 # Hardcode configuration variables for easy modification.
@@ -23,7 +27,7 @@ MODEL_NAME = "o4-mini"
 REASONING_EFFORT = "low"  # "low", "medium", or "high"
 MAX_WORKERS = 1  # Number of parallel requests to the API
 OUTPUT_FILE = "/Users/piroth/Downloads/output_dataset.jsonl"
-PROCESSED_TASKS_FILE = "/Users/piroth/Downloads/processed_tasks.json"
+PROCESSED_TASKS_FILE = "/Users/piroth/Downloads/processed_tasks.txt"
 
 
 # --- Pydantic Schema for OpenAI Structured Output ---
@@ -86,7 +90,9 @@ I have a Python function that solves a small visual reasoning puzzle. The origin
     * Each step's code block MUST end with the tag: `{STEP_END}`. (indented like the code in the function)
     * The final return statement does not require a `{STEP_END}` tag.
 
-5.  **Integer-only Domain (VERY IMPORTANT):**
+5.  **Prefix Verification:** Your code is checked after every `{STEP_END}` marker. Ensure each step is valid Python so all prefixes execute without errors.
+
+6.  **Integer-only Domain (VERY IMPORTANT):**
     * The original code uses a `Color` enum. You must "translate" all logic to use integers directly.
     * Do NOT include the `Color` class or any color names (e.g., "blue", "red") in your rewritten code or its comments.
     * Use the integer values directly. Here is the mapping for your reference:
@@ -95,7 +101,7 @@ I have a Python function that solves a small visual reasoning puzzle. The origin
         ```
     * For example, if the original code says `if pixel == Color.BLUE:`, your code MUST say `if pixel == 1:`. If it says `colors = [Color.RED, Color.GREEN]`, your code MUST say `colors = [2, 3]`.
 
-6. **Non standard functions:**
+7. **Non standard functions:**
     * There are some helper functions used. Assume the code works as is and you shouldn't need to change them.
 
 **EXAMPLE OF DESIRED OUTPUT STRUCTURE:**
@@ -137,25 +143,18 @@ Rewrite the following Python code according to all the instructions above. Respo
 # --- HELPER FUNCTIONS ---
 
 def load_processed_tasks(filename: str) -> Set[str]:
-    """Loads the set of already processed task names from a JSON file."""
+    """Loads processed task names from a line-based text file."""
     try:
-        with open(filename, 'r') as f:
-            return set(json.load(f))
+        with open(filename, "r", encoding="utf-8") as f:
+            return {line.strip() for line in f if line.strip()}
     except FileNotFoundError:
         return set()
 
 
-def save_processed_task(task_name: str, processed_set: Set[str], filename: str):
-    """Adds a task name to the processed set and rewrites the file."""
-    processed_set.add(task_name)
-    with open(filename, 'w') as f:
-        json.dump(list(processed_set), f, indent=4)
-
-
-def append_to_jsonl(data: Dict, filename: str):
-    """Appends a JSON object to a JSONL file."""
-    with open(filename, 'a') as f:
-        f.write(json.dumps(data) + '\n')
+def save_processed_task(task_name: str, filename: str):
+    """Appends a processed task name to the tracking file."""
+    with open(filename, "a", encoding="utf-8") as f:
+        f.write(task_name + "\n")
 
 
 def split_source_code(source_code: str) -> Tuple[str, str]:
@@ -176,33 +175,6 @@ def format_examples(examples: List[List[List[Any]]]) -> List[Dict[str, List[List
         output_grid = [[int(round(cell)) for cell in row] for row in pair[1]]
         formatted.append({"input": input_grid, "output": output_grid})
     return formatted
-
-
-def verify_solution(solution_code: str, example: Dict) -> bool:
-    """
-    Executes the generated solution code against an example to verify its correctness.
-    Returns True if the code runs and produces the correct output, False otherwise.
-    """
-    try:
-        # Prepare a clean environment for execution
-        exec_globals = {"np": np}
-        # The tags are not python code, so we remove them before executing.
-        code_to_exec = solution_code.strip().replace(CODE, "").replace(CODE_END, "")
-
-        # Define the 'solve' function in our clean environment
-        exec(code_to_exec, exec_globals)
-        solve_func = exec_globals['solve']
-
-        # Run the function with the example input
-        output = solve_func(example['input'])
-
-        # Check if the generated output matches the expected output
-        return output == example['output']
-    except Exception:
-        # If any error occurs during execution or verification, log it and return False.
-        # print(f"Verification failed for task. Error: {e}")
-        # traceback.print_exc()
-        return False
 
 
 # --- WORKER FUNCTION ---
@@ -245,9 +217,13 @@ def process_item(args: Tuple[int, Dict], client: OpenAI, processed_tasks: Set[st
         parsed_output = response.output_parsed
         solution_code = parsed_output.solution_code
 
-        # 4. Verify the generated code
-        is_verified = verify_solution(solution_code, formatted_examples[0])
-        if not is_verified:
+        # 4. Verify the generated code with prefix checks
+        input_grids = [ex["input"] for ex in formatted_examples]
+        expected_outputs = [ex["output"] for ex in formatted_examples]
+        success, _, err_full, passed_full, _ = verify_prefixes_and_code(
+            solution_code, input_grids, expected_outputs
+        )
+        if not (success and not err_full and passed_full):
             return False, {"task_name": task_name, "error": "Verification failed"}
 
         # 5. Assemble the final JSON object
@@ -272,38 +248,39 @@ def main():
     """
     Main function to orchestrate the dataset loading, processing, and saving.
     """
-    print("--- Starting Dataset Reformatting Script ---")
+    setup_logging(logging.INFO)
+    logger.info("--- Starting Dataset Reformatting Script ---")
 
     # Load API key from environment
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
-        print("Error: OPENAI_API_KEY environment variable not set.")
+        logger.error("Error: OPENAI_API_KEY environment variable not set.")
         return
     client = OpenAI(api_key=api_key)
 
     # Load the dataset from Hugging Face
-    print(f"Loading dataset: {DATASET_NAME}...")
+    logger.info(f"Loading dataset: {DATASET_NAME} ...")
     try:
         ds = load_dataset(DATASET_NAME, split='train', streaming=False)  # Use streaming=False for tqdm
     except Exception as e:
-        print(f"Failed to load dataset: {e}")
+        logger.error(f"Failed to load dataset: {e}")
         return
 
-    print("Dataset loaded successfully.")
+    logger.info("Dataset loaded successfully.")
 
     # Load the set of tasks that have already been processed
     processed_tasks = load_processed_tasks(PROCESSED_TASKS_FILE)
-    print(f"Found {len(processed_tasks)} previously processed tasks.")
+    logger.info(f"Found {len(processed_tasks)} previously processed tasks.")
 
     # Use enumerate to get an index for each item for the task_name
     all_tasks = list(enumerate(ds))
     tasks_to_process = [task for task in all_tasks if f"{task[0]:08x}" not in processed_tasks]
 
     if not tasks_to_process:
-        print("All tasks have already been processed. Exiting.")
+        logger.info("All tasks have already been processed. Exiting.")
         return
 
-    print(f"Total tasks to process: {len(tasks_to_process)}")
+    logger.info(f"Total tasks to process: {len(tasks_to_process)}")
 
     # Process tasks in parallel using a ThreadPoolExecutor
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
@@ -322,8 +299,9 @@ def main():
                     success, result_data = future.result()
                     if success:
                         # On successful processing, save the results
-                        append_to_jsonl(result_data, OUTPUT_FILE)
-                        save_processed_task(result_data['task_name'], processed_tasks, PROCESSED_TASKS_FILE)
+                        write_batch_data(OUTPUT_FILE, [result_data])
+                        processed_tasks.add(result_data['task_name'])
+                        save_processed_task(result_data['task_name'], PROCESSED_TASKS_FILE)
                     # else:
                     # Optionally log failures or skips
                     # if result_data:
@@ -337,7 +315,7 @@ def main():
 
                 pbar.update(1)
 
-    print("--- Script finished successfully! ---")
+    logger.info("--- Script finished successfully! ---")
 
 
 if __name__ == "__main__":
