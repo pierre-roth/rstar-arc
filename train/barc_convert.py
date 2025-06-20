@@ -1,7 +1,7 @@
 import logging
 import os
 import sys
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed, wait, FIRST_COMPLETED
 from typing import Any, Dict, List, Set, Tuple
 
 from datasets import load_dataset
@@ -258,60 +258,59 @@ def main():
         return
     client = OpenAI(api_key=api_key)
 
-    # Load the dataset from Hugging Face
+    # Load the dataset in streaming mode to avoid holding everything in memory
     logger.info(f"Loading dataset: {DATASET_NAME} ...")
     try:
-        ds = load_dataset(DATASET_NAME, split='train', streaming=False)  # Use streaming=False for tqdm
+        ds = load_dataset(DATASET_NAME, split="train", streaming=True)
     except Exception as e:
         logger.error(f"Failed to load dataset: {e}")
         return
 
-    logger.info("Dataset loaded successfully.")
+    total_tasks = ds.info.splits["train"].num_examples
+    logger.info(f"Dataset loaded successfully with {total_tasks} total tasks.")
 
     # Load the set of tasks that have already been processed
     processed_tasks = load_processed_tasks(PROCESSED_TASKS_FILE)
     logger.info(f"Found {len(processed_tasks)} previously processed tasks.")
 
-    # Use enumerate to get an index for each item for the task_name
-    all_tasks = list(enumerate(ds))
-    tasks_to_process = [task for task in all_tasks if f"{task[0]:08x}" not in processed_tasks]
+    logger.info(f"Total tasks in dataset: {total_tasks}")
+    processed_count = len(processed_tasks)
 
-    if not tasks_to_process:
-        logger.info("All tasks have already been processed. Exiting.")
-        return
-
-    logger.info(f"Total tasks to process: {len(tasks_to_process)}")
-
-    # Process tasks in parallel using a ThreadPoolExecutor
+    # Process tasks sequentially while keeping a small pool of workers
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        # Create a progress bar with tqdm
-        with tqdm(total=len(tasks_to_process), desc="Processing tasks") as pbar:
-            # Submit all tasks to the executor
-            future_to_task = {
-                executor.submit(process_item, task, client, processed_tasks): task
-                for task in tasks_to_process
-            }
+        pending_futures = set()
+        with tqdm(total=total_tasks, desc="Processing tasks") as pbar:
+            for index, item in enumerate(ds):
+                task_name = f"{index:08x}"
 
-            for future in as_completed(future_to_task):
-                task_index = future_to_task[future][0]
-                task_name = f"{task_index:08x}"
-                try:
-                    success, result_data = future.result()
-                    if success:
-                        # On successful processing, save the results
-                        write_batch_data(OUTPUT_FILE, [result_data])
-                        processed_tasks.add(result_data['task_name'])
-                        save_processed_task(result_data['task_name'], PROCESSED_TASKS_FILE)
-                    # else:
-                    # Optionally log failures or skips
-                    # if result_data:
-                    #     print(f"Failed or skipped task {result_data.get('task_name', 'N/A')}: {result_data.get('error', 'Skipped')}")
+                if task_name in processed_tasks:
+                    pbar.update(1)
+                    continue
 
-                except Exception as e:
-                    # Log exceptions that might occur from the future itself
-                    # print(f"An exception occurred for task {task_name}: {e}")
-                    # traceback.print_exc()
-                    pass
+                future = executor.submit(process_item, (index, item), client, processed_tasks)
+                pending_futures.add(future)
+
+                if len(pending_futures) >= MAX_WORKERS:
+                    done, pending_futures = wait(pending_futures, return_when=FIRST_COMPLETED)
+                    for fut in done:
+                        success, result_data = fut.result()
+                        if success:
+                            write_batch_data(OUTPUT_FILE, [result_data])
+                            processed_tasks.add(result_data['task_name'])
+                            save_processed_task(result_data['task_name'], PROCESSED_TASKS_FILE)
+                            processed_count += 1
+                            logger.info(f"Converted {processed_count}/{total_tasks} tasks")
+                        pbar.update(1)
+
+            # Handle any remaining futures
+            for fut in as_completed(pending_futures):
+                success, result_data = fut.result()
+                if success:
+                    write_batch_data(OUTPUT_FILE, [result_data])
+                    processed_tasks.add(result_data['task_name'])
+                    save_processed_task(result_data['task_name'], PROCESSED_TASKS_FILE)
+                    processed_count += 1
+                    logger.info(f"Converted {processed_count}/{total_tasks} tasks")
 
                 pbar.update(1)
 
