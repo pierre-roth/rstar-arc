@@ -3,9 +3,14 @@ import logging
 import os
 import signal
 import subprocess
+import sys
 import textwrap
 
 import numpy as np  # Added for direct execution context
+
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+if project_root not in sys.path:
+    sys.path.append(project_root)
 
 from constants import CPU_TIMEOUT_SECONDS, WALL_TIMEOUT_SECONDS, CODE, CODE_END, STEP_END, MEMORY_LIMIT_BYTES
 
@@ -13,6 +18,8 @@ logger = logging.getLogger(__name__)
 
 use_subprocess = True
 logger.info(f"Code execution method: {'Subprocess' if use_subprocess else 'Direct'}")
+
+GLOBAL_IMPORTS = "from train.common import *\nimport numpy as np\nfrom typing import *\n"
 
 # --- Get the path for the subprocess python ---
 SUBPROCESS_PYTHON_PATH = os.environ.get("SUBPROCESS_PYTHON_EXEC")
@@ -133,11 +140,15 @@ def execute_code_in_subprocess(code_str, input_grids, expected_outputs):
     }
 
     try:
+        env = os.environ.copy()
+        env["PYTHONPATH"] = str(project_root) + os.pathsep + env.get("PYTHONPATH", "")
         proc = subprocess.run(
             [SUBPROCESS_PYTHON_PATH, "-c", wrapper_code, json.dumps(input_data)],
             input=code_str.encode("utf-8"),
             capture_output=True,
-            timeout=WALL_TIMEOUT_SECONDS  # Use the wall-clock timeout for the subprocess run
+            timeout=WALL_TIMEOUT_SECONDS,  # Use the wall-clock timeout for the subprocess run
+            env=env,
+            cwd=str(project_root),
         )
 
         if proc.returncode < 0:
@@ -263,6 +274,8 @@ def execute_code_with_task(code: str, input_grids: list[list[list[int]]],
     if not code.strip():
         logger.debug("Cannot execute empty code!")
         return True, False, []
+
+    code = GLOBAL_IMPORTS + code
 
     if use_subprocess:
         logger.debug("Executing code via subprocess.")
