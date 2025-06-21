@@ -118,6 +118,8 @@ class Config:
     train_on_prompts: bool = False  # Whether to train on prompts
     qualitative_eval: bool = False  # Whether to perform qualitative evaluation during training
 
+    attn_implementation: Optional[str] = "flash_attention_2"  # Attention implementation to use
+
     task_validation_fraction: float = 0.05  # fraction of examples to use for validation (not used for training)
     example_validation_fraction: float = 0.05  # fraction of examples of tasks used for training that are used for validation
     curriculum_learning: bool = False  # Whether to sort training examples by code length (curriculum learning)

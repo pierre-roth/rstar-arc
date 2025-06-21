@@ -83,14 +83,14 @@ if not config.full_finetune:
         f"{config.max_seq_len}-{config.learning_rate}-"
         f"{config.lora_rank}-{config.lora_alpha}-"
         f"{config.lora_dropout}-"
-        f"{config.weight_decay}-{config.curriculum_learning}-"
+        f"{config.weight_decay}-"
         f"{config.train_on_prompts}"
     )
 else:
     dir_name = (
         f"ft-{config.policy_model.split('/')[-1]}-"
         f"{config.max_seq_len}-{config.learning_rate}-"
-        f"{config.weight_decay}-{config.curriculum_learning}-"
+        f"{config.weight_decay}-"
         f"{config.train_on_prompts}"
     )
 
@@ -120,6 +120,7 @@ model = AutoModelForCausalLM.from_pretrained(
     config.policy_model,
     torch_dtype=torch.bfloat16 if config.use_bf16 else torch.float16,
     trust_remote_code=True,
+    attn_implementation=config.attn_implementation,
 )
 
 # Resize embeddings if we added new tokens
@@ -302,14 +303,7 @@ else:
     val_ds = renormalize_task_weights(raw_val["validation"])
     dataset = DatasetDict({"train": train_ds, "validation": val_ds})
 
-# Shuffle or sort training split
-if config.curriculum_learning:
-    logger.info("Curriculum learning enabled: sorting training examples by code length")
-    dataset["train"] = dataset["train"].map(lambda ex: {"code_length": get_code_length(ex["solution"])})
-    dataset["train"] = dataset["train"].sort("code_length")
-    dataset["train"] = dataset["train"].remove_columns(["code_length"])
-else:
-    dataset["train"] = dataset["train"].shuffle(seed=config.seed or 42)
+dataset["train"] = dataset["train"].shuffle(seed=config.seed or 42)
 
 # Tokenize datasets
 tokenized_datasets = dataset.map(
