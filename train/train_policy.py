@@ -22,6 +22,7 @@ import os
 import random
 import sys
 from dataclasses import asdict
+from typing import Any
 
 import torch
 import wandb
@@ -241,80 +242,110 @@ logger.info(
     f"Filtered training dataset to {len(raw_dataset['train'])}/{orig_train_len} examples with max_seq_len={config.max_seq_len}"
 )
 
-# Split into training and validation sets
-if config.task_validation_fraction > 0 or config.example_validation_fraction > 0:
-    rng = random.Random(config.seed or 42)
-    task_to_indices: dict[str, list[int]] = {}
-    for idx, ex in enumerate(raw_dataset["train"]):
-        task_to_indices.setdefault(ex["task_name"], []).append(idx)
+# Split into training and multiple validation sets
+rng = random.Random(config.seed or 42)
+task_to_indices: dict[str, list[int]] = {}
+for idx, ex in enumerate(raw_dataset["train"]):
+    task_to_indices.setdefault(ex["task_name"], []).append(idx)
 
+# ----- validation set 1: hold out entire tasks -----
+val_task_indices: list[int] = []
+train_remaining_indices: list[int] = []
+if config.task_validation_fraction > 0:
     all_tasks = list(task_to_indices.keys())
     rng.shuffle(all_tasks)
     val_task_count = int(len(all_tasks) * config.task_validation_fraction)
     val_tasks = set(all_tasks[:val_task_count])
-
-    train_indices: list[int] = []
-    val_indices: list[int] = []
-    for task, indices in task_to_indices.items():
-        indices = list(indices)
-        rng.shuffle(indices)
-        if task in val_tasks:
-            val_indices.extend(indices)
-        else:
-            n_val = int(len(indices) * config.example_validation_fraction)
-            val_indices.extend(indices[:n_val])
-            train_indices.extend(indices[n_val:])
-
-    logger.info(
-        f"Split {len(all_tasks)} tasks with {len(val_tasks)} held-out tasks and {len(val_indices)} validation examples "
-        f"(task fraction={config.task_validation_fraction}, example fraction={config.example_validation_fraction})"
-    )
-
-    train_ds = renormalize_task_weights(raw_dataset["train"].select(train_indices))
-    val_ds = renormalize_task_weights(raw_dataset["train"].select(val_indices))
-    dataset = DatasetDict({"train": train_ds, "validation": val_ds})
 else:
-    # Use static validation dataset as validation split, no test evaluation
-    logger.info(
-        f"No validation split configured: using static validation dataset from {VAL_PATH} and skipping test evaluation")
-    train_ds = renormalize_task_weights(raw_dataset["train"])
-    raw_val = load_dataset(
-        "json",
-        data_files={"validation": VAL_PATH},
-        cache_dir=os.path.join(LOCAL_SCRATCH_PATH, ".cache/huggingface/datasets"),
-    )
+    val_tasks = set()
 
-    orig_val_len = len(raw_val["validation"])
-    raw_val["validation"] = raw_val["validation"].filter(
-        _within_max_len,
-        num_proc=max(1, config.cpus - 1 if config.cpus > 1 else config.cpus),
-    )
-    logger.info(
-        f"Filtered validation dataset to {len(raw_val['validation'])}/{orig_val_len} examples with max_seq_len={config.max_seq_len}")
+for task, indices in task_to_indices.items():
+    indices = list(indices)
+    rng.shuffle(indices)
+    if task in val_tasks:
+        val_task_indices.extend(indices)
+    else:
+        train_remaining_indices.extend(indices)
 
-    val_ds = renormalize_task_weights(raw_val["validation"])
-    dataset = DatasetDict({"train": train_ds, "validation": val_ds})
+# ----- validation set 2: hold out specific examples from remaining tasks -----
+val_example_indices: list[int] = []
+train_final_indices: list[int] = []
+for task, indices in task_to_indices.items():
+    if task in val_tasks:
+        continue
+    indices = list(indices)
+    rng.shuffle(indices)
+    if config.example_validation_num > 0 and len(indices) >= config.example_validation_threshold:
+        n_take = min(config.example_validation_num, len(indices))
+        val_example_indices.extend(indices[:n_take])
+        train_final_indices.extend(indices[n_take:])
+    else:
+        train_final_indices.extend(indices)
+
+# Use external validation path as separate set
+raw_val = load_dataset(
+    "json",
+    data_files={"validation": VAL_PATH},
+    cache_dir=os.path.join(LOCAL_SCRATCH_PATH, ".cache/huggingface/datasets"),
+)
+
+orig_val_len = len(raw_val["validation"])
+raw_val["validation"] = raw_val["validation"].filter(
+    _within_max_len,
+    num_proc=max(1, config.cpus - 1 if config.cpus > 1 else config.cpus),
+)
+logger.info(
+    f"Filtered external validation dataset to {len(raw_val['validation'])}/{orig_val_len} examples with max_seq_len={config.max_seq_len}")
+
+logger.info(
+    f"Split tasks: {len(val_tasks)} held-out tasks, {len(val_example_indices)} held-out examples")
+
+train_ds = renormalize_task_weights(raw_dataset["train"].select(train_final_indices))
+val_task_ds = renormalize_task_weights(raw_dataset["train"].select(val_task_indices)) if val_task_indices else None
+val_example_ds = renormalize_task_weights(
+    raw_dataset["train"].select(val_example_indices)) if val_example_indices else None
+val_val_ds = renormalize_task_weights(raw_val["validation"]) if len(raw_val["validation"]) > 0 else None
+
+dataset = DatasetDict({"train": train_ds})
+if val_task_ds is not None:
+    dataset["val_task"] = val_task_ds
+if val_example_ds is not None:
+    dataset["val_example"] = val_example_ds
+if val_val_ds is not None:
+    dataset["val_val"] = val_val_ds
 
 dataset["train"] = dataset["train"].shuffle(seed=config.seed or 42)
 
-# Tokenize datasets
-tokenized_datasets = dataset.map(
-    preprocess,
-    batched=True,
-    remove_columns=[c for c in dataset["train"].column_names if c != "weight"],
-    num_proc=max(1, config.cpus - 1 if config.cpus > 1 else config.cpus),
-)
+tokenized_datasets = DatasetDict()
+for split, ds in dataset.items():
+    if len(ds) == 0:
+        tokenized_datasets[split] = ds
+        continue
+    tokenized_datasets[split] = ds.map(
+        preprocess,
+        batched=True,
+        remove_columns=[c for c in dataset["train"].column_names if c != "weight"],
+        num_proc=max(1, config.cpus - 1 if config.cpus > 1 else config.cpus),
+    )
+
 logger.info("Tokenization complete.")
-# Count unique tasks per split (weight sum = number of tasks)
-train_weight_sum = sum(tokenized_datasets["train"]["weight"])
-val_weight_sum = sum(tokenized_datasets["validation"]["weight"])
-train_task_count = int(round(train_weight_sum))
-val_task_count = int(round(val_weight_sum))
-logger.info(f"Number of unique tasks — train: {train_task_count}, validation: {val_task_count}")
+
+train_task_count = round(sum(tokenized_datasets["train"]["weight"]))
+val_task_count = round(sum(tokenized_datasets["val_task"]["weight"])) if "val_task" in tokenized_datasets else 0
+example_task_count = round(
+    sum(tokenized_datasets["val_example"]["weight"])) if "val_example" in tokenized_datasets else 0
+external_task_count = round(sum(tokenized_datasets["val_val"]["weight"])) if "val_val" in tokenized_datasets else 0
+logger.info(
+    f"Number of unique tasks — train: {train_task_count}, val_task: {val_task_count}, val_example: {example_task_count}, val_val: {external_task_count}"
+)
 
 
 # ------------------- trainer subclass -------------------
 class WeightedTrainer(Trainer):
+    def __init__(self, *args, additional_eval_datasets: dict[str, Any] | None = None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.additional_eval_datasets = additional_eval_datasets or {}
+
     def compute_loss(
             self,
             model,
@@ -391,11 +422,24 @@ class WeightedTrainer(Trainer):
             ds = eval_dataset if eval_dataset is not None else self.eval_dataset
             metrics[f"{metric_key_prefix}_loss"] = self.compute_weighted_loss(ds).item()
 
+        # Run additional evaluations if provided
+        for prefix, ds in self.additional_eval_datasets.items():
+            if ds is None or len(ds) == 0:
+                continue
+            extra = super().evaluate(
+                eval_dataset=ds,
+                ignore_keys=ignore_keys,
+                metric_key_prefix=prefix,
+                **kwargs,
+            )
+            extra[f"{prefix}_loss"] = self.compute_weighted_loss(ds).item()
+            metrics.update(extra)
+
         return metrics
 
 
 # ------------------- training args -------------------
-args = TrainingArguments(
+arguments = TrainingArguments(
     output_dir=OUT_DIR,
     per_device_train_batch_size=config.per_device_train_batch_size,
     per_device_eval_batch_size=config.per_device_eval_batch_size,
@@ -431,18 +475,22 @@ if config.report_to == "wandb":
     wandb.init(
         project=config.wandb_project,
         entity=config.wandb_entity,
-        name=args.run_name,
+        name=arguments.run_name,
         config={
-            "lr": args.learning_rate,
-            "batch_size": args.per_device_train_batch_size * args.gradient_accumulation_steps,
-            "epochs": args.num_train_epochs,
+            "lr": arguments.learning_rate,
+            "batch_size": arguments.per_device_train_batch_size * arguments.gradient_accumulation_steps,
+            "epochs": arguments.num_train_epochs,
             "lora_r": config.lora_rank,
             "lora_alpha": config.lora_alpha,
             "train_samples": len(tokenized_datasets["train"]),
-            "val_samples": len(tokenized_datasets["validation"]),
+            "val_task_samples": len(tokenized_datasets["val_task"]) if "val_task" in tokenized_datasets else 0,
+            "val_example_samples": len(tokenized_datasets["val_example"]) if "val_example" in tokenized_datasets else 0,
+            "val_val_samples": len(tokenized_datasets["val_val"]) if "val_val" in tokenized_datasets else 0,
             "max_seq_len": config.max_seq_len,
             "train_tasks": train_task_count,
-            "val_tasks": val_task_count,
+            "val_task_tasks": val_task_count,
+            "val_example_tasks": example_task_count,
+            "val_val_tasks": external_task_count,
         },
     )
 
@@ -454,13 +502,25 @@ if config.report_to == "wandb":
     wandb.log({"Config": cfg_table})
 
 # ------------------- train / eval -------------------
+main_eval = (
+        tokenized_datasets.get("val_task")
+        or tokenized_datasets.get("val_example")
+        or tokenized_datasets.get("val_val")
+)
+additional_evals = {}
+for name in ("val_task", "val_example", "val_val"):
+    ds = tokenized_datasets.get(name)
+    if ds is not None and ds is not main_eval:
+        additional_evals[name] = ds
+
 trainer = WeightedTrainer(
     model=model,
-    args=args,
+    args=arguments,
     train_dataset=tokenized_datasets["train"],
-    eval_dataset=tokenized_datasets["validation"],
+    eval_dataset=main_eval,
     processing_class=tok,
     data_collator=WeightedCollator(tokenizer=tok),
+    additional_eval_datasets=additional_evals,
 )
 
 logger.info("⇢ Starting training …")

@@ -120,9 +120,10 @@ class Config:
 
     attn_implementation: Optional[str] = "flash_attention_2"  # Attention implementation to use
 
-    task_validation_fraction: float = 0.05  # fraction of examples to use for validation (not used for training)
-    example_validation_fraction: float = 0.05  # fraction of examples of tasks used for training that are used for validation
-    curriculum_learning: bool = False  # Whether to sort training examples by code length (curriculum learning)
+    task_validation_fraction: float = 0.05  # fraction of tasks held out entirely for validation
+
+    example_validation_num: int = 1  # number of examples to hold out from each remaining task for validation
+    example_validation_threshold: int = 5  # minimum number of examples a task must have to hold out examples
 
     # If true, skips LoRA adapters and fine-tunes all model parameters
     full_finetune: bool = False
