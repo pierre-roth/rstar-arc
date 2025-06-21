@@ -46,7 +46,6 @@ from constants import (
     SFT_IN_BETWEEN_PROMPT,
     LOCAL_SCRATCH_PATH,
     NET_SCRATCH_PATH,
-    CODE_END,
     SPECIAL_TOKENS
 )
 from utils import setup_logging
@@ -104,9 +103,6 @@ tok.padding_side = "right"
 added_tokens = tok.add_special_tokens({"additional_special_tokens": SPECIAL_TOKENS})
 if added_tokens > 0:
     logger.info(f"Added {added_tokens} special tokens to tokenizer")
-
-# Generation should stop on either regular EOS or CODE_END
-EOS_TOKEN_IDS = [tok.eos_token_id, tok.convert_tokens_to_ids(CODE_END)]
 
 # ------------------- model -------------------
 model = AutoModelForCausalLM.from_pretrained(
@@ -221,6 +217,9 @@ raw_dataset = load_dataset(
 )
 logger.info(f"Loaded {len(raw_dataset['train'])} examples from {TRAIN_PATH}")
 
+# Use available CPUs minus one to keep some resources free
+num_proc = max(1, config.cpus - 1)
+
 
 def _within_max_len(example):
     text = (
@@ -236,13 +235,16 @@ def _within_max_len(example):
 orig_train_len = len(raw_dataset["train"])
 raw_dataset["train"] = raw_dataset["train"].filter(
     _within_max_len,
-    num_proc=max(1, config.cpus - 1 if config.cpus > 1 else config.cpus),
+    num_proc=num_proc,
 )
 logger.info(
     f"Filtered training dataset to {len(raw_dataset['train'])}/{orig_train_len} examples with max_seq_len={config.max_seq_len}"
 )
 
-# Split into training and multiple validation sets
+# Split into training and three validation sets:
+#   1) val_task    – entire tasks held out
+#   2) val_example – few examples per remaining task
+#   3) val_val     – external validation dataset
 rng = random.Random(config.seed or 42)
 task_to_indices: dict[str, list[int]] = {}
 for idx, ex in enumerate(raw_dataset["train"]):
@@ -250,7 +252,6 @@ for idx, ex in enumerate(raw_dataset["train"]):
 
 # ----- validation set 1: hold out entire tasks -----
 val_task_indices: list[int] = []
-train_remaining_indices: list[int] = []
 if config.task_validation_fraction > 0:
     all_tasks = list(task_to_indices.keys())
     rng.shuffle(all_tasks)
@@ -264,8 +265,6 @@ for task, indices in task_to_indices.items():
     rng.shuffle(indices)
     if task in val_tasks:
         val_task_indices.extend(indices)
-    else:
-        train_remaining_indices.extend(indices)
 
 # ----- validation set 2: hold out specific examples from remaining tasks -----
 val_example_indices: list[int] = []
@@ -276,7 +275,7 @@ for task, indices in task_to_indices.items():
     indices = list(indices)
     rng.shuffle(indices)
     if config.example_validation_num > 0 and len(indices) >= config.example_validation_threshold:
-        n_take = min(config.example_validation_num, len(indices))
+        n_take = min(config.example_validation_num, len(indices) // 2)
         val_example_indices.extend(indices[:n_take])
         train_final_indices.extend(indices[n_take:])
     else:
@@ -292,7 +291,7 @@ raw_val = load_dataset(
 orig_val_len = len(raw_val["validation"])
 raw_val["validation"] = raw_val["validation"].filter(
     _within_max_len,
-    num_proc=max(1, config.cpus - 1 if config.cpus > 1 else config.cpus),
+    num_proc=num_proc,
 )
 logger.info(
     f"Filtered external validation dataset to {len(raw_val['validation'])}/{orig_val_len} examples with max_seq_len={config.max_seq_len}")
@@ -325,7 +324,7 @@ for split, ds in dataset.items():
         preprocess,
         batched=True,
         remove_columns=[c for c in dataset["train"].column_names if c != "weight"],
-        num_proc=max(1, config.cpus - 1 if config.cpus > 1 else config.cpus),
+        num_proc=num_proc,
     )
 
 logger.info("Tokenization complete.")
@@ -418,9 +417,8 @@ class WeightedTrainer(Trainer):
             **kwargs,
         )
         # Recompute exact loss per task for eval/test to normalize by total tasks
-        if metric_key_prefix in ("eval", "test"):
-            ds = eval_dataset if eval_dataset is not None else self.eval_dataset
-            metrics[f"{metric_key_prefix}_loss"] = self.compute_weighted_loss(ds).item()
+        ds = eval_dataset if eval_dataset is not None else self.eval_dataset
+        metrics[f"{metric_key_prefix}_weighted_loss"] = self.compute_weighted_loss(ds).item()
 
         # Run additional evaluations if provided
         for prefix, ds in self.additional_eval_datasets.items():
@@ -432,7 +430,7 @@ class WeightedTrainer(Trainer):
                 metric_key_prefix=prefix,
                 **kwargs,
             )
-            extra[f"{prefix}_loss"] = self.compute_weighted_loss(ds).item()
+            extra[f"{prefix}_weighted_loss"] = self.compute_weighted_loss(ds).item()
             metrics.update(extra)
 
         return metrics
