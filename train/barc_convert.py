@@ -324,7 +324,6 @@ def main():
                     pbar.update(1)
                     continue
 
-
                 future = executor.submit(process_item, (index, item), client, processed_tasks)
                 pending_futures.add(future)
 
@@ -340,7 +339,6 @@ def main():
                             processed_tasks.add(result_data['task_name'])
                             save_processed_task(result_data['task_name'], PROCESSED_TASKS_FILE)
                             processed_count += 1
-                            pbar.update(1)
                             logger.info(f"Successfully converted task: {result_data['task_name']}")
                         else:
                             logger.info(f"Failed to convert task: {result_data['task_name']}")
@@ -350,8 +348,10 @@ def main():
 
                         logger.info(
                             f"Run stats - attempted: {attempted_count}, succeeded: {success_count}, "
-                            f"failed: {failed_count}, success rate: {success_rate:.2%}"
+                            f"failed: {failed_count}, success rate: {success_rate:.2%}, "
+                            f"total success: {processed_count}"
                         )
+                        pbar.update(1)
 
             # Handle any remaining futures
             if pending_futures:
@@ -364,10 +364,20 @@ def main():
                         processed_tasks.add(result_data['task_name'])
                         save_processed_task(result_data['task_name'], PROCESSED_TASKS_FILE)
                         processed_count += 1
-                        pbar.update(1)
                         logger.info(f"Successfully converted task: {result_data['task_name']}")
                     else:
                         logger.info(f"Failed to convert task: {result_data['task_name']}")
+
+                    failed_count = attempted_count - success_count
+                    success_rate = success_count / attempted_count if attempted_count else 0
+
+                    logger.info(
+                        f"Run stats - attempted: {attempted_count}, succeeded: {success_count}, "
+                        f"failed: {failed_count}, success rate: {success_rate:.2%}, "
+                        f"total success: {processed_count}"
+                    )
+
+                    pbar.update(1)
 
     logger.info("--- Script finished successfully! ---")
 
