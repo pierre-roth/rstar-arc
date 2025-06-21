@@ -17,15 +17,11 @@ or
 
 from __future__ import annotations
 
-import json
 import logging
-import math
 import os
 import random
-import re
 import sys
 from dataclasses import asdict
-from typing import Any
 
 import torch
 import wandb
@@ -49,8 +45,6 @@ from constants import (
     SFT_IN_BETWEEN_PROMPT,
     LOCAL_SCRATCH_PATH,
     NET_SCRATCH_PATH,
-    CODE_PREFIX,
-    STEP_END,
     CODE_END,
     SPECIAL_TOKENS
 )
@@ -63,8 +57,6 @@ from train_utils import (
 from rstar_deepthink import Config
 from rstar_deepthink.arc_task import ARCTask
 from rstar_deepthink.arc_task.task_utils import task_to_prompt
-from rstar_deepthink.tools.python_tool import verify_prefixes_and_code
-from train.data_utils import get_code_length
 
 logger = logging.getLogger(__name__)
 
@@ -320,139 +312,6 @@ train_task_count = int(round(train_weight_sum))
 val_task_count = int(round(val_weight_sum))
 logger.info(f"Number of unique tasks — train: {train_task_count}, validation: {val_task_count}")
 
-# ------------------- qualitative logging helper -------------------
-_QUAL_TABLE_COLUMNS = [
-    "split",
-    "task_name",
-    "temperature",
-    "pass@k",
-    "pass_rate",
-    "generations",
-]
-
-_eval_counter = 0
-
-
-def _log_task_generations(
-        trainer: Any,
-        split: str,
-        indices: list[int],
-        ds: Any,
-        summary: wandb.Table,
-) -> None:
-    """Generate code for sampled tasks, log qualitative results and per-token perplexity."""
-    for idx in indices:
-        row = ds[idx]
-        task = ARCTask.from_dict(row["task_json"])
-        prompt_body = task_to_prompt(task)
-        prompt = SFT_SYSTEM_PROMPT + prompt_body + SFT_IN_BETWEEN_PROMPT + CODE_PREFIX
-        for temp in config.eval_temperatures:
-            gen_entries: list[dict[str, Any]] = []
-            pass_count = 0
-            for _ in range(config.pass_k):
-                inputs = tok(prompt, return_tensors="pt")
-                inputs = {k: v.to(trainer.model.device) for k, v in inputs.items()}
-                gen_ids = trainer.model.generate(
-                    **inputs,
-                    do_sample=True,
-                    temperature=temp,
-                    top_p=config.top_p,
-                    top_k=config.top_k if config.top_k > 0 else None,
-                    max_new_tokens=config.max_tokens,
-                    repetition_penalty=config.repetition_penalty,
-                    eos_token_id=EOS_TOKEN_IDS,
-                )
-                gen_text = tok.decode(gen_ids[0], skip_special_tokens=False)
-                raw_steps = re.split(f"{STEP_END}", gen_text)
-                num_steps = len(raw_steps)
-                format_adherence = CODE_END in gen_text and num_steps >= config.min_steps_for_format_adherence
-
-                input_grids = [ex.input_grid.grid for ex in task.training_examples + task.test_examples]
-                expected_outputs = [ex.output_grid.grid for ex in task.training_examples] + [None] * len(
-                    task.test_examples)
-
-                (
-                    _success,
-                    prefix_errors,
-                    err_full,
-                    passed_train_full,
-                    results_full,
-                ) = verify_prefixes_and_code(gen_text, input_grids, expected_outputs)
-
-                n_train = len(task.training_examples)
-                test_results = results_full[n_train:]
-                expected_test = [ex.output_grid.grid for ex in task.test_examples]
-                passed_test = (
-                        len(test_results) == len(expected_test)
-                        and all(tr == et for tr, et in zip(test_results, expected_test))
-                )
-                if not format_adherence:
-                    category = "formatting"
-                elif any(prefix_errors):
-                    category = "runtime"
-                elif not (passed_train_full and passed_test):
-                    category = "semantics"
-                else:
-                    category = "none"
-                gen_entries.append({
-                    "num_steps": num_steps,
-                    "passed_train": passed_train_full,
-                    "passed_test": passed_test,
-                    "error": err_full,
-                    "category": category,
-                    "generation": gen_text,
-                })
-                if passed_train_full and passed_test:
-                    pass_count += 1
-
-            pass_rate = pass_count / config.pass_k if config.pass_k > 0 else 0.0
-            pass_at_k = pass_count > 0
-
-            try:
-                gen_entries_json = json.dumps(gen_entries, indent=2)  # indent for readability if viewed raw
-            except TypeError as e:
-                logger.error(f"Could not serialize gen_entries to JSON for task {row.get('task_name', None)}: {e}")
-                gen_entries_json = str(gen_entries)  # Fallback to plain string representation
-
-            summary.add_data(
-                split,
-                row.get("task_name", None),
-                temp,
-                pass_at_k,
-                pass_rate,
-                gen_entries_json,
-            )
-            # Per-token perplexity analysis
-            if config.perplexity_window_size is not None:
-                with torch.no_grad():
-                    seq = gen_ids[0]
-                    input_len = inputs["input_ids"].shape[1]
-                    outputs = trainer.model(seq.unsqueeze(0)).logits
-                    shift_logits = outputs[..., :-1, :].contiguous()
-                    shift_labels = seq[1:].contiguous()
-                    loss_fct = torch.nn.CrossEntropyLoss(reduction="none")
-                    per_token_loss = loss_fct(
-                        shift_logits.view(-1, shift_logits.size(-1)),
-                        shift_labels.view(-1),
-                    ).view(shift_labels.size())
-                    gen_loss = per_token_loss[input_len - 1:]
-                    perp = torch.exp(gen_loss).cpu().tolist()
-                if config.perplexity_window_size and config.perplexity_window_size > 1:
-                    window = config.perplexity_window_size
-                    smoothed = [
-                        sum(perp[max(0, i - window + 1): i + 1]) / min(i + 1, window)
-                        for i in range(len(perp))
-                    ]
-                else:
-                    smoothed = perp
-                perp_table = wandb.Table(columns=["token_index", "perplexity", "windowed_perplexity"])
-                for i, (p, w) in enumerate(zip(perp, smoothed)):
-                    perp_table.add_data(i, p, w)
-                wandb.log(
-                    {f"perplexity/{row.get('task_name', None)}/{temp}": perp_table},
-                    step=trainer.state.global_step,
-                )
-
 
 # ------------------- trainer subclass -------------------
 class WeightedTrainer(Trainer):
@@ -531,41 +390,7 @@ class WeightedTrainer(Trainer):
         if metric_key_prefix in ("eval", "test"):
             ds = eval_dataset if eval_dataset is not None else self.eval_dataset
             metrics[f"{metric_key_prefix}_loss"] = self.compute_weighted_loss(ds).item()
-            metrics[f"{metric_key_prefix}_perplexity"] = math.exp(metrics[f"{metric_key_prefix}_loss"])
 
-        if config.qualitative_eval and config.report_to == "wandb" and metric_key_prefix == "eval":
-            try:
-                global _eval_counter
-                _eval_counter += 1
-                table_name = f"evaluation_{_eval_counter}"
-                rng = random.Random(config.seed or 42)
-
-                ds_train = dataset["train"]
-                total_train = len(ds_train)
-                num_train = min(config.num_training_samples, total_train)
-                name_to_train: dict[str, list[int]] = {}
-                for i, row in enumerate(ds_train):
-                    name_to_train.setdefault(row.get("task_name"), []).append(i)
-                unique_train = list(name_to_train.keys())
-                rng.shuffle(unique_train)
-                train_indices = [rng.choice(name_to_train[name]) for name in unique_train[:num_train]]
-
-                ds_val = dataset["validation"]
-                total_val = len(ds_val)
-                num_val = min(config.num_validation_samples, total_val)
-                name_to_val: dict[str, list[int]] = {}
-                for i, row in enumerate(ds_val):
-                    name_to_val.setdefault(row.get("task_name"), []).append(i)
-                unique_val = list(name_to_val.keys())
-                rng.shuffle(unique_val)
-                val_indices = [rng.choice(name_to_val[name]) for name in unique_val[:num_val]]
-
-                summary = wandb.Table(columns=_QUAL_TABLE_COLUMNS)
-                _log_task_generations(self, "train", train_indices, ds_train, summary)
-                _log_task_generations(self, "validation", val_indices, ds_val, summary)
-                wandb.log({table_name: summary}, step=self.state.global_step)
-            except Exception as e:
-                logger.warning(f"Qualitative eval logging failed: {e}")
         return metrics
 
 
@@ -642,25 +467,9 @@ logger.info("⇢ Starting training …")
 trainer.train()
 trainer.save_model(OUT_DIR)  # saves LoRA adapter only
 tok.save_pretrained(OUT_DIR)
-metrics = trainer.evaluate()
-trainer.save_metrics("eval", metrics)
-logger.info(
-    f"✓ Finished — final loss {metrics.get('eval_loss', 0.0):.4f}, perplexity {metrics.get('eval_perplexity', 0.0):.4f}")
-
-
-"""# ------------------- final test evaluation -------------------
-if config.qualitative_eval:
-    try:
-        total_test = len(val_ds)
-        num_test = min(config.num_validation_samples, total_test)
-        rng_test = random.Random(config.seed or 42)
-        test_indices = rng_test.sample(range(total_test), num_test)
-        table_test = wandb.Table(columns=_QUAL_TABLE_COLUMNS)
-        _log_task_generations(trainer, "test", test_indices, val_ds, table_test)
-        wandb.log({"qualitative_test": table_test})
-    except Exception as e:
-        logger.warning(f"Qualitative test evaluation failed: {e}")"""
-
+mets = trainer.evaluate()
+trainer.save_metrics("eval", mets)
+logger.info(f"✓ Finished — final loss {mets.get('eval_loss', 0.0):.4f}")
 
 # Finalize wandb run after all evaluations
 if config.report_to == "wandb":
