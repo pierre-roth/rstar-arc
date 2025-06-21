@@ -647,68 +647,20 @@ trainer.save_metrics("eval", metrics)
 logger.info(
     f"✓ Finished — final loss {metrics.get('eval_loss', 0.0):.4f}, perplexity {metrics.get('eval_perplexity', 0.0):.4f}")
 
-if config.report_to == "wandb":
-    wandb.log({
-        "final_eval/loss": metrics.get("eval_loss"),
-        "final_eval/perplexity": metrics.get("eval_perplexity"),
-    })
 
 # ------------------- final test evaluation -------------------
-if config.task_validation_fraction > 0 or config.example_validation_fraction > 0:
-    logger.info("Loading SFT test dataset …")
-    raw_test = load_dataset(
-        "json",
-        data_files={"test": VAL_PATH},
-        cache_dir=os.path.join(LOCAL_SCRATCH_PATH, ".cache/huggingface/datasets"),
-    )
-    logger.info(f"Loaded {len(raw_test['test'])} examples for test evaluation from {VAL_PATH}")
+if config.qualitative_eval:
+    try:
+        total_test = len(val_ds)
+        num_test = min(config.num_validation_samples, total_test)
+        rng_test = random.Random(config.seed or 42)
+        test_indices = rng_test.sample(range(total_test), num_test)
+        table_test = wandb.Table(columns=_QUAL_TABLE_COLUMNS)
+        _log_task_generations(trainer, "test", test_indices, val_ds, table_test)
+        wandb.log({"qualitative_test": table_test})
+    except Exception as e:
+        logger.warning(f"Qualitative test evaluation failed: {e}")
 
-    orig_test_len = len(raw_test["test"])
-    raw_test["test"] = raw_test["test"].filter(
-        _within_max_len,
-        num_proc=max(1, config.cpus - 1 if config.cpus > 1 else config.cpus),
-    )
-    logger.info(
-        f"Filtered test dataset to {len(raw_test['test'])}/{orig_test_len} examples with max_seq_len={config.max_seq_len}")
-
-    # Tokenize test dataset
-    tokenized_test = raw_test["test"].map(
-        preprocess,
-        batched=True,
-        remove_columns=[c for c in raw_test["test"].column_names if c != "weight"],
-        num_proc=max(1, config.cpus - 1 if config.cpus > 1 else config.cpus),
-    )
-    logger.info("Running final evaluation on test set …")
-    # Count unique tasks in test split (weight sum = number of tasks)
-    test_task_count = int(sum(tokenized_test["weight"]))
-    logger.info(f"Number of unique tasks in test set: {test_task_count}")
-    # Use test prefix for metrics
-    test_metrics = trainer.evaluate(eval_dataset=tokenized_test, metric_key_prefix="test")
-    trainer.save_metrics("test", test_metrics)
-    logger.info(
-        f"Test set evaluation complete — loss {test_metrics.get('test_loss', 0.0):.4f}, perplexity {test_metrics.get('test_perplexity', 0.0):.4f}")
-    if config.report_to == "wandb":
-        # Log quantitative test loss, perplexity and task count
-        wandb.log({
-            "test/loss": test_metrics.get("test_loss"),
-            "test/perplexity": test_metrics.get("test_perplexity"),
-            "test_tasks": test_task_count,
-        })
-    # Qualitative evaluation on test set: sample and log code generation and correctness
-    if config.qualitative_eval:
-        try:
-            ds_test = raw_test["test"]
-            total_test = len(ds_test)
-            num_test = min(config.num_validation_samples, total_test)
-            rng_test = random.Random(config.seed or 42)
-            test_indices = rng_test.sample(range(total_test), num_test)
-            table_test = wandb.Table(columns=_QUAL_TABLE_COLUMNS)
-            _log_task_generations(trainer, "test", test_indices, ds_test, table_test)
-            wandb.log({"qualitative_test": table_test})
-        except Exception as e:
-            logger.warning(f"Qualitative test evaluation failed: {e}")
-else:
-    logger.info("Skipping final test evaluation because no validation split was configured")
 
 # Finalize wandb run after all evaluations
 if config.report_to == "wandb":
