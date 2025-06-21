@@ -648,7 +648,7 @@ logger.info(
     f"✓ Finished — final loss {metrics.get('eval_loss', 0.0):.4f}, perplexity {metrics.get('eval_perplexity', 0.0):.4f}")
 
 
-# ------------------- final test evaluation -------------------
+"""# ------------------- final test evaluation -------------------
 if config.qualitative_eval:
     try:
         total_test = len(val_ds)
@@ -659,7 +659,7 @@ if config.qualitative_eval:
         _log_task_generations(trainer, "test", test_indices, val_ds, table_test)
         wandb.log({"qualitative_test": table_test})
     except Exception as e:
-        logger.warning(f"Qualitative test evaluation failed: {e}")
+        logger.warning(f"Qualitative test evaluation failed: {e}")"""
 
 
 # Finalize wandb run after all evaluations
