@@ -74,8 +74,8 @@ set_seed(config.seed or 42)
 setup_logging(config.numeric_log_level)
 logger.info(f"Using model: {config.policy_model}")
 
-TRAIN_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{config.round_number}", "policy_dataset_training.jsonl")
-VAL_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{config.round_number}", "policy_dataset_validation.jsonl")
+TRAIN_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{config.round_number}", config.training_dataset_name)
+VAL_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{config.round_number}", config.validation_dataset_name)
 
 if not config.full_finetune:
     dir_name = (
@@ -129,6 +129,7 @@ if added_tokens > 0:
 # ensure pad_token_id is set on the model to avoid fallback warning during generation
 if model.config.pad_token_id is None:
     model.config.pad_token_id = tok.pad_token_id
+
 # Multi-GPU training is handled via Accelerate launch
 model.config.use_cache = False
 model.gradient_checkpointing_enable()  # save memory

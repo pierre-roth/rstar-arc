@@ -40,9 +40,13 @@ DEFAULT_SLURM_CONFIG = {
 
 GPU_OPTIONS = ["none", "geforce_rtx_3090", "rtx_a6000", "a100", "titan_rtx", "geforce_rtx_2080", "other"]
 
+# Conda environments to choose from
+CONDA_ENV_OPTIONS = ["arc-solver", "arc-solver-new"]
+
 # --- Environment Defaults ---
 DEFAULT_ENV_CONFIG = {
     "install_python": True,
+    "conda_env": CONDA_ENV_OPTIONS[0],
 }
 
 
@@ -204,6 +208,14 @@ def main():
     if 'install_python' not in config['env'] or not args.config_file:
         config["env"]["install_python"] = ask_question("confirm", "Install python for subprocesses?", default=True)
 
+    if 'conda_env' not in config['env'] or not args.config_file:
+        config["env"]["conda_env"] = ask_question(
+            "select",
+            "Select Conda environment:",
+            choices=CONDA_ENV_OPTIONS,
+            default=config["env"].get("conda_env", CONDA_ENV_OPTIONS[0]),
+        )
+
     print("\n--- Custom Script Arguments ---")
     if 'script_args' not in config or not args.config_file:
         config["script_args"] = ask_question(
@@ -229,7 +241,7 @@ def main():
 ETH_USERNAME=piroth
 PROJECT_NAME=rstar-arc
 DIRECTORY=/home/${{ETH_USERNAME}}/${{PROJECT_NAME}}
-CONDA_ENVIRONMENT=arc-solver
+CONDA_ENVIRONMENT={config['env']['conda_env']}
 NET_SCRATCH_PATH=/itet-stor/${{ETH_USERNAME}}/net_scratch
 """
 

@@ -25,16 +25,16 @@ logger = logging.getLogger(__name__)
 # Hardcode configuration variables for easy modification.
 DATASET_NAME = "barc0/200k_HEAVY_gpt4o-description-gpt4omini-code_generated_problems"
 # MODEL_NAME = "o4-mini"
-# MODEL_NAME = "gpt-4.1"
+MODEL_NAME = "gpt-4.1-mini"
 # MODEL_NAME = "mistralai/devstral-small"
 # MODEL_NAME = "deepseek/deepseek-chat-v3-0324"
-MODEL_NAME = "google/gemini-2.5-flash-preview-05-20"
+# MODEL_NAME = "google/gemini-2.5-flash-preview-05-20"
 REASONING_EFFORT = "low"  # "low", "medium", or "high"
 MAX_WORKERS = 16  # Number of parallel requests to the API
 OUTPUT_FILE = "/Users/piroth/Downloads/output_dataset.jsonl"
 PROCESSED_TASKS_FILE = "/Users/piroth/Downloads/processed_tasks.txt"
 
-OPENAI_MODELS = ["o4-mini", "gpt-4.1"]
+OPENAI_MODELS = ["o4-mini", "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano"]
 
 
 # --- Pydantic Schema for OpenAI Structured Output ---
