@@ -10,7 +10,7 @@ num-training-samples: 2
 num-validation-samples: 2
 pass-k: 4
 
-max-seq-len: 14336
+max-seq-len: 16384
 max-tokens: 4096
 
 policy-model: "Qwen/Qwen2.5-Coder-1.5B"
