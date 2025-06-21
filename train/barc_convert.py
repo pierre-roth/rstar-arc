@@ -26,8 +26,9 @@ logger = logging.getLogger(__name__)
 DATASET_NAME = "barc0/200k_HEAVY_gpt4o-description-gpt4omini-code_generated_problems"
 # MODEL_NAME = "o4-mini"
 # MODEL_NAME = "gpt-4.1"
-MODEL_NAME = "mistralai/devstral-small"
-# MODEL_NAME = ""
+# MODEL_NAME = "mistralai/devstral-small"
+# MODEL_NAME = "deepseek/deepseek-chat-v3-0324"
+MODEL_NAME = "google/gemini-2.5-flash-preview-05-20"
 REASONING_EFFORT = "low"  # "low", "medium", or "high"
 MAX_WORKERS = 16  # Number of parallel requests to the API
 OUTPUT_FILE = "/Users/piroth/Downloads/output_dataset.jsonl"
@@ -309,6 +310,9 @@ def main():
     logger.info(f"Total tasks in dataset: {total_tasks}")
     processed_count = len(processed_tasks)
 
+    attempted_count = 0
+    success_count = 0
+
     # Process tasks sequentially while keeping a small pool of workers
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
         pending_futures = set()
@@ -320,15 +324,18 @@ def main():
                     pbar.update(1)
                     continue
 
+
                 future = executor.submit(process_item, (index, item), client, processed_tasks)
                 pending_futures.add(future)
 
                 if len(pending_futures) >= MAX_WORKERS:
                     done, pending_futures = wait(pending_futures, return_when=FIRST_COMPLETED)
                     for fut in done:
+                        attempted_count += 1
                         success, result_data = fut.result()
                         # print(success, result_data)
                         if success:
+                            success_count += 1
                             write_batch_data(OUTPUT_FILE, [result_data])
                             processed_tasks.add(result_data['task_name'])
                             save_processed_task(result_data['task_name'], PROCESSED_TASKS_FILE)
@@ -338,18 +345,29 @@ def main():
                         else:
                             logger.info(f"Failed to convert task: {result_data['task_name']}")
 
+                        failed_count = attempted_count - success_count
+                        success_rate = success_count / attempted_count if attempted_count else 0
+
+                        logger.info(
+                            f"Run stats - attempted: {attempted_count}, succeeded: {success_count}, "
+                            f"failed: {failed_count}, success rate: {success_rate:.2%}"
+                        )
+
             # Handle any remaining futures
-            for fut in done:
-                success, result_data = fut.result()
-                if success:
-                    write_batch_data(OUTPUT_FILE, [result_data])
-                    processed_tasks.add(result_data['task_name'])
-                    save_processed_task(result_data['task_name'], PROCESSED_TASKS_FILE)
-                    processed_count += 1
-                    pbar.update(1)
-                    logger.info(f"Successfully converted task: {result_data['task_name']}")
-                else:
-                    logger.info(f"Failed to convert task: {result_data['task_name']}")
+            if pending_futures:
+                done, _ = wait(pending_futures)
+                for fut in done:
+                    success, result_data = fut.result()
+                    if success:
+                        success_count += 1
+                        write_batch_data(OUTPUT_FILE, [result_data])
+                        processed_tasks.add(result_data['task_name'])
+                        save_processed_task(result_data['task_name'], PROCESSED_TASKS_FILE)
+                        processed_count += 1
+                        pbar.update(1)
+                        logger.info(f"Successfully converted task: {result_data['task_name']}")
+                    else:
+                        logger.info(f"Failed to convert task: {result_data['task_name']}")
 
     logger.info("--- Script finished successfully! ---")
 
