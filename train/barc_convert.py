@@ -25,8 +25,8 @@ logger = logging.getLogger(__name__)
 # Hardcode configuration variables for easy modification.
 DATASET_NAME = "barc0/200k_HEAVY_gpt4o-description-gpt4omini-code_generated_problems"
 # MODEL_NAME = "o4-mini"
-# MODEL_NAME = "gpt-4.1-mini"
-MODEL_NAME = "gpt-4.1"
+MODEL_NAME = "gpt-4.1-mini"
+# MODEL_NAME = "gpt-4.1"
 # MODEL_NAME = "mistralai/devstral-small"
 # MODEL_NAME = "deepseek/deepseek-chat-v3-0324"
 # MODEL_NAME = "google/gemini-2.5-flash-preview-05-20"
@@ -95,7 +95,7 @@ I have a Python function that solves a small visual reasoning puzzle. The origin
 4.  **Code Structure (VERY IMPORTANT):**
     * The entire solution code MUST be wrapped in these tags: `{CODE}` and `{CODE_END}`. (not indented)
     * The logic inside the function should be broken down into logical steps.
-    * Each step MUST be preceded by a detailed comment explaining the step's purpose.
+    * Each step MUST be preceded by a detailed comment explaining the step's purpose and the intuition behind it.
     * Each step's code block MUST end with the tag: `{STEP_END}`. (indented like the code in the function)
     * The final return statement does not require a `{STEP_END}` tag.
 
