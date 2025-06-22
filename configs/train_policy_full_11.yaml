@@ -18,6 +18,7 @@ policy-model: "Qwen/Qwen2.5-Coder-1.5B"
 training-dataset-name: "policy_dataset.jsonl"
 validation-dataset-name: "policy_dataset_validation.jsonl"
 use-bf16: true
+attn-implementation: "flash_attention_2"
 
 full-finetune: true
 weight_decay: 0.00001

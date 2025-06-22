@@ -118,7 +118,7 @@ class Config:
     train_on_prompts: bool = False  # Whether to train on prompts
     qualitative_eval: bool = False  # Whether to perform qualitative evaluation during training
 
-    attn_implementation: Optional[str] = "flash_attention_2"  # Attention implementation to use
+    attn_implementation: Optional[str] = None  # Attention implementation to use
 
     task_validation_fraction: float = 0.05  # fraction of tasks held out entirely for validation
 
