@@ -40,4 +40,3 @@ save-total-limit: 3
 gradient-checkpointing: true
 
 report-to: "wandb"
-
