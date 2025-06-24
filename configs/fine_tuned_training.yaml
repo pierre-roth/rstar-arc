@@ -15,7 +15,7 @@ dtype: "bfloat16"
 
 
 data-folder: "/itet-stor/piroth/net_scratch/task_data/training"
-sort-by-length: false
+sort-by-length: true
 
 rotate-example: false
 
