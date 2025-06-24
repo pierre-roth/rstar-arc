@@ -14,6 +14,7 @@ class PolicyModel:
     def __init__(self, config: Config):
         self.config = config
         self.llm = None
+        self.stop_token_ids = []
 
     def init(self):
         """Initialize the language model."""
@@ -38,6 +39,9 @@ class PolicyModel:
             gpu_memory_utilization=self.config.policy_vram_percentage,
         )
 
+        tokenizer = self.llm.get_tokenizer()
+        self.stop_token_ids = [tokenizer.convert_tokens_to_ids(STEP_END), tokenizer.convert_tokens_to_ids(CODE_END)]
+
         end = datetime.now()
         self.config.model_initialization_times["policy"] = end - start
 
@@ -61,7 +65,7 @@ class PolicyModel:
             repetition_penalty=self.config.repetition_penalty,
             max_tokens=self.config.max_tokens,
             n=self.config.branching_factor,
-            stop=[STEP_END, CODE_END],
+            stop_token_ids=self.stop_token_ids,
             include_stop_str_in_output=True
         )
 
