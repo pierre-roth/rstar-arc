@@ -10,7 +10,7 @@ solutions-per-task: 16
 save-sft-data: true
 
 policy-model: "barc_ft_1.5"
-max-model-len: 16384
+max-seq-len: 16384
 dtype: "bfloat16"
 
 
@@ -23,5 +23,6 @@ policy-temperature: 0.8
 
 branching-factor: 8
 max-depth: 12
+beam-width: 4
 
 batch-size: 20
