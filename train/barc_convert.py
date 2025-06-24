@@ -25,8 +25,8 @@ logger = logging.getLogger(__name__)
 # Hardcode configuration variables for easy modification.
 DATASET_NAME = "barc0/200k_HEAVY_gpt4o-description-gpt4omini-code_generated_problems"
 # MODEL_NAME = "o4-mini"
-MODEL_NAME = "gpt-4.1-mini"
-# MODEL_NAME = "gpt-4.1"
+# MODEL_NAME = "gpt-4.1-mini"
+MODEL_NAME = "gpt-4.1"
 # MODEL_NAME = "mistralai/devstral-small"
 # MODEL_NAME = "deepseek/deepseek-chat-v3-0324"
 # MODEL_NAME = "google/gemini-2.5-flash-preview-05-20"
@@ -34,7 +34,8 @@ REASONING_EFFORT = "low"  # "low", "medium", or "high"
 MAX_WORKERS = 16  # Number of parallel requests to the API
 OUTPUT_FILE = "/Users/piroth/Downloads/output_dataset.jsonl"
 PROCESSED_TASKS_FILE = "/Users/piroth/Downloads/processed_tasks.txt"
-SKIP_PROBABILITY = 0.9
+SKIP_PROBABILITY = 0.95
+START_INDEX = 100000
 
 OPENAI_MODELS = ["o4-mini", "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano"]
 
@@ -80,7 +81,88 @@ Your task is to rewrite a given Python function to adhere to a new format.
 You must follow all instructions precisely. Your output MUST be a JSON object conforming to the provided schema, containing only the refactored code.
 """
 
-USER_PROMPT_TEMPLATE = f"""
+if MODEL_NAME.startswith("o"):
+    USER_PROMPT_TEMPLATE = f"""
+    **CONTEXT:**
+    I have a Python function that solves a small visual reasoning puzzle. The original function uses numpy arrays and a custom `Color` enum. I need you to rewrite it based on the following strict rules.
+
+    **INSTRUCTIONS:**
+
+    1.  **Function Signature:** The rewritten function MUST be named `solve` and accept a single argument `I`, which is a Python `list[list[int]]`. It must return a `list[list[int]]`. The type hints in the final code are not required, but the logic must match this signature.
+
+    2.  **Input Handling:** The first step inside the `solve` function MUST be to convert the input list `I` into a numpy array. For example: `import numpy as np; input_grid = np.array(I, dtype=int)`.
+
+    3.  **Output Handling:** The final calculated grid, which you MUST name `O`, is a numpy array. It must be converted back to a Python list before being returned. For example: `return O.tolist()`.
+
+    4.  **Code Structure (VERY IMPORTANT):**
+        * The entire solution code MUST be wrapped in these tags: `{CODE}` and `{CODE_END}`. (not indented)
+        * The logic inside the function should be broken down into logical steps.
+        * Each step MUST be preceded by a detailed comment explaining the step's purpose and the intuition behind it.
+        * Each step's code block MUST end with the tag: `{STEP_END}`. (indented like the code in the function)
+        * The final return statement does not require a `{STEP_END}` tag.
+
+    5.  **Prefix Verification:** Your code is checked after every `{STEP_END}` marker. Ensure each step is valid Python so all prefixes execute without errors.
+
+    6.  **Integer-only Domain (VERY IMPORTANT):**
+        * The original code uses a `Color` enum. You must "translate" all logic to use integers directly.
+        * Do NOT include the `Color` class or any color names (e.g., "blue", "red") in your rewritten code or its comments.
+        * Use the integer values directly. Here is the mapping for your reference:
+            ```python
+            {COLOR_CLASS_DEFINITION}
+            ```
+        * For example, if the original code says `if pixel == Color.BLUE:`, your code MUST say `if pixel == 1:`. If it says `colors = [Color.RED, Color.GREEN]`, your code MUST say `colors = [2, 3]`.
+
+    7. **Non standard functions:**
+        * There are some helper functions used. Assume the code works as is and you shouldn't need to change them.
+        * Don't change the way the functions are used and called as you cannot know exactly what they do.
+
+    **EXAMPLE OF DESIRED OUTPUT STRUCTURE:**
+
+    {CODE}
+    def solve(I):
+        # Step 1: Convert the input list to a numpy array for easier manipulation.
+        import numpy as np
+        input_grid = np.array(I, dtype=int)
+        {STEP_END}
+
+        # Step 2: Create a copy of the input grid to modify.
+        O = np.copy(input_grid)
+        {STEP_END}
+
+        # Step 3: Explain the core logic here.
+        # ... more python code for the main logic ...
+        {STEP_END}
+
+        # potentially more steps here...
+
+        # Step 4: Return the final grid as a list of lists.
+        return O.tolist()
+    {CODE_END}
+
+    Obviously the output is expected in a single line JSON object. Only unfolded, it would look like above. 
+
+    **YOUR TASK:**
+
+    Rewrite the following Python code according to all the instructions above. Respond ONLY with a JSON object containing the 'solution_code' key.
+
+    The original code might additionally contain imports at the top level and also comments explaining the logic in more detail. 
+    Ignore the imports if they are part of these: 
+    from common import *
+    import numpy as np
+    from typing import *
+
+    Otherwise, move them inside the `solve` function, and ensure they are valid Python code.
+
+    Use the additional comments to write better comments in the rewritten code, but do not include comments not linked to a step in the final output.
+    
+    However, if you feel the way it was rewritten is not optimal, you can change the way it is written, but it must still follow the rules above. You may write certain things more elegantly, but the logic must remain the same.
+
+    **Original Code to Rewrite:**
+    {{original_code}}
+    """
+
+else:
+    USER_PROMPT_TEMPLATE = f"""
 **CONTEXT:**
 I have a Python function that solves a small visual reasoning puzzle. The original function uses numpy arrays and a custom `Color` enum. I need you to rewrite it based on the following strict rules.
 
@@ -322,7 +404,7 @@ def main():
             for index, item in enumerate(ds):
                 task_name = f"{index:08x}"
 
-                if task_name in processed_tasks or random.random() < SKIP_PROBABILITY:
+                if task_name in processed_tasks or random.random() < SKIP_PROBABILITY or index < START_INDEX:
                     pbar.update(1)
                     continue
 

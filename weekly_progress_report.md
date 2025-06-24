@@ -440,3 +440,24 @@
   - ??
 
 
+### Week 17 (23.06.2025)
+
+- **Work planned**:
+  - convert validation data to dsl (for comparable validation)
+  - test trained model accuracy against training and validation set
+  - start reward data collection run
+  - correct solutions / generated solutions
+  - train bigger models on CSCS
+  - 
+
+- **Work done**:
+  - ??
+
+- **Issues and Questions**:
+  - ??
+
+- **Results**:
+  - ??
+
+- **Visuals**:
+  - ??
