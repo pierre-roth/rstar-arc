@@ -93,6 +93,9 @@ def main() -> None:
     overall_pass = []
     for task, output in zip(tasks, request_outputs):
         codes = [_extract_code(o.text) for o in output.outputs]
+        logger.info(f"Task {task.name}")
+        logger.info(f"Task prompt: {task_to_prompt(task)}")
+        logger.info(f"Codes: {codes}")
         inputs, outputs_ = _prepare_io(task)
         successes = 0
         for code in codes:
