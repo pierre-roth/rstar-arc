@@ -1,3 +1,4 @@
+search-mode: "mcts"
 log-level: "INFO"
 
 fine-tuned: true
