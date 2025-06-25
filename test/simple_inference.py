@@ -12,7 +12,7 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from constants import SFT_SYSTEM_PROMPT, SFT_IN_BETWEEN_PROMPT, CODE, CODE_END
+from constants import SFT_SYSTEM_PROMPT, SFT_IN_BETWEEN_PROMPT, CODE, CODE_END, CODE_PREFIX
 from utils import setup_logging
 from rstar_deepthink import Config
 from rstar_deepthink.arc_task.task_utils import load_tasks, task_to_prompt
@@ -51,7 +51,7 @@ def main() -> None:
 
     tasks = load_tasks(config)
     prompts = [
-        SFT_SYSTEM_PROMPT + task_to_prompt(task) + SFT_IN_BETWEEN_PROMPT
+        SFT_SYSTEM_PROMPT + task_to_prompt(task) + SFT_IN_BETWEEN_PROMPT + CODE_PREFIX
         for task in tasks
     ]
 
@@ -93,9 +93,9 @@ def main() -> None:
 
     overall_pass = []
     for task, output in zip(tasks, request_outputs):
-        prompt = SFT_SYSTEM_PROMPT + task_to_prompt(task) + SFT_IN_BETWEEN_PROMPT
+        partial_prompt = CODE_PREFIX
         generations = [o.text for o in output.outputs]
-        texts = [prompt + generation for generation in generations]
+        texts = [partial_prompt + generation for generation in generations]
         codes = [_extract_code(text) for text in texts]
         logger.info(f"Task {task.name}")
         logger.info(f"Task prompt: {task_to_prompt(task)}")
