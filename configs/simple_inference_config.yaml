@@ -6,6 +6,9 @@ fine-tuned: true
 policy-model: "barc_ft_1.5"
 max-seq-len: 16384
 max-tokens: 2048
+
+length-pre-filtering: true
+
 dtype: "bfloat16"
 
 

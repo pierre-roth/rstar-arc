@@ -89,6 +89,27 @@ def main() -> None:
         tokenizer.convert_tokens_to_ids(CODE_END)
     ]
 
+    if config.length_pre_filtering:
+        original_task_count = len(tasks)
+        filtered_tasks = []
+        for task in tasks:
+            prompt = SFT_SYSTEM_PROMPT + task_to_prompt(task) + SFT_IN_BETWEEN_PROMPT + CODE_PREFIX
+            prompt_len = len(tokenizer.encode(prompt))
+            total_len = prompt_len + config.max_tokens
+            if total_len <= config.max_seq_len:
+                filtered_tasks.append(task)
+            else:
+                logger.info(
+                    f"Skipping task {task.name} as prompt length ({prompt_len}) + max_tokens ({config.max_tokens}) = {total_len} would exceed context size {config.max_seq_len}"
+                )
+
+        if original_task_count > 0 and not filtered_tasks:
+            logger.error("No tasks left after filtering by length. Exiting.")
+            sys.exit(1)
+
+        logger.info(f"Filtered tasks: {len(filtered_tasks)}/{original_task_count} remaining.")
+        tasks = filtered_tasks
+
     n = config.num_rollouts
     sampling_params = SamplingParams(
         temperature=config.policy_temperature,
