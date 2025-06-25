@@ -12,7 +12,7 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from constants import SFT_SYSTEM_PROMPT, SFT_IN_BETWEEN_PROMPT
+from constants import SFT_SYSTEM_PROMPT, SFT_IN_BETWEEN_PROMPT, CODE, CODE_END
 from utils import setup_logging
 from rstar_deepthink import Config
 from rstar_deepthink.arc_task.task_utils import load_tasks, task_to_prompt
@@ -26,12 +26,12 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 def _extract_code(text: str) -> str:
-    """Extract the code segment between <beginning_of_code> and <end_of_code>."""
-    start = text.find("<beginning_of_code>")
-    end = text.find("<end_of_code>")
+    """Extract the code segment between CODE and CODE_END."""
+    start = text.find(CODE)
+    end = text.find(CODE_END)
     if start == -1 or end == -1:
         return ""
-    return text[start: end + len("<end_of_code>")].strip()
+    return text[start: end + len(CODE_END)].strip()
 
 
 def _prepare_io(task) -> tuple[List[List[List[int]]], List[List[List[int]]]]:
@@ -73,7 +73,7 @@ def main() -> None:
 
     tokenizer = llm.get_tokenizer()
     stop_ids = [
-        tokenizer.convert_tokens_to_ids("<end_of_code>")
+        tokenizer.convert_tokens_to_ids(CODE_END)
     ]
 
     n = config.num_rollouts
@@ -85,6 +85,7 @@ def main() -> None:
         n=n,
         stop_token_ids=stop_ids,
         include_stop_str_in_output=True,
+        skip_special_tokens=False
     )
 
     logger.info("Starting inference...")
@@ -92,11 +93,12 @@ def main() -> None:
 
     overall_pass = []
     for task, output in zip(tasks, request_outputs):
-        texts = [o.text for o in output.outputs]
+        prompt = SFT_SYSTEM_PROMPT + task_to_prompt(task) + SFT_IN_BETWEEN_PROMPT
+        texts = [prompt + o.text for o in output.outputs]
         codes = [_extract_code(text) for text in texts]
         logger.info(f"Task {task.name}")
         logger.info(f"Task prompt: {task_to_prompt(task)}")
-        logger.info(f"Generations: {texts}")
+        logger.info(f"Codes: {codes}")
         inputs, outputs_ = _prepare_io(task)
         successes = 0
         for code in codes:
