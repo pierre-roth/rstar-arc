@@ -1,5 +1,5 @@
 search-mode: "bs"
-log-level: "INFO"
+log-level: "DEBUG"
 
 fine-tuned: true
 
@@ -13,16 +13,14 @@ policy-model: "barc_ft_1.5"
 max-seq-len: 16384
 dtype: "bfloat16"
 
-
-data-folder: "/itet-stor/piroth/net_scratch/task_data/training"
-sort-by-length: true
-
-rotate-example: false
+data-folder: "/home/piroth/rstar-arc/data_sample/easy"
+sort-by-length: false
+length-pre-filtering: true
 
 policy-temperature: 0.8
 
 branching-factor: 8
+beam-width: 8
 max-depth: 12
-beam-width: 4
 
 batch-size: 20

@@ -71,6 +71,7 @@ class Config:
     data_folder: str = DEFAULT_DATA_FOLDER  # Path to ARC task data
     task_names: list[str] | None = None  # List of task names to process
     sort_by_length = False  # Whether to sort tasks by length
+    length_pre_filtering: bool = False  # Drop tasks that cannot fit in context
 
     search_mode: str = "bs"  # Search algorithm - "bs" for beam search, "mcts" for Monte Carlo Tree Search
 

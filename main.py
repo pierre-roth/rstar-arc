@@ -3,7 +3,7 @@ from datetime import datetime
 
 from rstar_deepthink import Solver
 from rstar_deepthink.agents import BS, MCTS, Custom, Bootstrap
-from rstar_deepthink.arc_task import load_tasks
+from rstar_deepthink.arc_task import load_tasks, filter_tasks_by_length
 from rstar_deepthink.config import Config
 from train.save_sft_data import save_sft_data
 from utils import setup_logging, batch, save_nodes, save_summary
@@ -30,6 +30,11 @@ if __name__ == '__main__':
 
     # select the search agent
     agent = {"bs": BS, "mcts": MCTS, "custom": Custom, "bootstrap": Bootstrap}.get(config.search_mode, BS)
+
+    tokenizer = solver.policy.llm.get_tokenizer()
+    tasks = filter_tasks_by_length(tasks, tokenizer, config, agent)
+
+    logging.info(f"Solving {len(tasks)} tasks after filtering by length.")
 
     # process tasks in batches
     for i, task_batch in enumerate(batch(tasks, config.batch_size)):

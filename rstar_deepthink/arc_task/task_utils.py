@@ -91,3 +91,34 @@ def load_tasks(config: Config) -> list[ARCTask]:
     logger.info(f"Processing {len(tasks)} (randomly chosen) tasks from '{config.data_folder}'")
 
     return tasks
+
+
+def filter_tasks_by_length(
+    tasks: list[ARCTask],
+    tokenizer,
+    config: Config,
+    agent_cls,
+) -> list[ARCTask]:
+    """Filter out tasks whose maximum context length would exceed the model window."""
+
+    if not config.length_pre_filtering:
+        return tasks
+
+    filtered: list[ARCTask] = []
+    for task in tasks:
+        agent = agent_cls(config, task)
+        agent.update(0, config.policy_temperature)
+        prompt = agent.root.collect_prompt_and_code()
+
+        length = len(tokenizer.encode(prompt))
+
+        total = length + config.max_depth * config.max_tokens
+        if total <= config.max_seq_len:
+            filtered.append(task)
+        else:
+            logger.warning(
+                f"Skipping task {task.name} as maximum possible length {total} would exceed context size {config.max_seq_len}"
+            )
+
+    return filtered
+

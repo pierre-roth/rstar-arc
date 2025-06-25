@@ -229,7 +229,6 @@ def execute_code_directly(code_str, input_grids, expected_outputs):
 
         # Run solve on each input grid
         for i, grid in enumerate(input_grids):
-            grid_result = None
             try:
                 # Potentially time the individual call if needed for debugging
                 # start_time = time.time()
