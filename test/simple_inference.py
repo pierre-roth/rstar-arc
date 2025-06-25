@@ -97,10 +97,10 @@ def main() -> None:
         generations = [o.text for o in output.outputs]
         texts = [partial_prompt + generation for generation in generations]
         codes = [_extract_code(text) for text in texts]
-        logger.info(f"Task {task.name}")
-        logger.info(f"Task prompt: {task_to_prompt(task)}")
-        logger.info(f"Generations: {generations}")
-        logger.info(f"Codes: {codes}")
+        # logger.info(f"Task {task.name}")
+        # logger.info(f"Task prompt: {task_to_prompt(task)}")
+        # logger.info(f"Generations: {generations}")
+        # logger.info(f"Codes: {codes}")
         inputs, outputs_ = _prepare_io(task)
         successes = 0
         for code in codes:
