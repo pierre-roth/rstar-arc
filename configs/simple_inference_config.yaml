@@ -16,7 +16,7 @@ rotate-example: false
 
 policy-temperature: 0.8
 
-num-rollouts: 64
+num-rollouts: 1024
 branching-factor: 8
 max-depth: 12
 beam-width: 4
