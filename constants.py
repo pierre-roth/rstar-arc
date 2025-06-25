@@ -18,7 +18,7 @@ NET_SCRATCH_RE_ARC_DATA = f"{NET_SCRATCH_PATH}/re_arc"  # path to the re_arc dir
 
 CPU_TIMEOUT_SECONDS = 10  # Maximum cpu time allowed for code execution
 WALL_TIMEOUT_SECONDS = 60  # Maximum wall time allowed for code execution
-MEMORY_LIMIT_MB = 1024  # Maximum memory allowed for each code execution process
+MEMORY_LIMIT_MB = 1280  # Maximum memory allowed for each code execution process
 MEMORY_LIMIT_BYTES = MEMORY_LIMIT_MB * 1024 * 1024
 
 # terminal reasons in order of priority
