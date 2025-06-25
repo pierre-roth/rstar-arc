@@ -21,7 +21,7 @@ from constants import (
 from utils import setup_logging
 from rstar_deepthink import Config
 from rstar_deepthink.arc_task import ARCTask
-from rstar_deepthink.arc_task.task_utils import task_to_prompt
+from rstar_deepthink.arc_task.task_utils import load_tasks, task_to_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -30,10 +30,9 @@ config = Config()
 set_seed(config.seed or 42)
 setup_logging(config.numeric_log_level)
 
-MODEL = "/Users/piroth/Downloads/barc_ft_1.5"
-TASK_PATH = "/Users/piroth/Downloads/arc-dataset-collection-main-4/dataset/ARC-AGI-1/data/training/08ed6ac7.json"
+MODEL = os.path.join(config.policy_model_dir, config.policy_model)
 
-prompt = SFT_SYSTEM_PROMPT + task_to_prompt(ARCTask(config, TASK_PATH)) + SFT_IN_BETWEEN_PROMPT
+prompts = [SFT_SYSTEM_PROMPT + task_to_prompt(task) + SFT_IN_BETWEEN_PROMPT for task in load_tasks(config)]
 
 # Load the tokenizer and model
 tokenizer = AutoTokenizer.from_pretrained(MODEL)
@@ -45,7 +44,8 @@ model.to(device)
 logger.info(f"Using device: {device}")
 
 # Prepare the input
-inputs = tokenizer(prompt, return_tensors="pt").to(device)
+
+inputs = tokenizer(prompts, return_tensors="pt").to(device)
 
 # Generate completions
 logger.info("Starting inference...")

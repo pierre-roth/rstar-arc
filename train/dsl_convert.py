@@ -24,10 +24,10 @@ logger = logging.getLogger(__name__)
 # Hardcode configuration variables for easy modification.
 # DATASET_PATH = "/Users/piroth/Downloads/round_2_2/policy_dataset_validation.jsonl"
 DATASET_PATH = "/Users/piroth/Downloads/round_2_2/solutions_training_augmented.jsonl"
-# MODEL_NAME = "o4-mini"
-MODEL_NAME = "gpt-4.1"
+MODEL_NAME = "o4-mini"
+# MODEL_NAME = "gpt-4.1"
 # MODEL_NAME = "google/gemini-2.5-flash-preview-05-20"
-REASONING_EFFORT = "low"  # "low", "medium", or "high"
+REASONING_EFFORT = "medium"  # "low", "medium", or "high"
 MAX_WORKERS = 1  # Number of parallel requests to the API
 OUTPUT_FILE = "/Users/piroth/Downloads/dsl_dataset.jsonl"
 PROCESSED_TASKS_FILE = "/Users/piroth/Downloads/dsl_processed_tasks.txt"

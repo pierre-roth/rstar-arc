@@ -25,8 +25,8 @@ logger = logging.getLogger(__name__)
 # Hardcode configuration variables for easy modification.
 DATASET_NAME = "barc0/200k_HEAVY_gpt4o-description-gpt4omini-code_generated_problems"
 # MODEL_NAME = "o4-mini"
-# MODEL_NAME = "gpt-4.1-mini"
-MODEL_NAME = "gpt-4.1"
+MODEL_NAME = "gpt-4.1-mini"
+# MODEL_NAME = "gpt-4.1"
 # MODEL_NAME = "mistralai/devstral-small"
 # MODEL_NAME = "deepseek/deepseek-chat-v3-0324"
 # MODEL_NAME = "google/gemini-2.5-flash-preview-05-20"

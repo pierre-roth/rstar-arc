@@ -344,9 +344,8 @@ def test_correct(node) -> (bool, bool, list[list[list[int]]]):
         return True, False, []
 
 
-def verify_prefixes_and_code(code: str, input_grids: list[list[list[int]]],
+"""def verify_prefixes_and_code(code: str, input_grids: list[list[list[int]]],
                              expected_outputs: list | None) -> tuple[bool, list[bool], bool, bool, list]:
-    """Execute each code prefix and the full code, returning aggregated results."""
 
     import re
 
@@ -355,6 +354,19 @@ def verify_prefixes_and_code(code: str, input_grids: list[list[list[int]]],
     if len(steps) < 3:
         logger.debug("Insufficient steps! The code must contain at least two steps!")
         return False, [], True, False, []
+
+    if len(input_grids) > 50:
+        input1 = input_grids[:50]
+        output1 = expected_outputs[:50] if expected_outputs else None
+        input2 = input_grids[50:]
+        output2 = expected_outputs[50:] if expected_outputs else None
+
+        success1, prefix_errors1, err_full1, passed_full1, results_full1 = verify_prefixes_and_code(code, input1,
+                                                                                                    output1)
+        success2, prefix_errors2, err_full2, passed_full2, results_full2 = verify_prefixes_and_code(code, input2,
+                                                                                                    output2)
+
+        return success1 and success2, prefix_errors1 + prefix_errors2, err_full1 or err_full2, passed_full1 and passed_full2, results_full1 + results_full2
 
     prefix_errors: list[bool] = []
 
@@ -365,4 +377,84 @@ def verify_prefixes_and_code(code: str, input_grids: list[list[list[int]]],
 
     err_full, passed_full, results_full = execute_code_with_task(remove_markers(code), input_grids, expected_outputs)
     success = not any(prefix_errors) and not err_full and passed_full
-    return success, prefix_errors, err_full, passed_full, results_full
+    return success, prefix_errors, err_full, passed_full, results_full"""
+
+
+def verify_prefixes_and_code(code: str, input_grids: list[list[list[int]]],
+                             expected_outputs: list | None) -> tuple[bool, list[bool], bool, bool, list]:
+    """
+    Execute each code prefix and the full code, returning aggregated results.
+    Uses batching to avoid command-line argument length limits.
+    """
+    import re
+
+    steps = re.split(f"({STEP_END})", code)
+    # Re-join the delimiter to the preceding step to correctly form prefixes
+    steps = ["".join(s) for s in zip(steps[0::2], steps[1::2] + [""])]
+
+    if not steps or not steps[0].strip():
+        return False, [], True, False, []
+
+    # --- 1. Prefix Validation ---
+    # Check prefixes on a single grid to be fast and avoid arg length errors.
+    prefix_errors: list[bool] = []
+    prefix_check_inputs = input_grids[:1]
+    # We only check prefixes, not the full code here.
+    for k in range(1, len(steps)):
+        current_prefix_code = "".join(steps[:k])
+        prefix_code_to_run = remove_markers(current_prefix_code)
+        if not prefix_code_to_run.strip():
+            prefix_errors.append(False)  # Empty prefix is not an error
+            continue
+        err, _, _ = execute_code_with_task(prefix_code_to_run, prefix_check_inputs, [None])
+        prefix_errors.append(err)
+
+    if any(prefix_errors):
+        # Fail fast if any prefix is invalid. No need to run the full code.
+        logger.debug("Prefix validation failed. Aborting full execution.")
+        # Pad prefix_errors to match number of steps for consistency if needed by caller
+        while len(prefix_errors) < len(steps) - 1:
+            prefix_errors.append(True)
+        return False, prefix_errors, True, False, []
+
+    # --- 2. Full Code Execution in Batches ---
+    BATCH_SIZE = 50
+    full_code = remove_markers(code)
+    all_results = []
+    overall_passed = True
+    any_error_occurred = False
+
+    # Ensure expected_outputs is a list of the same length as input_grids for batching
+    if expected_outputs is None:
+        expected_outputs = [None] * len(input_grids)
+
+    for i in range(0, len(input_grids), BATCH_SIZE):
+        input_batch = input_grids[i:i + BATCH_SIZE]
+        output_batch = expected_outputs[i:i + BATCH_SIZE]
+
+        err_full, passed_full, results_full = execute_code_with_task(full_code, input_batch, output_batch)
+
+        if err_full:
+            any_error_occurred = True
+        if not passed_full:
+            overall_passed = False
+
+        all_results.extend(results_full)
+
+        # If a critical error occurs in a batch, we can stop early.
+        if any_error_occurred:
+            logger.debug(f"Error occurred in batch starting at index {i}. Stopping execution.")
+            # Fill remaining results with None to maintain correct length
+            remaining_count = len(input_grids) - len(all_results)
+            all_results.extend([None] * remaining_count)
+            break
+
+        if not overall_passed:
+            logger.debug(f"Batch starting at index {i} did not pass. Stopping execution.")
+            # Fill remaining results with None to maintain correct length
+            remaining_count = len(input_grids) - len(all_results)
+            all_results.extend([None] * remaining_count)
+            break
+
+    success = not any(prefix_errors) and not any_error_occurred and overall_passed
+    return success, prefix_errors, any_error_occurred, overall_passed, all_results
