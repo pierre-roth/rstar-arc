@@ -1,5 +1,6 @@
 search-mode: "bs"
-log-level: "DEBUG"
+# log-level: "DEBUG"
+log-level: "INFO"
 
 fine-tuned: true
 
@@ -20,7 +21,7 @@ length-pre-filtering: true
 policy-temperature: 0.8
 
 branching-factor: 8
-beam-width: 8
+beam-width: 16
 max-depth: 12
 
-batch-size: 8
+batch-size: 10
