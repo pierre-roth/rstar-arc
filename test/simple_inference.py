@@ -63,10 +63,6 @@ def main() -> None:
     setup_logging(config.numeric_log_level)
 
     tasks = load_tasks(config)
-    prompts = [
-        SFT_SYSTEM_PROMPT + task_to_prompt(task) + SFT_IN_BETWEEN_PROMPT + CODE_PREFIX
-        for task in tasks
-    ]
 
     logger.info("Initializing policy model via vLLM...")
     model_name = (
@@ -109,6 +105,11 @@ def main() -> None:
 
         logger.info(f"Filtered tasks: {len(filtered_tasks)}/{original_task_count} remaining.")
         tasks = filtered_tasks
+
+    prompts = [
+        SFT_SYSTEM_PROMPT + task_to_prompt(task) + SFT_IN_BETWEEN_PROMPT + CODE_PREFIX
+        for task in tasks
+    ]
 
     n = config.num_rollouts
     sampling_params = SamplingParams(
