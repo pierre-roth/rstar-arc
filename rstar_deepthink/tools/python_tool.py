@@ -16,7 +16,7 @@ from constants import CPU_TIMEOUT_SECONDS, WALL_TIMEOUT_SECONDS, CODE, CODE_END,
 
 logger = logging.getLogger(__name__)
 
-use_subprocess = False
+use_subprocess = True
 logger.info(f"Code execution method: {'Subprocess' if use_subprocess else 'Direct'}")
 
 GLOBAL_IMPORTS = "from train.common import *\nimport numpy as np\nfrom typing import *\n"
