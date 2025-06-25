@@ -9,9 +9,7 @@ max-tokens: 2048
 dtype: "bfloat16"
 
 
-# data-folder: "/itet-stor/piroth/net_scratch/task_data/training"
-data-folder: "/home/piroth/rstar-arc/data_sample/easy"
-# task-names: ["0b148d64", "1f85a75f", "2dc579da"]
+data-folder: "/itet-stor/piroth/net_scratch/task_data/training"
 sort-by-length: true
 
 policy-temperature: 0.8
