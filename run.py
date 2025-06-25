@@ -21,6 +21,7 @@ SCRIPTS = [
     "train/generate_policy_validation_dataset.py",
     "train/train_policy.py",
     "test/merge_policy_lora.py",
+    "test/simple_inference.py",
     "train/augment_reward_data.py",
     "train/generate_reward_training_dataset.py",
     "train/generate_reward_validation_dataset.py",

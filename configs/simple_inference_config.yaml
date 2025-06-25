@@ -1,0 +1,23 @@
+log-level: "INFO"
+
+fine-tuned: true
+
+policy-model: "barc_ft_1.5"
+max-seq-len: 16384
+dtype: "bfloat16"
+
+
+data-folder: "/itet-stor/piroth/net_scratch/task_data/training"
+task-names: ["0b148d64", "1f85a75f", "2dc579da"]
+sort-by-length: true
+
+rotate-example: false
+
+policy-temperature: 0.8
+
+num-rollouts: 64
+branching-factor: 8
+max-depth: 12
+beam-width: 4
+
+batch-size: 20
