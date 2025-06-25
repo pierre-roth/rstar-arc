@@ -2,7 +2,7 @@ import logging
 import os
 import random
 import sys
-from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
+from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED, as_completed
 from typing import Any, Dict, List, Set, Tuple
 
 from datasets import load_dataset
@@ -439,8 +439,8 @@ def main():
 
             # Handle any remaining futures
             if pending_futures:
-                done, _ = wait(pending_futures)
-                for fut in done:
+                for fut in as_completed(pending_futures):
+                    attempted_count += 1
                     success, result_data = fut.result()
                     if success:
                         success_count += 1
@@ -460,7 +460,6 @@ def main():
                         f"failed: {failed_count}, success rate: {success_rate:.2%}, "
                         f"total success: {processed_count}"
                     )
-
                     pbar.update(1)
 
     logger.info("--- Script finished successfully! ---")
