@@ -2,6 +2,9 @@ import logging
 import os
 import sys
 from typing import List
+from functools import partial
+from concurrent.futures import TimeoutError
+from pebble import ProcessPool
 
 from vllm import LLM, SamplingParams
 
@@ -41,10 +44,20 @@ def _prepare_io(task) -> tuple[List[List[List[int]]], List[List[List[int]]]]:
     return inputs, outputs
 
 
+def _verify_code_worker(code: str, inputs: List[List[List[int]]], outputs: List[List[List[int]]]) -> bool:
+    """
+    Wrapper for verify_prefixes_and_code to be used with a process pool.
+    Returns True if the code is correct, False otherwise.
+    """
+    success, _, err_full, passed_full, _ = verify_prefixes_and_code(
+        code, inputs, outputs
+    )
+    return success and not err_full and passed_full
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
-
 def main() -> None:
     config = Config()
     setup_logging(config.numeric_log_level)
@@ -92,28 +105,33 @@ def main() -> None:
     request_outputs = llm.generate(prompts, sampling_params)
 
     overall_pass = []
-    for task, output in zip(tasks, request_outputs):
-        partial_prompt = CODE_PREFIX
-        generations = [o.text for o in output.outputs]
-        texts = [partial_prompt + generation for generation in generations]
-        codes = [_extract_code(text) for text in texts]
-        # logger.info(f"Task {task.name}")
-        # logger.info(f"Task prompt: {task_to_prompt(task)}")
-        # logger.info(f"Generations: {generations}")
-        # logger.info(f"Codes: {codes}")
-        inputs, outputs_ = _prepare_io(task)
-        successes = 0
-        for code in codes:
-            success, _, err_full, passed_full, _ = verify_prefixes_and_code(
-                code, inputs, outputs_
+    with ProcessPool(max_workers=max(1, config.cpus - 1)) as pool:
+        for task, output in zip(tasks, request_outputs):
+            partial_prompt = CODE_PREFIX
+            generations = [o.text for o in output.outputs]
+            texts = [partial_prompt + generation for generation in generations]
+            codes = [_extract_code(text) for text in texts]
+            inputs, outputs_ = _prepare_io(task)
+
+            check_code_with_context = partial(_verify_code_worker, inputs=inputs, outputs=outputs_)
+            future = pool.map(check_code_with_context, codes, timeout=10)
+
+            successes = 0
+            try:
+                iterator = future.result()
+                successes = sum(1 for r in iterator if r)
+            except TimeoutError:
+                logger.warning(
+                    f"Code verification for task {task.name} timed out."
+                )
+            except Exception as e:
+                logger.error(f"An error occurred during verification for task {task.name}: {e}")
+
+            passed = successes > 0
+            overall_pass.append(passed)
+            logger.info(
+                f"Task {task.name}: pass@{n} {passed} ({successes}/{n} correct)"
             )
-            if success and not err_full and passed_full:
-                successes += 1
-        passed = successes > 0
-        overall_pass.append(passed)
-        logger.info(
-            f"Task {task.name}: pass@{n} {passed} ({successes}/{n} correct)"
-        )
 
     overall_rate = sum(overall_pass) / len(overall_pass)
     logger.info(f"Overall pass@{n}: {overall_rate:.2f}")

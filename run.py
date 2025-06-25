@@ -503,12 +503,13 @@ cd ${{DIRECTORY}}
 export HF_CACHE_DIR="/scratch/${{ETH_USERNAME}}/.cache/huggingface"
 export HF_HOME="/scratch/${{ETH_USERNAME}}/.cache/huggingface"
 export HF_DATASETS_CACHE="/scratch/${{ETH_USERNAME}}/.cache/huggingface/datasets"
+export VLLM_NO_USAGE_STATS=1
 
 # Execute the Python application with output redirected to local scratch
 echo "Running: python {config["script"]} {f"--config-file {config['yaml_config']}" if config['yaml_config'] != 'none' else ""} {config['script_args']}" | tee -a "${{local_job_dir}}/job_info.log"
 
 # Setting relevant environment variables for the main application
-export VLLM_LOGGING_LEVEL=DEBUG
+export VLLM_LOGGING_LEVEL=INFO
 export TOKENIZERS_PARALLELISM=true
 
 # Run the program with output going to local scratch
