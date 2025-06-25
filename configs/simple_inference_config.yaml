@@ -16,4 +16,4 @@ sort-by-length: true
 
 policy-temperature: 0.8
 
-num-rollouts: 1024
+num-rollouts: 128
