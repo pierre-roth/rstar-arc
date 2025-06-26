@@ -12,7 +12,7 @@ length-pre-filtering: true
 dtype: "bfloat16"
 
 
-data-folder: "/itet-stor/piroth/net_scratch/task_data/validation"
+data-folder: "/itet-stor/piroth/net_scratch/task_data/evaluation"
 sort-by-length: false
 
 policy-temperature: 0.7
