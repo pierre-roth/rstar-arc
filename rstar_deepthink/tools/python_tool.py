@@ -64,7 +64,8 @@ def execute_code_in_subprocess(code_str, input_grids, expected_outputs):
         # Set memory limit
         try:
             mem_limit = {MEMORY_LIMIT_BYTES}
-            resource.setrlimit(resource.RLIMIT_AS, (mem_limit, mem_limit))
+            # resource.setrlimit(resource.RLIMIT_AS, (mem_limit, mem_limit))
+            resource.setrlimit(resource.RLIMIT_RSS, (mem_limit, mem_limit))
         except Exception as e:
             print(f"Warning: Could not set memory limit: {{e}}", file=sys.stderr)
 

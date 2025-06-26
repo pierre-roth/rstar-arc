@@ -34,8 +34,8 @@ REASONING_EFFORT = "low"  # "low", "medium", or "high"
 MAX_WORKERS = 16  # Number of parallel requests to the API
 OUTPUT_FILE = "/Users/piroth/Downloads/output_dataset.jsonl"
 PROCESSED_TASKS_FILE = "/Users/piroth/Downloads/processed_tasks.txt"
-SKIP_PROBABILITY = 0.85
-START_INDEX = 50000
+SKIP_PROBABILITY = 0.95
+START_INDEX = 150000
 
 OPENAI_MODELS = ["o4-mini", "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano"]
 
@@ -404,7 +404,7 @@ def main():
             for index, item in enumerate(ds):
                 task_name = f"{index:08x}"
 
-                if task_name in processed_tasks or random.random() < SKIP_PROBABILITY or index < START_INDEX:
+                if index < START_INDEX or task_name in processed_tasks or random.random() < SKIP_PROBABILITY:
                     pbar.update(1)
                     continue
 
