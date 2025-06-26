@@ -15,7 +15,7 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from constants import SFT_SYSTEM_PROMPT, SFT_IN_BETWEEN_PROMPT, CODE, CODE_END, CODE_PREFIX
+from constants import SFT_SYSTEM_PROMPT, SFT_IN_BETWEEN_PROMPT, CODE, CODE_END, CODE_PREFIX, WALL_TIMEOUT_SECONDS
 from utils import setup_logging
 from rstar_deepthink import Config
 from rstar_deepthink.arc_task.task_utils import load_tasks, task_to_prompt
@@ -126,8 +126,10 @@ def main() -> None:
     logger.info("Starting inference...")
     request_outputs = llm.generate(prompts, sampling_params)
 
+    workers = max(1, config.cpus - 1)
+
     overall_pass = []
-    with ProcessPool(max_workers=max(1, config.cpus - 1)) as pool:
+    with ProcessPool(max_workers=workers) as pool:
         for task, output in zip(tasks, request_outputs):
             partial_prompt = CODE_PREFIX
             generations = [o.text for o in output.outputs]
@@ -136,7 +138,7 @@ def main() -> None:
             inputs, outputs_ = _prepare_io(task)
 
             check_code_with_context = partial(_verify_code_worker, inputs=inputs, outputs=outputs_)
-            future = pool.map(check_code_with_context, codes, timeout=10)
+            future = pool.map(check_code_with_context, codes, timeout=(n // workers) * WALL_TIMEOUT_SECONDS)
 
             successes = 0
             try:
