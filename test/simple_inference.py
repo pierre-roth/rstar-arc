@@ -1,6 +1,7 @@
 import logging
 import os
 import sys
+import json
 from typing import List
 from functools import partial
 from concurrent.futures import TimeoutError
@@ -111,6 +112,13 @@ def main() -> None:
         for task in tasks
     ]
 
+    output_dir = os.path.join(config.sft_data_dir, f"round_{config.round_number}")
+    os.makedirs(output_dir, exist_ok=True)
+    if not config.evaluation:
+        solutions_file_path = os.path.join(output_dir, "solutions_training.jsonl")
+    else:
+        solutions_file_path = os.path.join(output_dir, "solutions_evaluation.jsonl")
+
     n = config.num_rollouts
     sampling_params = SamplingParams(
         temperature=config.policy_temperature,
@@ -141,9 +149,11 @@ def main() -> None:
             future = pool.map(check_code_with_context, codes, timeout=(n // workers + 1) * WALL_TIMEOUT_SECONDS)
 
             successes = 0
+            results = []
             try:
                 iterator = future.result()
-                successes = sum(1 for r in iterator if r)
+                results = list(iterator)
+                successes = sum(1 for r in results if r)
             except TimeoutError:
                 logger.warning(
                     f"Code verification for task {task.name} timed out."
@@ -156,6 +166,13 @@ def main() -> None:
             logger.info(
                 f"Task {task.name}: pass@{n} {passed} ({successes}/{n} correct)"
             )
+
+            if passed:
+                with open(solutions_file_path, "a", encoding="utf-8") as f:
+                    for ok, code in zip(results, codes):
+                        if ok:
+                            json.dump({"task_name": task.name, "solution_code": code}, f)
+                            f.write("\n")
 
     overall_rate = sum(overall_pass) / len(overall_pass)
     logger.info(f"Overall pass@{n}: {overall_rate:.2f}")

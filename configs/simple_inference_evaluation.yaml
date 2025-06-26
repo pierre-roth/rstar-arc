@@ -1,5 +1,6 @@
 search-mode: "mcts"
 log-level: "INFO"
+evaluation: true
 
 fine-tuned: true
 
