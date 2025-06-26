@@ -138,7 +138,7 @@ def main() -> None:
             inputs, outputs_ = _prepare_io(task)
 
             check_code_with_context = partial(_verify_code_worker, inputs=inputs, outputs=outputs_)
-            future = pool.map(check_code_with_context, codes, timeout=(n // workers) * WALL_TIMEOUT_SECONDS)
+            future = pool.map(check_code_with_context, codes, timeout=(n // workers + 1) * WALL_TIMEOUT_SECONDS)
 
             successes = 0
             try:
