@@ -34,8 +34,8 @@ REASONING_EFFORT = "low"  # "low", "medium", or "high"
 MAX_WORKERS = 16  # Number of parallel requests to the API
 OUTPUT_FILE = "/Users/piroth/Downloads/output_dataset.jsonl"
 PROCESSED_TASKS_FILE = "/Users/piroth/Downloads/processed_tasks.txt"
-SKIP_PROBABILITY = 0.95
-START_INDEX = 150000
+SKIP_PROBABILITY = 0.9
+START_INDEX = 75000
 
 OPENAI_MODELS = ["o4-mini", "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano"]
 
