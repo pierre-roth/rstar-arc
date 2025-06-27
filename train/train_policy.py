@@ -8,9 +8,6 @@ Everything is driven by rstar_deepthink.Config:
 Multi-GPU training is handled via Accelerate.
 
 Launch with:
-  # 4 GPUs with torchrun
-  torchrun --nproc_per_node 4 train/train_policy.py --config-file configs/train_policy.yaml
-or
   # via Accelerate
   accelerate launch train/train_policy.py --config-file configs/train_policy.yaml
 """
