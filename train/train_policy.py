@@ -107,7 +107,7 @@ model = AutoModelForCausalLM.from_pretrained(
     torch_dtype=torch.bfloat16 if config.use_bf16 else torch.float16,
     trust_remote_code=True,
     attn_implementation=config.attn_implementation,
-    device_map="auto",
+    # device_map="auto",
 )
 
 # Resize embeddings if we added new tokens
@@ -120,7 +120,8 @@ if model.config.pad_token_id is None:
 
 # Multi-GPU training is handled via Accelerate launch
 model.config.use_cache = False
-model.gradient_checkpointing_enable()  # save memory
+if config.gradient_checkpointing:
+    model.gradient_checkpointing_enable()  # save memory
 
 model.enable_input_require_grads()
 
@@ -462,6 +463,7 @@ arguments = TrainingArguments(
     weight_decay=config.weight_decay,
     max_grad_norm=config.max_grad_norm,
     label_smoothing_factor=config.label_smoothing_factor,
+    torch_compile=config.torch_compile,
 )
 
 # ------------------- wandb (lightweight) -------------------

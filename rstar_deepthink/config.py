@@ -120,6 +120,7 @@ class Config:
     qualitative_eval: bool = False  # Whether to perform qualitative evaluation during training
 
     attn_implementation: Optional[str] = None  # Attention implementation to use
+    torch_compile: bool = False
 
     task_validation_fraction: float = 0.05  # fraction of tasks held out entirely for validation
 
