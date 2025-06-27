@@ -15,7 +15,6 @@ validation-dataset-name: "policy_dataset_validation.jsonl"
 use-bf16: true
 attn-implementation: "flash_attention_2"
 torch-compile: true
-gradient-checkpointing: false
 
 full-finetune: true
 weight_decay: 0
