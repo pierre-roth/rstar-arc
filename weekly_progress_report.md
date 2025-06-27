@@ -451,7 +451,12 @@
   - 
 
 - **Work done**:
-  - ??
+  - Adapted original training and validation data to the new DSL format
+  - tested semi-trained model accuracy against training set and validation set
+    - training: pass@128: 15%
+    - validation: pass@256: 5%
+  - started testing the limits of training models on CSCS
+  - 
 
 - **Issues and Questions**:
   - ??

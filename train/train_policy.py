@@ -501,9 +501,9 @@ if config.report_to == "wandb":
 
 # ------------------- train / eval -------------------
 main_eval = (
-        tokenized_datasets.get("val_task")
+        tokenized_datasets.get("val_val")
         or tokenized_datasets.get("val_example")
-        or tokenized_datasets.get("val_val")
+        or tokenized_datasets.get("val_task")
 )
 additional_evals = {}
 for name in ("val_task", "val_example", "val_val"):

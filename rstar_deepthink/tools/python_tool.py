@@ -5,6 +5,7 @@ import signal
 import subprocess
 import sys
 import textwrap
+from timeout_decorator import timeout
 
 import numpy as np  # Added for direct execution context
 
@@ -190,7 +191,8 @@ def execute_code_in_subprocess(code_str, input_grids, expected_outputs):
                 logger.debug(f"Subprocess reported internal error. Message: {result_data.get('message', 'None')}")
             return internal_error, result_data.get("passed", False), result_data.get("results", [])
         except (json.JSONDecodeError, IndexError):
-            logger.error(f"CRITICAL: Subprocess OK but failed to parse JSON output. Stdout: {stdout}")
+            logger.debug(
+                f"Subprocess OK but failed to parse JSON output. Stdout: {stdout}. Most likely there is a print statement making the output invalid JSON.")
             return True, False, []
 
     except FileNotFoundError:
@@ -204,6 +206,7 @@ def execute_code_in_subprocess(code_str, input_grids, expected_outputs):
         return True, False, []
 
 
+# @timeout(WALL_TIMEOUT_SECONDS)
 def execute_code_directly(code_str, input_grids, expected_outputs):
     """
     Executes the code directly in the current process.
