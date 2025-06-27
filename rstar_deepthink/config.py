@@ -92,7 +92,7 @@ class Config:
     batch_size: int = -1  # Batch size for parallel inference (-1 means all at once, otherwise batch size)
 
     job_id: int = int(os.getenv("SLURM_JOB_ID", 0))  # Job ID (read from environment variable)
-    cpus: int = int(os.getenv("SLURM_CPUS_PER_TASK", 16))  # Number of CPUs available
+    cpus: int = int(os.getenv("SLURM_CPUS_PER_TASK", os.getenv("SLURM_NTASKS", 16)))  # Number of CPUs available
     gpus: int = int(os.getenv("SLURM_GPUS", 1))  # Number of GPUs available
     mem: int = int(os.getenv("SLURM_MEM_PER_NODE", 32768))  # Memory per node in MB
     nodelist: str = os.getenv("SLURM_JOB_NODELIST", "")  # List of nodes assigned to the job
