@@ -32,6 +32,6 @@ logging-steps: 100
 eval-steps: 200
 save-steps: 200
 save-total-limit: 3
-gradient-checkpointing: false
+gradient-checkpointing: true
 
 report-to: "wandb"
