@@ -1,5 +1,5 @@
 log-level: INFO
-round-number: 3
+round-number: 4
 
 qualitative-eval: false
 
@@ -9,12 +9,12 @@ example-validation-threshold: 5
 
 max-seq-len: 16384
 
-policy-model: "Qwen/Qwen2.5-Coder-7B"
+policy-model: "Qwen/Qwen2.5-Coder-3B"
 training-dataset-name: "policy_dataset_training.jsonl"
 validation-dataset-name: "policy_dataset_validation.jsonl"
 use-bf16: true
 attn-implementation: "flash_attention_2"
-torch-compile: "reduce-overhead"
+torch-compile: false
 
 full-finetune: true
 weight_decay: 0
