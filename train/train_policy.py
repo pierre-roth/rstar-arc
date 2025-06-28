@@ -1,17 +1,3 @@
-"""
-LoRA-based supervised fine-tuning for the *policy* model that writes ARC code.
-
-Everything is driven by rstar_deepthink.Config:
-  • model + dataset paths
-  • LoRA hyper-params
-  • batch-size, LR, logging, etc.
-Multi-GPU training is handled via Accelerate.
-
-Launch with:
-  # via Accelerate
-  accelerate launch train/train_policy.py --config-file configs/train_policy.yaml
-"""
-
 from __future__ import annotations
 
 import logging
