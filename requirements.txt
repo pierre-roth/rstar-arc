@@ -25,3 +25,5 @@ peft
 wandb
 questionary
 pytest
+openai
+accelerate
