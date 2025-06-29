@@ -142,12 +142,12 @@ def main() -> None:
 
     model = AutoModelForCausalLM.from_pretrained(
         args.model_name_or_path,
-        torch_dtype=torch.bfloat16
-        if accelerator.mixed_precision == "bf16"
-        else torch.float16,
+        attn_implementation="flash_attention_2",  # or "flash_attention_3" if you built FA-3
+        torch_dtype=torch.bfloat16,
         trust_remote_code=True,
         use_cache=not args.use_gradient_checkpointing,
     )
+
     if args.use_gradient_checkpointing:
         model.gradient_checkpointing_enable()
 
@@ -188,7 +188,7 @@ def main() -> None:
             tokenize_fn,
             batched=True,
             remove_columns=list(raw_datasets.column_names),
-            num_proc=36,
+            num_proc=18,
             desc="Tokenising",
         )
         processed_dataset.set_format(
