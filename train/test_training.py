@@ -143,9 +143,15 @@ def main():
     raw_datasets = load_dataset(args.dataset_name)
 
     def tokenize_function(examples):
-        full_prompts = [create_prompt(ex) + tokenizer.eos_token for ex in examples]
+        # Reconstruct each example from the batched columns
+        prompts = []
+        num_examples = len(examples[list(examples.keys())[0]])
+        for i in range(num_examples):
+            ex = {key: examples[key][i] for key in examples}
+            prompts.append(create_prompt(ex) + tokenizer.eos_token)
+
         tokenized_output = tokenizer(
-            full_prompts,
+            prompts,
             padding="max_length",
             truncation=True,
             max_length=args.max_length,
