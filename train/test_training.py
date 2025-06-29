@@ -92,8 +92,9 @@ def main():
     args = parse_args()
 
     # --- 1. Define Output Directory and Run Name ---
-    # Use NET_SCRATCH_PATH environment variable if available, otherwise use a default.
-    net_scratch_path = os.environ.get("NET_SCRATCH_PATH", "/tmp/llm_runs")
+    ETH_USERNAME = "piroth"
+
+    net_scratch_path = f"/itet-stor/{ETH_USERNAME}/net_scratch"
     run_name = f"test-policy-ft-{args.model_name_or_path.split('/')[-1]}"
     output_dir = os.path.join(net_scratch_path, "models", "fine_tuned", "policy", run_name)
 
