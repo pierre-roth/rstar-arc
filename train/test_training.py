@@ -170,6 +170,7 @@ def main():
             remove_columns=train_dataset.column_names,
             desc="Tokenizing dataset",
         )
+        processed_dataset.set_format(type="torch", columns=["input_ids", "attention_mask", "labels"])
 
     logger.info(f"Dataset processed. Number of examples: {len(processed_dataset)}")
 
@@ -206,19 +207,19 @@ def main():
                 outputs = model(**batch)
                 loss = outputs.loss
                 accelerator.backward(loss)
-                optimizer.step()
-                lr_scheduler.step()
-                optimizer.zero_grad()
 
-            if accelerator.sync_gradients:
-                progress_bar.update(1)
-                completed_steps += 1
+                if accelerator.sync_gradients:
+                    optimizer.step()
+                    lr_scheduler.step()
+                    optimizer.zero_grad()
 
-                # Log metrics to W&B
-                # Gather loss across all processes for accurate logging
-                avg_loss = accelerator.gather(loss.repeat(args.per_device_train_batch_size)).mean()
-                accelerator.log({"loss": avg_loss.item()}, step=completed_steps)
-                progress_bar.set_description(f"Epoch {epoch + 1} | Loss: {avg_loss.item():.4f}")
+                    progress_bar.update(1)
+                    completed_steps += 1
+
+                    # Log metrics to W&B
+                    avg_loss = accelerator.gather(loss.repeat(args.per_device_train_batch_size)).mean()
+                    accelerator.log({"loss": avg_loss.item()}, step=completed_steps)
+                    progress_bar.set_description(f"Epoch {epoch + 1} | Loss: {avg_loss.item():.4f}")
 
             if completed_steps >= num_training_steps:
                 break
