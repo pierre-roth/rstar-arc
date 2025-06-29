@@ -77,13 +77,26 @@ class WeightedCollator:
 
     def __call__(self, features: list[dict]):
         weights = torch.tensor([f.pop("weight") for f in features], dtype=torch.float32)
+
+        # remove labels before tokenizer padding - HF tokenizer can't pad them directly
+        labels = [f.pop("labels") for f in features]
+
+        # pad input IDs/attention masks to the longest sequence in the batch
+
         batch = self.tokenizer.pad(
             features,
             padding=True,
-            max_length=self.max_len,
             return_tensors="pt",
         )
-        if "labels" in batch:
-            batch["labels"][batch["labels"] == self.tokenizer.pad_token_id] = -100
+
+        max_len = batch["input_ids"].shape[1]
+        padded_labels = torch.full((len(labels), max_len), self.tokenizer.pad_token_id, dtype=torch.long)
+        for i, lab in enumerate(labels):
+            length = min(len(lab), max_len)
+            padded_labels[i, :length] = torch.tensor(lab[:length], dtype=torch.long)
+
+        padded_labels[padded_labels == self.tokenizer.pad_token_id] = -100
+
+        batch["labels"] = padded_labels
         batch["weight"] = weights
         return batch
