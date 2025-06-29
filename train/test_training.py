@@ -158,15 +158,29 @@ def main() -> None:
     logger.info(f"Loaded {len(raw_datasets):,} training examples.")
 
     def tokenize_fn(batch):
-        prompts = [format_prompt(ex) + tokenizer.eos_token for ex in batch]
+        # 1️⃣  Build the instruction-style prompt per example
+        prompts = [
+            format_prompt(
+                {
+                    "instruction": instr,
+                    "input": inp,
+                    "output": out,
+                }
+            ) + tokenizer.eos_token
+            for instr, inp, out in zip(
+                batch["instruction"], batch["input"], batch["output"]
+            )
+        ]
+
+        # 2️⃣  Tokenise the whole batch in one call
+        #     ⚠  Don't return PyTorch tensors here – let .set_format() handle that later.
         encoded = tokenizer(
             prompts,
             padding="max_length",
             truncation=True,
             max_length=args.max_length,
-            return_tensors="pt",
         )
-        encoded["labels"] = encoded["input_ids"].clone()
+        encoded["labels"] = encoded["input_ids"].copy()
         return encoded
 
     with accelerator.main_process_first():
@@ -174,7 +188,7 @@ def main() -> None:
             tokenize_fn,
             batched=True,
             remove_columns=list(raw_datasets.column_names),
-            num_proc=os.cpu_count(),
+            num_proc=36,
             desc="Tokenising",
         )
         processed_dataset.set_format(
