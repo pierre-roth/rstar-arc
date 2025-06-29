@@ -23,6 +23,12 @@ from transformers import (
     set_seed,
 )
 
+
+os.environ["NCCL_DEBUG"] = "WARN"
+os.environ["WANDB_SILENT"] = "true"
+os.environ["FLASH_ATTENTION_SKIP_INIT_WARNING"] = "1"
+os.environ["TORCHDYNAMO_CAPTURE_SCALAR_OUTPUTS"] = "1"
+
 # -----------------------------------------------------------------------------#
 # 1. Utilities
 # -----------------------------------------------------------------------------#
