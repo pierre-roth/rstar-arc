@@ -93,7 +93,7 @@ model = AutoModelForCausalLM.from_pretrained(
     torch_dtype=torch.bfloat16 if config.use_bf16 else torch.float16,
     trust_remote_code=True,
     attn_implementation=config.attn_implementation,
-    device_map="auto",
+    device_map="auto"
 )
 
 # Resize embeddings if we added new tokens
