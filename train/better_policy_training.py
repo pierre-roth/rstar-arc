@@ -40,7 +40,10 @@ logger = logging.getLogger(__name__)
 # -------------------------------------------------------------
 
 def preprocess(batch):
-    """Tokenize solutions. Only tokens after the prompt contribute to the loss."""
+    """
+    Preprocesses the batch to train the model only on completing the solution, given the prompt.
+    The prompt tokens in the labels will be masked.
+    """
     prompts: list[str] = []
     full_texts: list[str] = []
     for task_json, solution in zip(batch["task_json"], batch["solution"]):
@@ -60,15 +63,14 @@ def preprocess(batch):
         return_attention_mask=True,
     )
 
-    labels: list[list[int]] = []
-    for i in range(len(full_texts)):
-        prompt_len = len(tok(prompts[i], add_special_tokens=False).input_ids)
-        input_ids = model_inputs["input_ids"][i]
-        lbl = list(input_ids)
+    labels = [list(l) for l in model_inputs["input_ids"]]
+    prompt_ids = tok(prompts, max_length=config.max_seq_len, truncation=True, padding=False).input_ids
+
+    for i in range(len(labels)):
+        prompt_len = len(prompt_ids[i])
         for j in range(prompt_len):
-            if j < len(lbl):
-                lbl[j] = -100
-        labels.append(lbl)
+            if j < len(labels[i]):
+                labels[i][j] = -100
 
     model_inputs["labels"] = labels
     model_inputs["weight"] = [float(w) for w in batch["weight"]]
