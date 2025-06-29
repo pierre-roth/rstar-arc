@@ -166,6 +166,7 @@ def main():
             tokenize_function,
             batched=True,
             batch_size=100,
+            num_proc=os.cpu_count(),
             remove_columns=train_dataset.column_names,
             desc="Tokenizing dataset",
         )
