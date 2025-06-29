@@ -450,6 +450,7 @@ arguments = TrainingArguments(
     max_grad_norm=config.max_grad_norm,
     label_smoothing_factor=config.label_smoothing_factor,
     torch_compile=config.torch_compile,
+    ddp_backend="nccl" if config.distributed else None
 )
 
 # ------------------- wandb (lightweight) -------------------
