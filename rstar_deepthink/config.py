@@ -107,6 +107,8 @@ class Config:
 
     config_file: str = ""  # Path to YAML config file
 
+    execute_in_subprocess: bool = True  # Whether to execute the python code in a subprocess
+
     # Computed fields
     policy_model_dir: Optional[str] = None  # Full path to policy model
     reward_model_dir: Optional[str] = None  # Full path to reward model
@@ -129,6 +131,7 @@ class Config:
 
     # If true, skips LoRA adapters and fine-tunes all model parameters
     full_finetune: bool = False
+    distributed: bool = False
     learning_rate: float = 2e-5
     num_train_epochs: int = 1
     per_device_train_batch_size: int = 1
