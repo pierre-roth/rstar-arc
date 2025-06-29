@@ -197,6 +197,7 @@ def _within_max_len(example):
             + task_to_prompt(ARCTask.from_dict(example["task_json"]))
             + SFT_IN_BETWEEN_PROMPT
             + example["solution"]
+            + tok.eos_token
     )
     return len(tok.encode(text)) <= config.max_seq_len
 
@@ -275,7 +276,7 @@ for split, ds in dataset.items():
         num_proc=num_proc,
     )
 
-collator = WeightedCollator(tokenizer=tok)
+collator = WeightedCollator(tokenizer=tok, max_len=config.max_seq_len)
 train_loader = torch.utils.data.DataLoader(
     tokenized_datasets["train"],
     batch_size=config.per_device_train_batch_size,

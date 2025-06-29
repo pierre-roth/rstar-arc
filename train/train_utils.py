@@ -71,12 +71,18 @@ def renormalize_task_weights(ds: Dataset) -> Dataset:
 class WeightedCollator:
     """Pad dynamically and preserve per-example weights."""
 
-    def __init__(self, tokenizer: PreTrainedTokenizerBase):
+    def __init__(self, tokenizer: PreTrainedTokenizerBase, max_len: int):
         self.tokenizer = tokenizer
+        self.max_len = max_len
 
     def __call__(self, features: list[dict]):
         weights = torch.tensor([f.pop("weight") for f in features], dtype=torch.float32)
-        batch = self.tokenizer.pad(features, padding=True, return_tensors="pt")
+        batch = self.tokenizer.pad(
+            features,
+            padding=True,
+            max_length=self.max_len,
+            return_tensors="pt",
+        )
         if "labels" in batch:
             batch["labels"][batch["labels"] == self.tokenizer.pad_token_id] = -100
         batch["weight"] = weights

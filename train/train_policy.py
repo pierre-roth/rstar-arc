@@ -503,7 +503,7 @@ trainer = WeightedTrainer(
     train_dataset=tokenized_datasets["train"],
     eval_dataset=main_eval,
     processing_class=tok,
-    data_collator=WeightedCollator(tokenizer=tok),
+    data_collator=WeightedCollator(tokenizer=tok, max_len=config.max_seq_len),
     additional_eval_datasets=additional_evals,
 )
 
