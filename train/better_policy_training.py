@@ -60,26 +60,37 @@ class DataCollatorForSFT:
         self._eos_token_id = tokenizer.eos_token_id
 
     def __call__(self, features: List[Dict]) -> Dict[str, torch.Tensor]:
-        batch_size = len(features)
+        prompts = []
+        completions = []
+        weights_list = []
+
+        for ex in features:
+            task_json = ex["task_json"]
+            solution = ex["solution"]
+            prompt = (
+                SFT_SYSTEM_PROMPT
+                + task_to_prompt(ARCTask.from_dict(task_json))
+                + SFT_IN_BETWEEN_PROMPT
+            )
+            prompts.append(prompt)
+            completions.append(solution)
+            weights_list.append(float(ex.get("weight", 1.0)))
+
+        weights = torch.tensor(weights_list, dtype=torch.float32)
+
+        prompt_tokens_batch = self.tokenizer(
+            prompts, add_special_tokens=False, padding=False
+        )["input_ids"]
+        completion_tokens_batch = self.tokenizer(
+            completions, add_special_tokens=False, padding=False
+        )["input_ids"]
 
         all_input_ids = []
         all_labels = []
-        weights = torch.zeros(batch_size, dtype=torch.float32)
 
-        for i, ex in enumerate(features):
-            task_json = ex["task_json"]
-            solution = ex["solution"]
-
-            prompt = (
-                    SFT_SYSTEM_PROMPT
-                    + task_to_prompt(ARCTask.from_dict(task_json))
-                    + SFT_IN_BETWEEN_PROMPT
-            )
-
-            prompt_tokens = self.tokenizer.encode(prompt, add_special_tokens=False)
-            completion_tokens = self.tokenizer.encode(
-                solution, add_special_tokens=False
-            ) + [self._eos_token_id]
+        for i in range(len(features)):
+            prompt_tokens = prompt_tokens_batch[i]
+            completion_tokens = completion_tokens_batch[i] + [self._eos_token_id]
 
             # Combine and truncate if necessary
             prompt_len = len(prompt_tokens)
@@ -87,22 +98,20 @@ class DataCollatorForSFT:
 
             if len(total_tokens) > self.max_len:
                 if prompt_len < self.max_len:
-                    total_tokens = total_tokens[:self.max_len]
+                    total_tokens = total_tokens[: self.max_len]
                     actual_prompt_len = prompt_len
                 else:
-                    total_tokens = prompt_tokens[:self.max_len]
+                    total_tokens = prompt_tokens[: self.max_len]
                     actual_prompt_len = self.max_len
             else:
                 actual_prompt_len = prompt_len
 
             labels = total_tokens[:]  # Copy all tokens first
             # Now mask the prompt portion
-            for j in range(actual_prompt_len):
-                labels[j] = -100
+            labels[:actual_prompt_len] = [-100] * actual_prompt_len
 
             all_input_ids.append(total_tokens)
             all_labels.append(labels)
-            weights[i] = float(ex.get("weight", 1.0))
 
         # Pad sequences efficiently
         batch = self._pad_sequences(all_input_ids, self.tokenizer.pad_token_id)
@@ -151,101 +160,71 @@ class SFTTrainer:
         self.best_model_dir.mkdir(parents=True, exist_ok=True)
 
     def compute_loss(
-            self, logits: torch.Tensor, labels: torch.Tensor, weights: torch.Tensor
+        self, logits: torch.Tensor, labels: torch.Tensor, weights: torch.Tensor, reduction: str = "mean"
     ) -> torch.Tensor:
-        """Compute weighted cross-entropy loss with proper masking and dtype safety."""
-        # Shift for next-token prediction
-        shift_logits = logits[..., :-1, :].contiguous()
+        """Computes weighted cross-entropy loss. Can return total loss or per-sequence loss."""
+        shift_logits = logits[..., :-1, :].contiguous().float()
         shift_labels = labels[..., 1:].contiguous()
 
-        shift_logits = shift_logits.float()  # Convert to float32
-
-        # Compute per-token loss in float32
         loss_fct = torch.nn.CrossEntropyLoss(reduction="none")
         per_token_loss = loss_fct(
-            shift_logits.view(-1, shift_logits.size(-1)),
-            shift_labels.view(-1)
+            shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1)
         )
         per_token_loss = per_token_loss.view(shift_labels.size())
 
-        # Mask out padding and compute per-sequence loss
         active_mask = shift_labels != -100
-        per_seq_loss = per_token_loss.masked_fill(~active_mask, 0.0).sum(dim=1)
-        per_seq_loss = per_seq_loss / active_mask.sum(dim=1).clamp_min(1)
+        per_seq_loss = (per_token_loss * active_mask).sum(dim=1) / active_mask.sum(dim=1).clamp_min(1)
 
-        # Apply sample weights
-        weights = weights.to(per_seq_loss.device)
-        weighted_loss = (per_seq_loss * weights).sum() / weights.sum().clamp_min(1e-8)
+        if reduction == "none":
+            return per_seq_loss
 
+        # Default: compute weighted mean loss for the batch
+        device_weights = weights.to(per_seq_loss.device)
+        weighted_loss = (per_seq_loss * device_weights).sum() / device_weights.sum().clamp_min(1e-8)
         return weighted_loss
 
-    def evaluate(
-            self,
-            dataloader: DataLoader,
-            prefix: str
-    ) -> Optional[float]:
-        """Evaluate model on a validation set."""
+    def evaluate(self, dataloader: DataLoader, prefix: str) -> Optional[float]:
+        """Evaluate model on a validation set with correct distributed averaging."""
         self.model.eval()
-
-        all_losses = []
+        all_per_seq_losses = []
         all_weights = []
 
         with torch.no_grad():
             for batch in dataloader:
                 outputs = self.model(
-                    input_ids=batch["input_ids"],
-                    attention_mask=batch["attention_mask"],
+                    input_ids=batch["input_ids"], attention_mask=batch["attention_mask"]
                 )
 
-                # Calculate per-sequence loss
-                logits = outputs.logits
-                labels = batch["labels"]
-                weights = batch["weight"]
-
-                shift_logits = logits[..., :-1, :].contiguous()
-                shift_labels = labels[..., 1:].contiguous()
-
-                loss_fct = torch.nn.CrossEntropyLoss(reduction="none")
-                per_token_loss = loss_fct(
-                    shift_logits.view(-1, shift_logits.size(-1)),
-                    shift_labels.view(-1)
+                # Get per-sequence losses, not the final batch average
+                per_seq_loss = self.compute_loss(
+                    outputs.logits, batch["labels"], batch["weight"], reduction="none"
                 )
-                per_token_loss = per_token_loss.view(shift_labels.size())
 
-                active_mask = shift_labels != -100
-                per_seq_loss = per_token_loss.masked_fill(~active_mask, 0.0).sum(dim=1)
-                per_seq_loss = per_seq_loss / active_mask.sum(dim=1).clamp_min(1)
-
-                # Gather from all processes
+                # Gather per-sequence losses and their corresponding weights
                 gathered_losses = self.accelerator.gather_for_metrics(per_seq_loss)
-                gathered_weights = self.accelerator.gather_for_metrics(weights)
+                gathered_weights = self.accelerator.gather_for_metrics(batch["weight"])
 
-                all_losses.append(gathered_losses)
+                all_per_seq_losses.append(gathered_losses)
                 all_weights.append(gathered_weights)
 
-        # Compute final loss
         total_loss = None
         if self.accelerator.is_main_process:
-            all_losses = torch.cat(all_losses)
-            all_weights = torch.cat(all_weights)
+            # Concatenate all gathered tensors
+            loss_tensor = torch.cat(all_per_seq_losses)
+            weight_tensor = torch.cat(all_weights).to(loss_tensor.device)
 
-            total_loss = (all_losses * all_weights).sum() / all_weights.sum().clamp_min(1e-8)
-            total_loss = total_loss.item()
+            # Perform the final, correctly weighted average
+            total_loss_tensor = (loss_tensor * weight_tensor).sum() / weight_tensor.sum().clamp_min(1e-8)
+            total_loss = total_loss_tensor.item()
 
-            # Log metrics
-            self.accelerator.log(
-                {f"{prefix}/loss": total_loss},
-                step=self.metrics.global_step
-            )
+            self.accelerator.log({f"{prefix}/loss": total_loss}, step=self.metrics.global_step)
 
         self.model.train()
 
-        # Use accelerator.broadcast to ensure all processes get the loss
-        if total_loss is not None:
-            total_loss_tensor = torch.tensor(total_loss, device=self.accelerator.device)
-        else:
-            total_loss_tensor = torch.tensor(0.0, device=self.accelerator.device)
-
+        # Broadcast the final, correct loss to all processes
+        total_loss_tensor = torch.tensor(
+            total_loss if total_loss is not None else 0.0, device=self.accelerator.device
+        )
         total_loss_tensor = self.accelerator.broadcast(total_loss_tensor, from_process=0)
         return total_loss_tensor.item()
 
@@ -358,6 +337,9 @@ class SFTTrainer:
                     # Regular checkpointing with step number
                     if self.metrics.global_step % self.config.save_steps == 0:
                         self.save_checkpoint(is_best=False, step=self.metrics.global_step)
+
+                if completed_steps >= max_train_steps:
+                    return
 
 
 def create_validation_splits(
@@ -493,16 +475,23 @@ def main(config: Config):
     cache_dir = Path(LOCAL_SCRATCH_PATH) / ".cache" / "huggingface" / "datasets"
     num_proc = max(1, config.cpus - 1)
 
-    def within_max_length(example):
-        """Filter examples that exceed maximum sequence length."""
-        text = (
-                SFT_SYSTEM_PROMPT
-                + task_to_prompt(ARCTask.from_dict(example["task_json"]))
-                + SFT_IN_BETWEEN_PROMPT
-                + example["solution"]
-                + tokenizer.eos_token
-        )
-        return len(tokenizer.encode(text)) <= config.max_seq_len
+    def _add_length_column(batch):
+        """Batched function to compute and add tokenized length."""
+        texts = []
+        for i in range(len(batch["solution"])):
+            task_json = batch["task_json"][i]
+            solution = batch["solution"][i]
+            text = (
+                    SFT_SYSTEM_PROMPT
+                    + task_to_prompt(ARCTask.from_dict(task_json))
+                    + SFT_IN_BETWEEN_PROMPT
+                    + solution
+                    + tokenizer.eos_token
+            )
+            texts.append(text)
+
+        tokenized = tokenizer(texts)
+        return {"length": [len(ids) for ids in tokenized["input_ids"]]}
 
     # Load and filter training data
     raw_train_data = load_dataset(
@@ -512,7 +501,16 @@ def main(config: Config):
     )["train"]
 
     orig_train_len = len(raw_train_data)
-    filtered_train_data = raw_train_data.filter(within_max_length, num_proc=num_proc)
+    train_data_with_length = raw_train_data.map(
+        _add_length_column,
+        batched=True,
+        batch_size=1000,
+        num_proc=num_proc,
+    )
+    filtered_train_data = train_data_with_length.filter(
+        lambda x: x["length"] <= config.max_seq_len,
+        num_proc=num_proc
+    )
 
     logger.info(
         f"Filtered training data: {orig_train_len} -> {len(filtered_train_data)} "
@@ -532,7 +530,16 @@ def main(config: Config):
     )["validation"]
 
     orig_val_len = len(raw_val_data)
-    val_val_ds = raw_val_data.filter(within_max_length, num_proc=num_proc)
+    val_data_with_length = raw_val_data.map(
+        _add_length_column,
+        batched=True,
+        batch_size=1000,
+        num_proc=num_proc,
+    )
+    val_val_ds = val_data_with_length.filter(
+        lambda x: x["length"] <= config.max_seq_len,
+        num_proc=num_proc
+    )
 
     logger.info(
         f"Filtered validation data: {orig_val_len} -> {len(val_val_ds)} "
