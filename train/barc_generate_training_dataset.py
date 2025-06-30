@@ -15,15 +15,15 @@ from data_utils import write_batch_data
 
 logger = logging.getLogger(__name__)
 
-WRITE_BACK_BATCH_SIZE = 100
+WRITE_BACK_BATCH_SIZE = 1000
 
 
 def _sample_split(num_examples: int, rng: random.Random) -> tuple[int, int]:
     """Determine number of training and test examples for a chunk."""
     if num_examples <= 16:
         return 3, 1
-    n_train = rng.choices([2, 3, 4, 5], weights=[0.1, 0.7, 0.1, 0.1])[0]
-    n_test = rng.choices([1, 2], weights=[0.9, 0.1])[0]
+    n_train = rng.choices([2, 3, 4, 5, 6], weights=[0.1, 0.6, 0.15, 0.1, 0.05])[0]
+    n_test = rng.choices([1, 2], weights=[0.95, 0.05])[0]
     return n_train, n_test
 
 

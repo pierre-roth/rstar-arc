@@ -35,7 +35,7 @@ MAX_WORKERS = 16  # Number of parallel requests to the API
 OUTPUT_FILE = "/Users/piroth/Downloads/output_dataset.jsonl"
 PROCESSED_TASKS_FILE = "/Users/piroth/Downloads/processed_tasks.txt"
 SKIP_PROBABILITY = 0.9
-START_INDEX = 75000
+START_INDEX = 0
 
 OPENAI_MODELS = ["o4-mini", "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano"]
 
@@ -372,9 +372,9 @@ def main():
     openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
 
     if MODEL_NAME in OPENAI_MODELS:
-        client = OpenAI(api_key=openai_api_key)
+        client = OpenAI(api_key=openai_api_key, timeout=120)
     else:
-        client = OpenAI(api_key=openrouter_api_key, base_url="https://openrouter.ai/api/v1")
+        client = OpenAI(api_key=openrouter_api_key, base_url="https://openrouter.ai/api/v1", timeout=120)
 
     # Load the dataset in streaming mode to avoid holding everything in memory
     logger.info(f"Loading dataset: {DATASET_NAME} ...")

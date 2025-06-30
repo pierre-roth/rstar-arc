@@ -52,6 +52,8 @@ logger.info(f"Using model: {config.policy_model}")
 TRAIN_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{config.round_number}", config.training_dataset_name)
 VAL_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{config.round_number}", config.validation_dataset_name)
 
+num_proc = max(1, config.cpus - 1)
+
 if not config.full_finetune:
     dir_name = (
         f"ft-{config.policy_model.split('/')[-1]}-"
@@ -136,6 +138,7 @@ def preprocess_prompt_and_completion(batch):
         max_length=config.max_seq_len,
         truncation=True,
         padding=False,
+        num_proc=8,
         return_attention_mask=True
     )
 
@@ -167,6 +170,7 @@ def preprocess_for_completion_only(batch):
         max_length=config.max_seq_len,
         truncation=True,
         padding=False,
+        num_proc=8,
         return_attention_mask=True
     )
 
@@ -201,9 +205,6 @@ raw_dataset = load_dataset(
     cache_dir=os.path.join(LOCAL_SCRATCH_PATH, ".cache/huggingface/datasets"),
 )
 logger.info(f"Loaded {len(raw_dataset['train'])} examples from {TRAIN_PATH}")
-
-# Use available CPUs minus one to keep some resources free
-num_proc = max(1, config.cpus - 1)
 
 
 def _within_max_len(example):

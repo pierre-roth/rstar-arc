@@ -222,7 +222,7 @@ def execute_code_directly(code_str, input_grids, expected_outputs):
         exec(code_str, exec_globals)
 
         if 'solve' not in exec_globals:
-            logger.error("Direct execution failed: Function 'solve' not defined.")
+            logger.debug("Direct execution failed: Function 'solve' not defined.")
             return True, False, []  # Error, Not Passed, Empty Results
 
         solve_func = exec_globals['solve']
@@ -260,7 +260,7 @@ def execute_code_directly(code_str, input_grids, expected_outputs):
 
     except Exception as e:
         # Catch errors during the initial exec call
-        logger.error(f"Error executing provided code string directly: {str(e)}")
+        logger.debug(f"Error executing provided code string directly: {str(e)}")
         # traceback.print_exc() # Uncomment for full traceback during debugging
         error_occurred = True
         passed = False  # Mark as not passed if exec fails

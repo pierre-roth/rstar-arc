@@ -131,7 +131,6 @@ class Config:
 
     # If true, skips LoRA adapters and fine-tunes all model parameters
     full_finetune: bool = False
-    distributed: bool = False
     learning_rate: float = 2e-5
     num_train_epochs: int = 1
     per_device_train_batch_size: int = 1

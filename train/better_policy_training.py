@@ -1,15 +1,15 @@
 import logging
-import os
+import math
 import random
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple
 
 import torch
 from accelerate import Accelerator
 from accelerate.utils import set_seed
-from datasets import Dataset, DatasetDict, load_dataset
+from datasets import Dataset, load_dataset
 from torch.optim import AdamW
 from torch.utils.data import DataLoader
 from transformers import (
@@ -57,19 +57,16 @@ class DataCollatorForSFT:
     def __init__(self, tokenizer: PreTrainedTokenizerBase, max_len: int):
         self.tokenizer = tokenizer
         self.max_len = max_len
-        # Pre-compute to avoid repeated encoding
         self._eos_token_id = tokenizer.eos_token_id
 
     def __call__(self, features: List[Dict]) -> Dict[str, torch.Tensor]:
         batch_size = len(features)
 
-        # Pre-allocate lists for efficiency
         all_input_ids = []
         all_labels = []
         weights = torch.zeros(batch_size, dtype=torch.float32)
 
         for i, ex in enumerate(features):
-            # Construct prompt
             task_json = ex["task_json"]
             solution = ex["solution"]
 
@@ -79,8 +76,7 @@ class DataCollatorForSFT:
                     + SFT_IN_BETWEEN_PROMPT
             )
 
-            # Tokenize prompt and completion separately for efficient masking
-            prompt_tokens = self.tokenizer.encode(prompt, add_special_tokens=True)
+            prompt_tokens = self.tokenizer.encode(prompt, add_special_tokens=False)
             completion_tokens = self.tokenizer.encode(
                 solution, add_special_tokens=False
             ) + [self._eos_token_id]
@@ -90,19 +86,19 @@ class DataCollatorForSFT:
             total_tokens = prompt_tokens + completion_tokens
 
             if len(total_tokens) > self.max_len:
-                # Truncate completion to fit, keeping full prompt if possible
                 if prompt_len < self.max_len:
                     total_tokens = total_tokens[:self.max_len]
                     actual_prompt_len = prompt_len
                 else:
-                    # Prompt itself is too long, truncate it
                     total_tokens = prompt_tokens[:self.max_len]
                     actual_prompt_len = self.max_len
             else:
                 actual_prompt_len = prompt_len
 
-            # Create labels with prompt masking
-            labels = [-100] * actual_prompt_len + total_tokens[actual_prompt_len:]
+            labels = total_tokens[:]  # Copy all tokens first
+            # Now mask the prompt portion
+            for j in range(actual_prompt_len):
+                labels[j] = -100
 
             all_input_ids.append(total_tokens)
             all_labels.append(labels)
@@ -157,12 +153,14 @@ class SFTTrainer:
     def compute_loss(
             self, logits: torch.Tensor, labels: torch.Tensor, weights: torch.Tensor
     ) -> torch.Tensor:
-        """Compute weighted cross-entropy loss with proper masking."""
+        """Compute weighted cross-entropy loss with proper masking and dtype safety."""
         # Shift for next-token prediction
         shift_logits = logits[..., :-1, :].contiguous()
         shift_labels = labels[..., 1:].contiguous()
 
-        # Compute per-token loss
+        shift_logits = shift_logits.float()  # Convert to float32
+
+        # Compute per-token loss in float32
         loss_fct = torch.nn.CrossEntropyLoss(reduction="none")
         per_token_loss = loss_fct(
             shift_logits.view(-1, shift_logits.size(-1)),
@@ -251,13 +249,19 @@ class SFTTrainer:
         total_loss_tensor = self.accelerator.broadcast(total_loss_tensor, from_process=0)
         return total_loss_tensor.item()
 
-    def save_checkpoint(self, is_best: bool = False):
-        """Save model checkpoint with proper synchronization."""
-        save_dir = self.best_model_dir if is_best else self.output_dir
+    def save_checkpoint(self, is_best: bool = False, step: Optional[int] = None):
+        """Save model checkpoint with proper synchronization and versioning."""
+        if is_best:
+            save_dir = self.best_model_dir
+        elif step is not None:
+            save_dir = self.output_dir / f"checkpoint-{step}"
+        else:
+            save_dir = self.output_dir
+
+        save_dir.mkdir(parents=True, exist_ok=True)
 
         self.accelerator.wait_for_everyone()
 
-        # Use accelerator's save method for proper handling
         if self.accelerator.is_main_process:
             unwrapped_model = self.accelerator.unwrap_model(self.model)
             unwrapped_model.save_pretrained(
@@ -284,10 +288,9 @@ class SFTTrainer:
             lr_scheduler: torch.optim.lr_scheduler._LRScheduler,
             max_train_steps: int,
     ):
-        """Main training loop with proper step counting."""
+        """Main training loop with proper step counting and gradient clipping."""
         self.model.train()
 
-        # Track optimization steps correctly
         completed_steps = 0
 
         for epoch in range(self.config.num_train_epochs):
@@ -309,6 +312,12 @@ class SFTTrainer:
 
                     # Optimizer step (only when gradients are accumulated)
                     if self.accelerator.sync_gradients:
+                        if self.config.max_grad_norm > 0:
+                            self.accelerator.clip_grad_norm_(
+                                self.model.parameters(),
+                                self.config.max_grad_norm
+                            )
+
                         optimizer.step()
                         lr_scheduler.step()
                         optimizer.zero_grad()
@@ -346,16 +355,9 @@ class SFTTrainer:
                                     )
                                     self.save_checkpoint(is_best=True)
 
-                    # Regular checkpointing
+                    # Regular checkpointing with step number
                     if self.metrics.global_step % self.config.save_steps == 0:
-                        self.save_checkpoint(is_best=False)
-
-                    # Check if done
-                    if completed_steps >= max_train_steps:
-                        return
-
-        # Final save
-        self.save_checkpoint(is_best=False)
+                        self.save_checkpoint(is_best=False, step=self.metrics.global_step)
 
 
 def create_validation_splits(
@@ -599,7 +601,9 @@ def main(config: Config):
     )
 
     # Calculate training steps correctly
-    num_update_steps_per_epoch = len(train_dataloader) // config.gradient_accumulation_steps
+    num_update_steps_per_epoch = math.ceil(
+        len(train_dataloader) / config.gradient_accumulation_steps
+    )
     max_train_steps = num_update_steps_per_epoch * config.num_train_epochs
 
     lr_scheduler = get_scheduler(
