@@ -14,6 +14,7 @@ from transformers import (
     get_scheduler,
     set_seed,
 )
+from transformers import PreTrainedTokenizerBase
 
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if project_root not in sys.path:
@@ -39,42 +40,73 @@ logger = logging.getLogger(__name__)
 # preprocessing
 # -------------------------------------------------------------
 
-def preprocess(batch):
+class DataCollatorForSFT:
     """
-    Preprocesses the batch to train the model only on completing the solution, given the prompt.
-    The prompt tokens in the labels will be masked.
+    Collator for supervised fine-tuning that handles tokenization, masking, and padding.
+    This is more efficient as it avoids multiple tokenization steps and manual padding.
     """
-    prompts: list[str] = []
-    full_texts: list[str] = []
-    for task_json, solution in zip(batch["task_json"], batch["solution"]):
-        prompt_text = (
-                SFT_SYSTEM_PROMPT
-                + task_to_prompt(ARCTask.from_dict(task_json))
-                + SFT_IN_BETWEEN_PROMPT
+
+    def __init__(self, tokenizer: PreTrainedTokenizerBase, max_len: int):
+        self.tokenizer = tokenizer
+        self.max_len = max_len
+
+    def __call__(self, features: list[dict]) -> dict[str, torch.Tensor]:
+        prompts = []
+        completions = []
+        weights = []
+
+        for ex in features:
+            task_json = ex["task_json"]
+            solution = ex["solution"]
+            prompt = (
+                    SFT_SYSTEM_PROMPT
+                    + task_to_prompt(ARCTask.from_dict(task_json))
+                    + SFT_IN_BETWEEN_PROMPT
+            )
+            prompts.append(prompt)
+            completions.append(solution + self.tokenizer.eos_token)
+            weights.append(float(ex.get("weight", 1.0)))
+
+        # Tokenize prompts and completions
+        prompt_inputs = self.tokenizer(prompts, return_length=True)
+        completion_inputs = self.tokenizer(completions)
+
+        # Combine, truncate, and prepare labels
+        input_ids = []
+        labels = []
+        for i in range(len(prompts)):
+            prompt_len = prompt_inputs["length"][i]
+
+            combined_ids = prompt_inputs["input_ids"][i] + completion_inputs["input_ids"][i]
+
+            # Truncate if necessary
+            if len(combined_ids) > self.max_len:
+                combined_ids = combined_ids[:self.max_len]
+
+            input_ids.append(torch.tensor(combined_ids))
+
+            # Create labels, masking prompt tokens
+            label = [-100] * min(prompt_len, self.max_len) + combined_ids[prompt_len:]
+            labels.append(torch.tensor(label))
+
+        # Pad the sequences
+        batch = self.tokenizer.pad(
+            {"input_ids": input_ids},
+            padding=True,
+            return_tensors="pt",
         )
-        prompts.append(prompt_text)
-        full_texts.append(prompt_text + solution + tok.eos_token)
 
-    model_inputs = tok(
-        full_texts,
-        max_length=config.max_seq_len,
-        truncation=True,
-        padding=False,
-        return_attention_mask=True,
-    )
+        # Manually pad labels
+        labels_max_len = batch['input_ids'].shape[1]
+        padded_labels = torch.full((len(labels), labels_max_len), -100, dtype=torch.long)
+        for i, label_tensor in enumerate(labels):
+            len_label = label_tensor.shape[0]
+            padded_labels[i, :len_label] = label_tensor
 
-    labels = [list(l) for l in model_inputs["input_ids"]]
-    prompt_ids = tok(prompts, max_length=config.max_seq_len, truncation=True, padding=False).input_ids
+        batch["labels"] = padded_labels
+        batch["weight"] = torch.tensor(weights, dtype=torch.float32)
 
-    for i in range(len(labels)):
-        prompt_len = len(prompt_ids[i])
-        for j in range(prompt_len):
-            if j < len(labels[i]):
-                labels[i][j] = -100
-
-    model_inputs["labels"] = labels
-    model_inputs["weight"] = [float(w) for w in batch["weight"]]
-    return model_inputs
+        return batch
 
 
 # -------------------------------------------------------------
@@ -100,7 +132,7 @@ def evaluate(model, dataloader, accelerator: Accelerator, prefix: str, step: int
     for batch in dataloader:
         with torch.no_grad():
             outputs = model(**batch)
-        
+
         # Calculate per-sequence loss, but don't average it yet
         logits = outputs.logits
         labels = batch["labels"]
@@ -111,14 +143,14 @@ def evaluate(model, dataloader, accelerator: Accelerator, prefix: str, step: int
         loss_fct = torch.nn.CrossEntropyLoss(reduction="none")
         per_token = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
         per_token = per_token.view(shift_labels.size())
-        
+
         active = shift_labels != -100
         per_seq_loss = (per_token * active).sum(dim=1) / active.sum(dim=1).clamp_min(1)
 
         # Gather per-sequence losses and weights from all GPUs
         gathered_losses = accelerator.gather_for_metrics(per_seq_loss)
         gathered_weights = accelerator.gather_for_metrics(weights)
-        
+
         all_losses.append(gathered_losses)
         all_weights.append(gathered_weights)
 
@@ -127,16 +159,16 @@ def evaluate(model, dataloader, accelerator: Accelerator, prefix: str, step: int
     if accelerator.is_main_process:
         loss_tensor = torch.cat(all_losses)
         weight_tensor = torch.cat(all_weights)
-        
+
         # Ensure tensors are on the same device for the final calculation
         weight_tensor = weight_tensor.to(loss_tensor.device)
 
         total_loss_tensor = (loss_tensor * weight_tensor).sum() / weight_tensor.sum().clamp_min(1e-8)
         total_loss = total_loss_tensor.item()
-        
+
         if config.report_to == "wandb":
             accelerator.log({f"{prefix}/loss": total_loss}, step=step)
-    
+
     model.train()
     # Return the computed loss if on the main process, otherwise a placeholder
     return total_loss
@@ -265,22 +297,9 @@ if val_val_ds is not None:
 
 dataset["train"] = dataset["train"].shuffle(seed=config.seed or 42)
 
-logger.info("Tokenizing dataset …")
-tokenized_datasets = DatasetDict()
-for split, ds in dataset.items():
-    if len(ds) == 0:
-        tokenized_datasets[split] = ds
-        continue
-    tokenized_datasets[split] = ds.map(
-        preprocess,
-        batched=True,
-        remove_columns=[c for c in dataset["train"].column_names if c != "weight"],
-        num_proc=num_proc,
-    )
-
-collator = WeightedCollator(tokenizer=tok, max_len=config.max_seq_len)
+collator = DataCollatorForSFT(tokenizer=tok, max_len=config.max_seq_len)
 train_loader = torch.utils.data.DataLoader(
-    tokenized_datasets["train"],
+    dataset["train"],
     batch_size=config.per_device_train_batch_size,
     shuffle=True,
     num_workers=4,
@@ -289,7 +308,7 @@ train_loader = torch.utils.data.DataLoader(
 
 val_loaders = {}
 for name in ("val_task", "val_example", "val_val"):
-    ds = tokenized_datasets.get(name)
+    ds = dataset.get(name)
     if ds is not None:
         val_loaders[name] = torch.utils.data.DataLoader(
             ds,
@@ -347,7 +366,8 @@ for epoch in range(config.num_train_epochs):
                     if accelerator.is_main_process and eval_loss < best_eval_loss:
                         best_eval_loss = eval_loss
                         best_step = global_step
-                        logger.info(f"New best val_val loss: {best_eval_loss:.4f} at step {best_step}. Saving model to {BEST_MODEL_DIR}")
+                        logger.info(
+                            f"New best val_val loss: {best_eval_loss:.4f} at step {best_step}. Saving model to {BEST_MODEL_DIR}")
                         accelerator.wait_for_everyone()
                         unwrapped = accelerator.unwrap_model(model)
                         unwrapped.save_pretrained(BEST_MODEL_DIR, safe_serialization=True)

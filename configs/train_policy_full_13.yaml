@@ -16,17 +16,15 @@ torch-compile: false
 
 full-finetune: true
 
-distributed: false
-
 weight_decay: 0
 train-on-prompts: false
 
 learning-rate: 0.00001
 
-per-device-train-batch-size: 1
-per-device-eval-batch-size: 1
+per-device-train-batch-size: 2
+per-device-eval-batch-size: 2
 gradient-accumulation-steps: 64
-num-train-epochs: 2
+num-train-epochs: 1
 lr-scheduler-type: "cosine"
 warmup-ratio: 0.05
 logging-steps: 100
