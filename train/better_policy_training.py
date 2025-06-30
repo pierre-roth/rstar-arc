@@ -2,23 +2,28 @@ import logging
 import os
 import random
 import sys
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple, Union
 
 import torch
 from accelerate import Accelerator
-from datasets import DatasetDict, load_dataset
+from accelerate.utils import set_seed
+from datasets import Dataset, DatasetDict, load_dataset
 from torch.optim import AdamW
+from torch.utils.data import DataLoader
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
+    PreTrainedModel,
+    PreTrainedTokenizerBase,
     get_scheduler,
-    set_seed,
 )
-from transformers import PreTrainedTokenizerBase
 
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
+# Add project root to path
+project_root = Path(__file__).parent.parent.absolute()
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
 from constants import (
     LOCAL_SCRATCH_PATH,
@@ -27,375 +32,640 @@ from constants import (
     SFT_SYSTEM_PROMPT,
     SPECIAL_TOKENS,
 )
-from utils import setup_logging
-from train_utils import renormalize_task_weights, WeightedCollator
 from rstar_deepthink import Config
 from rstar_deepthink.arc_task import ARCTask
 from rstar_deepthink.arc_task.task_utils import task_to_prompt
+from train_utils import renormalize_task_weights
+from utils import setup_logging
 
 logger = logging.getLogger(__name__)
 
 
-# -------------------------------------------------------------
-# preprocessing
-# -------------------------------------------------------------
+@dataclass
+class TrainingMetrics:
+    """Container for training metrics."""
+    best_eval_loss: float = float('inf')
+    best_step: int = 0
+    global_step: int = 0
+
 
 class DataCollatorForSFT:
     """
-    Collator for supervised fine-tuning that handles tokenization, masking, and padding.
-    This is more efficient as it avoids multiple tokenization steps and manual padding.
+    Efficient collator for supervised fine-tuning with proper tokenization and masking.
     """
 
     def __init__(self, tokenizer: PreTrainedTokenizerBase, max_len: int):
         self.tokenizer = tokenizer
         self.max_len = max_len
+        # Pre-compute to avoid repeated encoding
+        self._eos_token_id = tokenizer.eos_token_id
 
-    def __call__(self, features: list[dict]) -> dict[str, torch.Tensor]:
-        prompts = []
-        completions = []
-        weights = []
+    def __call__(self, features: List[Dict]) -> Dict[str, torch.Tensor]:
+        batch_size = len(features)
 
-        for ex in features:
+        # Pre-allocate lists for efficiency
+        all_input_ids = []
+        all_labels = []
+        weights = torch.zeros(batch_size, dtype=torch.float32)
+
+        for i, ex in enumerate(features):
+            # Construct prompt
             task_json = ex["task_json"]
             solution = ex["solution"]
+
             prompt = (
                     SFT_SYSTEM_PROMPT
                     + task_to_prompt(ARCTask.from_dict(task_json))
                     + SFT_IN_BETWEEN_PROMPT
             )
-            prompts.append(prompt)
-            completions.append(solution + self.tokenizer.eos_token)
-            weights.append(float(ex.get("weight", 1.0)))
 
-        # Tokenize prompts and completions
-        prompt_inputs = self.tokenizer(prompts, return_length=True)
-        completion_inputs = self.tokenizer(completions)
+            # Tokenize prompt and completion separately for efficient masking
+            prompt_tokens = self.tokenizer.encode(prompt, add_special_tokens=True)
+            completion_tokens = self.tokenizer.encode(
+                solution, add_special_tokens=False
+            ) + [self._eos_token_id]
 
-        # Combine, truncate, and prepare labels
-        input_ids = []
-        labels = []
-        for i in range(len(prompts)):
-            prompt_len = prompt_inputs["length"][i]
+            # Combine and truncate if necessary
+            prompt_len = len(prompt_tokens)
+            total_tokens = prompt_tokens + completion_tokens
 
-            combined_ids = prompt_inputs["input_ids"][i] + completion_inputs["input_ids"][i]
+            if len(total_tokens) > self.max_len:
+                # Truncate completion to fit, keeping full prompt if possible
+                if prompt_len < self.max_len:
+                    total_tokens = total_tokens[:self.max_len]
+                    actual_prompt_len = prompt_len
+                else:
+                    # Prompt itself is too long, truncate it
+                    total_tokens = prompt_tokens[:self.max_len]
+                    actual_prompt_len = self.max_len
+            else:
+                actual_prompt_len = prompt_len
 
-            # Truncate if necessary
-            if len(combined_ids) > self.max_len:
-                combined_ids = combined_ids[:self.max_len]
+            # Create labels with prompt masking
+            labels = [-100] * actual_prompt_len + total_tokens[actual_prompt_len:]
 
-            input_ids.append(torch.tensor(combined_ids))
+            all_input_ids.append(total_tokens)
+            all_labels.append(labels)
+            weights[i] = float(ex.get("weight", 1.0))
 
-            # Create labels, masking prompt tokens
-            label = [-100] * min(prompt_len, self.max_len) + combined_ids[prompt_len:]
-            labels.append(torch.tensor(label))
+        # Pad sequences efficiently
+        batch = self._pad_sequences(all_input_ids, self.tokenizer.pad_token_id)
+        labels = self._pad_sequences(all_labels, -100)
 
-        # Pad the sequences
-        batch = self.tokenizer.pad(
-            {"input_ids": input_ids},
-            padding=True,
-            return_tensors="pt",
-        )
+        return {
+            "input_ids": batch,
+            "attention_mask": (batch != self.tokenizer.pad_token_id).long(),
+            "labels": labels,
+            "weight": weights,
+        }
 
-        # Manually pad labels
-        labels_max_len = batch['input_ids'].shape[1]
-        padded_labels = torch.full((len(labels), labels_max_len), -100, dtype=torch.long)
-        for i, label_tensor in enumerate(labels):
-            len_label = label_tensor.shape[0]
-            padded_labels[i, :len_label] = label_tensor
+    @staticmethod
+    def _pad_sequences(sequences: List[List[int]], pad_value: int) -> torch.Tensor:
+        """Efficiently pad sequences to the same length."""
+        max_len = max(len(seq) for seq in sequences)
+        padded = torch.full((len(sequences), max_len), pad_value, dtype=torch.long)
 
-        batch["labels"] = padded_labels
-        batch["weight"] = torch.tensor(weights, dtype=torch.float32)
+        for i, seq in enumerate(sequences):
+            padded[i, :len(seq)] = torch.tensor(seq, dtype=torch.long)
 
-        return batch
-
-
-# -------------------------------------------------------------
-# helper functions
-# -------------------------------------------------------------
-
-def compute_loss(logits: torch.Tensor, labels: torch.Tensor, weights: torch.Tensor) -> torch.Tensor:
-    shift_logits = logits[..., :-1, :].contiguous()
-    shift_labels = labels[..., 1:].contiguous()
-    loss_fct = torch.nn.CrossEntropyLoss(reduction="none")
-    per_token = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
-    per_token = per_token.view(shift_labels.size())
-    active = shift_labels != -100
-    per_seq = (per_token * active).sum(dim=1) / active.sum(dim=1).clamp_min(1)
-    weight = weights.to(per_seq.device)
-    return (per_seq * weight).sum() / weight.sum().clamp_min(1e-8)
+        return padded
 
 
-def evaluate(model, dataloader, accelerator: Accelerator, prefix: str, step: int) -> float:
-    model.eval()
-    all_losses = []
-    all_weights = []
-    for batch in dataloader:
-        with torch.no_grad():
-            outputs = model(**batch)
+class SFTTrainer:
+    """Encapsulates the training logic for better organization and testing."""
 
-        # Calculate per-sequence loss, but don't average it yet
-        logits = outputs.logits
-        labels = batch["labels"]
-        weights = batch["weight"]
+    def __init__(
+            self,
+            config: Config,
+            model: PreTrainedModel,
+            tokenizer: PreTrainedTokenizerBase,
+            accelerator: Accelerator,
+            output_dir: Path,
+    ):
+        self.config = config
+        self.model = model
+        self.tokenizer = tokenizer
+        self.accelerator = accelerator
+        self.output_dir = output_dir
+        self.best_model_dir = output_dir / "best_model"
+        self.metrics = TrainingMetrics()
 
+        # Create directories
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        self.best_model_dir.mkdir(parents=True, exist_ok=True)
+
+    def compute_loss(
+            self, logits: torch.Tensor, labels: torch.Tensor, weights: torch.Tensor
+    ) -> torch.Tensor:
+        """Compute weighted cross-entropy loss with proper masking."""
+        # Shift for next-token prediction
         shift_logits = logits[..., :-1, :].contiguous()
         shift_labels = labels[..., 1:].contiguous()
+
+        # Compute per-token loss
         loss_fct = torch.nn.CrossEntropyLoss(reduction="none")
-        per_token = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
-        per_token = per_token.view(shift_labels.size())
+        per_token_loss = loss_fct(
+            shift_logits.view(-1, shift_logits.size(-1)),
+            shift_labels.view(-1)
+        )
+        per_token_loss = per_token_loss.view(shift_labels.size())
 
-        active = shift_labels != -100
-        per_seq_loss = (per_token * active).sum(dim=1) / active.sum(dim=1).clamp_min(1)
+        # Mask out padding and compute per-sequence loss
+        active_mask = shift_labels != -100
+        per_seq_loss = per_token_loss.masked_fill(~active_mask, 0.0).sum(dim=1)
+        per_seq_loss = per_seq_loss / active_mask.sum(dim=1).clamp_min(1)
 
-        # Gather per-sequence losses and weights from all GPUs
-        gathered_losses = accelerator.gather_for_metrics(per_seq_loss)
-        gathered_weights = accelerator.gather_for_metrics(weights)
+        # Apply sample weights
+        weights = weights.to(per_seq_loss.device)
+        weighted_loss = (per_seq_loss * weights).sum() / weights.sum().clamp_min(1e-8)
 
-        all_losses.append(gathered_losses)
-        all_weights.append(gathered_weights)
+        return weighted_loss
 
-    # Now, calculate the final weighted average loss on the main process
-    total_loss = 0.0
-    if accelerator.is_main_process:
-        loss_tensor = torch.cat(all_losses)
-        weight_tensor = torch.cat(all_weights)
+    def evaluate(
+            self,
+            dataloader: DataLoader,
+            prefix: str
+    ) -> Optional[float]:
+        """Evaluate model on a validation set."""
+        self.model.eval()
 
-        # Ensure tensors are on the same device for the final calculation
-        weight_tensor = weight_tensor.to(loss_tensor.device)
+        all_losses = []
+        all_weights = []
 
-        total_loss_tensor = (loss_tensor * weight_tensor).sum() / weight_tensor.sum().clamp_min(1e-8)
-        total_loss = total_loss_tensor.item()
+        with torch.no_grad():
+            for batch in dataloader:
+                outputs = self.model(
+                    input_ids=batch["input_ids"],
+                    attention_mask=batch["attention_mask"],
+                )
 
-        if config.report_to == "wandb":
-            accelerator.log({f"{prefix}/loss": total_loss}, step=step)
+                # Calculate per-sequence loss
+                logits = outputs.logits
+                labels = batch["labels"]
+                weights = batch["weight"]
 
-    model.train()
-    # Return the computed loss if on the main process, otherwise a placeholder
-    return total_loss
+                shift_logits = logits[..., :-1, :].contiguous()
+                shift_labels = labels[..., 1:].contiguous()
+
+                loss_fct = torch.nn.CrossEntropyLoss(reduction="none")
+                per_token_loss = loss_fct(
+                    shift_logits.view(-1, shift_logits.size(-1)),
+                    shift_labels.view(-1)
+                )
+                per_token_loss = per_token_loss.view(shift_labels.size())
+
+                active_mask = shift_labels != -100
+                per_seq_loss = per_token_loss.masked_fill(~active_mask, 0.0).sum(dim=1)
+                per_seq_loss = per_seq_loss / active_mask.sum(dim=1).clamp_min(1)
+
+                # Gather from all processes
+                gathered_losses = self.accelerator.gather_for_metrics(per_seq_loss)
+                gathered_weights = self.accelerator.gather_for_metrics(weights)
+
+                all_losses.append(gathered_losses)
+                all_weights.append(gathered_weights)
+
+        # Compute final loss
+        total_loss = None
+        if self.accelerator.is_main_process:
+            all_losses = torch.cat(all_losses)
+            all_weights = torch.cat(all_weights)
+
+            total_loss = (all_losses * all_weights).sum() / all_weights.sum().clamp_min(1e-8)
+            total_loss = total_loss.item()
+
+            # Log metrics
+            self.accelerator.log(
+                {f"{prefix}/loss": total_loss},
+                step=self.metrics.global_step
+            )
+
+        self.model.train()
+
+        # Use accelerator.broadcast to ensure all processes get the loss
+        if total_loss is not None:
+            total_loss_tensor = torch.tensor(total_loss, device=self.accelerator.device)
+        else:
+            total_loss_tensor = torch.tensor(0.0, device=self.accelerator.device)
+
+        total_loss_tensor = self.accelerator.broadcast(total_loss_tensor, from_process=0)
+        return total_loss_tensor.item()
+
+    def save_checkpoint(self, is_best: bool = False):
+        """Save model checkpoint with proper synchronization."""
+        save_dir = self.best_model_dir if is_best else self.output_dir
+
+        self.accelerator.wait_for_everyone()
+
+        # Use accelerator's save method for proper handling
+        if self.accelerator.is_main_process:
+            unwrapped_model = self.accelerator.unwrap_model(self.model)
+            unwrapped_model.save_pretrained(
+                save_dir,
+                safe_serialization=True,
+                save_function=self.accelerator.save
+            )
+            self.tokenizer.save_pretrained(save_dir)
+
+            # Save training state
+            state = {
+                "global_step": self.metrics.global_step,
+                "best_eval_loss": self.metrics.best_eval_loss,
+                "best_step": self.metrics.best_step,
+                "config": asdict(self.config),
+            }
+            torch.save(state, save_dir / "training_state.pt")
+
+    def train(
+            self,
+            train_dataloader: DataLoader,
+            val_dataloaders: Dict[str, DataLoader],
+            optimizer: torch.optim.Optimizer,
+            lr_scheduler: torch.optim.lr_scheduler._LRScheduler,
+            max_train_steps: int,
+    ):
+        """Main training loop with proper step counting."""
+        self.model.train()
+
+        # Track optimization steps correctly
+        completed_steps = 0
+
+        for epoch in range(self.config.num_train_epochs):
+            for step, batch in enumerate(train_dataloader):
+                with self.accelerator.accumulate(self.model):
+                    # Forward pass
+                    outputs = self.model(
+                        input_ids=batch["input_ids"],
+                        attention_mask=batch["attention_mask"],
+                    )
+
+                    # Compute loss
+                    loss = self.compute_loss(
+                        outputs.logits, batch["labels"], batch["weight"]
+                    )
+
+                    # Backward pass
+                    self.accelerator.backward(loss)
+
+                    # Optimizer step (only when gradients are accumulated)
+                    if self.accelerator.sync_gradients:
+                        optimizer.step()
+                        lr_scheduler.step()
+                        optimizer.zero_grad()
+                        completed_steps += 1
+
+                # Only increment global_step after optimization
+                if self.accelerator.sync_gradients:
+                    self.metrics.global_step += 1
+
+                    # Logging
+                    if self.metrics.global_step % self.config.logging_steps == 0:
+                        self.accelerator.log({
+                            "train/loss": loss.item(),
+                            "train/learning_rate": lr_scheduler.get_last_lr()[0],
+                            "train/epoch": epoch,
+                            "train/completed_steps": completed_steps,
+                        }, step=self.metrics.global_step)
+
+                    # Evaluation
+                    if (self.metrics.global_step % self.config.eval_steps == 0 and
+                            self.metrics.global_step > 0):
+
+                        for name, val_loader in val_dataloaders.items():
+                            eval_loss = self.evaluate(val_loader, name)
+
+                            # Check for best model on primary validation set
+                            if name == "val_val" and self.accelerator.is_main_process:
+                                if eval_loss < self.metrics.best_eval_loss:
+                                    self.metrics.best_eval_loss = eval_loss
+                                    self.metrics.best_step = self.metrics.global_step
+
+                                    logger.info(
+                                        f"New best {name} loss: {eval_loss:.4f} "
+                                        f"at step {self.metrics.global_step}"
+                                    )
+                                    self.save_checkpoint(is_best=True)
+
+                    # Regular checkpointing
+                    if self.metrics.global_step % self.config.save_steps == 0:
+                        self.save_checkpoint(is_best=False)
+
+                    # Check if done
+                    if completed_steps >= max_train_steps:
+                        return
+
+        # Final save
+        self.save_checkpoint(is_best=False)
 
 
-# -------------------------------------------------------------
-# main setup
-# -------------------------------------------------------------
+def create_validation_splits(
+        dataset: Dataset,
+        config: Config,
+        seed: int = 42,
+) -> Tuple[Dataset, Optional[Dataset], Optional[Dataset]]:
+    """Create validation splits with clearer logic."""
+    rng = random.Random(seed)
 
-config = Config()
-set_seed(config.seed or 42)
-setup_logging(config.numeric_log_level)
+    # Group examples by task
+    task_to_indices: Dict[str, List[int]] = {}
+    for idx, ex in enumerate(dataset):
+        task_to_indices.setdefault(ex["task_name"], []).append(idx)
 
-TRAIN_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{config.round_number}", config.training_dataset_name)
-VAL_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{config.round_number}", config.validation_dataset_name)
+    # Split by task
+    val_task_indices = []
+    if config.task_validation_fraction > 0:
+        all_tasks = list(task_to_indices.keys())
+        rng.shuffle(all_tasks)
 
-run_name = f"policy-ft-{config.policy_model.split('/')[-1]}"
-OUT_DIR = os.path.join(NET_SCRATCH_PATH, "models", "fine_tuned", "policy", run_name)
-BEST_MODEL_DIR = os.path.join(OUT_DIR, "best_model")
-os.makedirs(OUT_DIR, exist_ok=True)
-os.makedirs(BEST_MODEL_DIR, exist_ok=True)
+        n_val_tasks = int(len(all_tasks) * config.task_validation_fraction)
+        val_tasks = set(all_tasks[:n_val_tasks])
 
-accelerator = Accelerator(log_with="wandb" if config.report_to == "wandb" else None)
-if accelerator.is_main_process and config.report_to == "wandb":
-    accelerator.init_trackers(config.wandb_project, config=asdict(config))
-
-logger.info(f"Loading tokenizer and model: {config.policy_model}")
-
-tok = AutoTokenizer.from_pretrained(config.policy_model, trust_remote_code=True)
-tok.pad_token = tok.pad_token or tok.eos_token
-tok.pad_token_id = tok.pad_token_id or tok.eos_token_id
-tok.padding_side = "right"
-added_tokens = tok.add_special_tokens({"additional_special_tokens": SPECIAL_TOKENS})
-
-model = AutoModelForCausalLM.from_pretrained(
-    config.policy_model,
-    torch_dtype=torch.bfloat16 if config.use_bf16 else torch.float16,
-    trust_remote_code=True,
-    attn_implementation=config.attn_implementation,
-)
-if added_tokens > 0:
-    model.resize_token_embeddings(len(tok))
-model.config.use_cache = False
-if config.gradient_checkpointing:
-    model.gradient_checkpointing_enable()
-model.enable_input_require_grads()
-
-logger.info("Loading training dataset …")
-raw_dataset = load_dataset(
-    "json",
-    data_files={"train": TRAIN_PATH},
-    cache_dir=os.path.join(LOCAL_SCRATCH_PATH, ".cache/huggingface/datasets"),
-)
-num_proc = max(1, config.cpus - 1)
-
-
-def _within_max_len(example):
-    text = (
-            SFT_SYSTEM_PROMPT
-            + task_to_prompt(ARCTask.from_dict(example["task_json"]))
-            + SFT_IN_BETWEEN_PROMPT
-            + example["solution"]
-            + tok.eos_token
-    )
-    return len(tok.encode(text)) <= config.max_seq_len
-
-
-orig_train_len = len(raw_dataset["train"])
-raw_dataset["train"] = raw_dataset["train"].filter(_within_max_len, num_proc=num_proc)
-
-rng = random.Random(config.seed or 42)
-task_to_indices: dict[str, list[int]] = {}
-for idx, ex in enumerate(raw_dataset["train"]):
-    task_to_indices.setdefault(ex["task_name"], []).append(idx)
-
-val_task_indices: list[int] = []
-if config.task_validation_fraction > 0:
-    all_tasks = list(task_to_indices.keys())
-    rng.shuffle(all_tasks)
-    val_task_count = int(len(all_tasks) * config.task_validation_fraction)
-    val_tasks = set(all_tasks[:val_task_count])
-else:
-    val_tasks = set()
-
-for task, indices in task_to_indices.items():
-    idxs = list(indices)
-    rng.shuffle(idxs)
-    if task in val_tasks:
-        val_task_indices.extend(idxs)
-
-val_example_indices: list[int] = []
-train_final_indices: list[int] = []
-for task, indices in task_to_indices.items():
-    if task in val_tasks:
-        continue
-    idxs = list(indices)
-    rng.shuffle(idxs)
-    if config.example_validation_num > 0 and len(idxs) >= config.example_validation_threshold:
-        n_take = min(config.example_validation_num, len(idxs) // 2)
-        val_example_indices.extend(idxs[:n_take])
-        train_final_indices.extend(idxs[n_take:])
+        for task in val_tasks:
+            val_task_indices.extend(task_to_indices[task])
     else:
-        train_final_indices.extend(idxs)
+        val_tasks = set()
 
-raw_val = load_dataset(
-    "json",
-    data_files={"validation": VAL_PATH},
-    cache_dir=os.path.join(LOCAL_SCRATCH_PATH, ".cache/huggingface/datasets"),
-)
-orig_val_len = len(raw_val["validation"])
-raw_val["validation"] = raw_val["validation"].filter(_within_max_len, num_proc=num_proc)
+    # Split remaining tasks by example
+    val_example_indices = []
+    train_indices = []
 
-train_ds = renormalize_task_weights(raw_dataset["train"].select(train_final_indices))
-val_task_ds = renormalize_task_weights(raw_dataset["train"].select(val_task_indices)) if val_task_indices else None
-val_example_ds = renormalize_task_weights(
-    raw_dataset["train"].select(val_example_indices)) if val_example_indices else None
-val_val_ds = renormalize_task_weights(raw_val["validation"]) if len(raw_val["validation"]) > 0 else None
+    for task, indices in task_to_indices.items():
+        if task in val_tasks:
+            continue
 
-dataset = DatasetDict({"train": train_ds})
-if val_task_ds is not None:
-    dataset["val_task"] = val_task_ds
-if val_example_ds is not None:
-    dataset["val_example"] = val_example_ds
-if val_val_ds is not None:
-    dataset["val_val"] = val_val_ds
+        indices_copy = list(indices)
+        rng.shuffle(indices_copy)
 
-dataset["train"] = dataset["train"].shuffle(seed=config.seed or 42)
+        # Take validation examples if task has enough samples
+        if (config.example_validation_num > 0 and
+                len(indices_copy) >= config.example_validation_threshold):
 
-collator = DataCollatorForSFT(tokenizer=tok, max_len=config.max_seq_len)
-train_loader = torch.utils.data.DataLoader(
-    dataset["train"],
-    batch_size=config.per_device_train_batch_size,
-    shuffle=True,
-    num_workers=4,
-    collate_fn=collator,
-)
+            n_val = min(config.example_validation_num, len(indices_copy) // 2)
+            val_example_indices.extend(indices_copy[:n_val])
+            train_indices.extend(indices_copy[n_val:])
+        else:
+            train_indices.extend(indices_copy)
 
-val_loaders = {}
-for name in ("val_task", "val_example", "val_val"):
-    ds = dataset.get(name)
-    if ds is not None:
-        val_loaders[name] = torch.utils.data.DataLoader(
-            ds,
-            batch_size=config.per_device_eval_batch_size,
-            shuffle=False,
-            num_workers=4,
-            collate_fn=collator,
+    # Create dataset splits
+    train_ds = dataset.select(train_indices)
+    val_task_ds = dataset.select(val_task_indices) if val_task_indices else None
+    val_example_ds = dataset.select(val_example_indices) if val_example_indices else None
+
+    return train_ds, val_task_ds, val_example_ds
+
+
+def main(config: Config):
+    """Main training function with improved structure."""
+    # Setup
+    set_seed(config.seed or 42)
+    setup_logging(config.numeric_log_level)
+
+    # Paths
+    train_path = Path(NET_SCRATCH_PATH) / "sft_data" / f"round_{config.round_number}" / config.training_dataset_name
+    val_path = Path(NET_SCRATCH_PATH) / "sft_data" / f"round_{config.round_number}" / config.validation_dataset_name
+
+    run_name = f"policy-ft-{Path(config.policy_model).name}"
+    output_dir = Path(NET_SCRATCH_PATH) / "models" / "fine_tuned" / "policy" / run_name
+
+    # Initialize accelerator
+    accelerator_config = {
+        "log_with": "wandb" if config.report_to == "wandb" else None,
+        "mixed_precision": "bf16" if config.use_bf16 else "fp16",
+        "gradient_accumulation_steps": config.gradient_accumulation_steps,
+    }
+    accelerator = Accelerator(**accelerator_config)
+
+    if accelerator.is_main_process and config.report_to == "wandb":
+        accelerator.init_trackers(
+            project_name=config.wandb_project,
+            config=asdict(config),
+            init_kwargs={"wandb": {"name": run_name}},
         )
 
-optimizer = AdamW(model.parameters(), lr=config.learning_rate, weight_decay=config.weight_decay)
-steps_per_epoch = len(train_loader) // config.gradient_accumulation_steps + int(
-    len(train_loader) % config.gradient_accumulation_steps != 0)
-max_train_steps = steps_per_epoch * config.num_train_epochs
-lr_scheduler = get_scheduler(
-    config.lr_scheduler_type,
-    optimizer=optimizer,
-    num_warmup_steps=int(config.warmup_ratio * max_train_steps),
-    num_training_steps=max_train_steps,
-)
+    # Load tokenizer and model
+    logger.info(f"Loading tokenizer and model: {config.policy_model}")
 
-model, optimizer, train_loader, lr_scheduler, *val_loader_list = accelerator.prepare(
-    model,
-    optimizer,
-    train_loader,
-    lr_scheduler,
-    *val_loaders.values(),
-)
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(
+            config.policy_model,
+            trust_remote_code=True
+        )
 
-# mapping after accelerator.prepare
-prepared_val_loaders = dict(zip(val_loaders.keys(), val_loader_list))
+        # Setup tokenizer
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
+            tokenizer.pad_token_id = tokenizer.eos_token_id
+        tokenizer.padding_side = "right"
 
-global_step = 0
-best_eval_loss = float('inf')
-best_step = 0
-logger.info("Starting training …")
+        # Add special tokens
+        num_added_tokens = tokenizer.add_special_tokens({
+            "additional_special_tokens": SPECIAL_TOKENS
+        })
 
-for epoch in range(config.num_train_epochs):
-    for step, batch in enumerate(train_loader):
-        with accelerator.accumulate(model):
-            outputs = model(**batch)
-            loss = compute_loss(outputs.logits, batch["labels"], batch["weight"])
-            accelerator.backward(loss)
-            optimizer.step()
-            lr_scheduler.step()
-            optimizer.zero_grad()
+        # Load model
+        model = AutoModelForCausalLM.from_pretrained(
+            config.policy_model,
+            torch_dtype=torch.bfloat16 if config.use_bf16 else torch.float16,
+            trust_remote_code=True,
+            attn_implementation=config.attn_implementation,
+        )
 
-        if accelerator.is_main_process and global_step % config.logging_steps == 0:
-            accelerator.log({"train/loss": loss.item(), "lr": lr_scheduler.get_last_lr()[0]}, step=global_step)
+        # Resize embeddings if needed
+        if num_added_tokens > 0:
+            model.resize_token_embeddings(len(tokenizer))
+            logger.info(f"Resized token embeddings to {len(tokenizer)}")
 
-        if global_step % config.eval_steps == 0 and global_step > 0:
-            for name, loader in prepared_val_loaders.items():
-                eval_loss = evaluate(model, loader, accelerator, name, global_step)
-                if name == "val_val":
-                    accelerator.log({"eval_loss": eval_loss}, step=global_step)
-                    if accelerator.is_main_process and eval_loss < best_eval_loss:
-                        best_eval_loss = eval_loss
-                        best_step = global_step
-                        logger.info(
-                            f"New best val_val loss: {best_eval_loss:.4f} at step {best_step}. Saving model to {BEST_MODEL_DIR}")
-                        accelerator.wait_for_everyone()
-                        unwrapped = accelerator.unwrap_model(model)
-                        unwrapped.save_pretrained(BEST_MODEL_DIR, safe_serialization=True)
-                        tok.save_pretrained(BEST_MODEL_DIR)
+        # Configure model for training
+        model.config.use_cache = False
+        if config.gradient_checkpointing:
+            model.gradient_checkpointing_enable()
+        model.enable_input_require_grads()
 
-        if global_step % config.save_steps == 0 and accelerator.is_main_process:
-            accelerator.wait_for_everyone()
-            unwrapped = accelerator.unwrap_model(model)
-            unwrapped.save_pretrained(OUT_DIR, safe_serialization=True)
-            tok.save_pretrained(OUT_DIR)
+    except Exception as e:
+        logger.error(f"Failed to load model or tokenizer: {e}")
+        raise
 
-        global_step += 1
-        if global_step >= max_train_steps:
-            break
-    if global_step >= max_train_steps:
-        break
+    # Load datasets
+    logger.info("Loading datasets...")
 
-accelerator.wait_for_everyone()
-if accelerator.is_main_process:
-    unwrapped = accelerator.unwrap_model(model)
-    unwrapped.save_pretrained(OUT_DIR, safe_serialization=True)
-    tok.save_pretrained(OUT_DIR)
-    logger.info(f"Training finished. Best val_val loss: {best_eval_loss:.4f} at step {best_step}")
+    cache_dir = Path(LOCAL_SCRATCH_PATH) / ".cache" / "huggingface" / "datasets"
+    num_proc = max(1, config.cpus - 1)
 
-for name, loader in prepared_val_loaders.items():
-    eval_loss = evaluate(model, loader, accelerator, name, global_step)
-    if name == "val_val" and accelerator.is_main_process:
-        logger.info(f"Final val_loss: {eval_loss:.4f}")
+    def within_max_length(example):
+        """Filter examples that exceed maximum sequence length."""
+        text = (
+                SFT_SYSTEM_PROMPT
+                + task_to_prompt(ARCTask.from_dict(example["task_json"]))
+                + SFT_IN_BETWEEN_PROMPT
+                + example["solution"]
+                + tokenizer.eos_token
+        )
+        return len(tokenizer.encode(text)) <= config.max_seq_len
 
-if config.report_to == "wandb" and accelerator.is_main_process:
-    accelerator.end_training()
+    # Load and filter training data
+    raw_train_data = load_dataset(
+        "json",
+        data_files={"train": str(train_path)},
+        cache_dir=str(cache_dir),
+    )["train"]
+
+    orig_train_len = len(raw_train_data)
+    filtered_train_data = raw_train_data.filter(within_max_length, num_proc=num_proc)
+
+    logger.info(
+        f"Filtered training data: {orig_train_len} -> {len(filtered_train_data)} "
+        f"({orig_train_len - len(filtered_train_data)} examples removed)"
+    )
+
+    # Create validation splits
+    train_ds, val_task_ds, val_example_ds = create_validation_splits(
+        filtered_train_data, config, config.seed or 42
+    )
+
+    # Load external validation data
+    raw_val_data = load_dataset(
+        "json",
+        data_files={"validation": str(val_path)},
+        cache_dir=str(cache_dir),
+    )["validation"]
+
+    orig_val_len = len(raw_val_data)
+    val_val_ds = raw_val_data.filter(within_max_length, num_proc=num_proc)
+
+    logger.info(
+        f"Filtered validation data: {orig_val_len} -> {len(val_val_ds)} "
+        f"({orig_val_len - len(val_val_ds)} examples removed)"
+    )
+
+    # Renormalize weights
+    train_ds = renormalize_task_weights(train_ds)
+    if val_task_ds:
+        val_task_ds = renormalize_task_weights(val_task_ds)
+    if val_example_ds:
+        val_example_ds = renormalize_task_weights(val_example_ds)
+    if len(val_val_ds) > 0:
+        val_val_ds = renormalize_task_weights(val_val_ds)
+    else:
+        val_val_ds = None
+
+    # Shuffle training data
+    train_ds = train_ds.shuffle(seed=config.seed or 42)
+
+    # Log dataset statistics
+    logger.info(f"Dataset sizes:")
+    logger.info(f"  Train: {len(train_ds)}")
+    if val_task_ds:
+        logger.info(f"  Val (task): {len(val_task_ds)}")
+    if val_example_ds:
+        logger.info(f"  Val (example): {len(val_example_ds)}")
+    if val_val_ds:
+        logger.info(f"  Val (external): {len(val_val_ds)}")
+
+    # Create data loaders
+    collator = DataCollatorForSFT(tokenizer=tokenizer, max_len=config.max_seq_len)
+
+    train_dataloader = DataLoader(
+        train_ds,
+        batch_size=config.per_device_train_batch_size,
+        shuffle=True,
+        collate_fn=collator,
+        num_workers=min(4, config.cpus),
+        pin_memory=True,
+    )
+
+    val_dataloaders = {}
+    for name, ds in [
+        ("val_task", val_task_ds),
+        ("val_example", val_example_ds),
+        ("val_val", val_val_ds),
+    ]:
+        if ds is not None:
+            val_dataloaders[name] = DataLoader(
+                ds,
+                batch_size=config.per_device_eval_batch_size,
+                shuffle=False,
+                collate_fn=collator,
+                num_workers=min(4, config.cpus),
+                pin_memory=True,
+            )
+
+    # Setup optimizer and scheduler
+    optimizer = AdamW(
+        model.parameters(),
+        lr=config.learning_rate,
+        weight_decay=config.weight_decay,
+        betas=(0.9, 0.999),
+        eps=1e-8,
+    )
+
+    # Calculate training steps correctly
+    num_update_steps_per_epoch = len(train_dataloader) // config.gradient_accumulation_steps
+    max_train_steps = num_update_steps_per_epoch * config.num_train_epochs
+
+    lr_scheduler = get_scheduler(
+        name=config.lr_scheduler_type,
+        optimizer=optimizer,
+        num_warmup_steps=int(config.warmup_ratio * max_train_steps),
+        num_training_steps=max_train_steps,
+    )
+
+    # Prepare with accelerator
+    model, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
+        model, optimizer, train_dataloader, lr_scheduler
+    )
+
+    # Prepare validation dataloaders
+    prepared_val_dataloaders = {}
+    for name, loader in val_dataloaders.items():
+        prepared_val_dataloaders[name] = accelerator.prepare(loader)
+
+    # Initialize trainer
+    trainer = SFTTrainer(
+        config=config,
+        model=model,
+        tokenizer=tokenizer,
+        accelerator=accelerator,
+        output_dir=output_dir,
+    )
+
+    # Train
+    logger.info(f"Starting training for {max_train_steps} steps...")
+    trainer.train(
+        train_dataloader=train_dataloader,
+        val_dataloaders=prepared_val_dataloaders,
+        optimizer=optimizer,
+        lr_scheduler=lr_scheduler,
+        max_train_steps=max_train_steps,
+    )
+
+    # Final evaluation
+    logger.info("Running final evaluation...")
+    for name, loader in prepared_val_dataloaders.items():
+        eval_loss = trainer.evaluate(loader, f"final_{name}")
+        if accelerator.is_main_process:
+            logger.info(f"Final {name} loss: {eval_loss:.4f}")
+
+    # Log best results
+    if accelerator.is_main_process:
+        logger.info(
+            f"Training completed. Best validation loss: {trainer.metrics.best_eval_loss:.4f} "
+            f"at step {trainer.metrics.best_step}"
+        )
+
+    # Cleanup
+    if config.report_to == "wandb":
+        accelerator.end_training()
+
+
+if __name__ == "__main__":
+    # Load configuration
+    config = Config()
+
+    # Run training
+    try:
+        main(config)
+    except KeyboardInterrupt:
+        logger.info("Training interrupted by user")
+    except Exception as e:
+        logger.error(f"Training failed with error: {e}", exc_info=True)
+        raise
