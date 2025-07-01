@@ -3,6 +3,7 @@
 import argparse
 import logging
 import os
+import warnings
 from datetime import datetime
 from pathlib import Path
 
@@ -17,12 +18,13 @@ from transformers import (
     AutoTokenizer,
     get_linear_schedule_with_warmup,
     set_seed,
+    logging as hf_logging
 )
 
 
 os.environ["NCCL_DEBUG"] = "WARN"
 os.environ["WANDB_SILENT"] = "true"
-# os.environ["FLASH_ATTENTION_SKIP_INIT_WARNING"] = "1"
+os.environ["FLASH_ATTENTION_SKIP_INIT_WARNING"] = "1"
 # os.environ["TORCHDYNAMO_CAPTURE_SCALAR_OUTPUTS"] = "1"
 
 # -----------------------------------------------------------------------------#
@@ -124,6 +126,11 @@ def main() -> None:
         mixed_precision=(None if args.mixed_precision == "no" else args.mixed_precision),
         log_with="wandb",
     )
+
+    if not accelerator.is_main_process:
+        hf_logging.set_verbosity_error()
+        warnings.filterwarnings("ignore")
+
     if accelerator.is_main_process:
         accelerator.init_trackers(
             project_name="simple-accelerate-demo",
@@ -150,6 +157,9 @@ def main() -> None:
         trust_remote_code=True,
         use_cache=not args.use_gradient_checkpointing,
     )
+
+    if not accelerator.is_main_process:
+        warnings.resetwarnings()
 
     if args.use_gradient_checkpointing:
         model.gradient_checkpointing_enable()
@@ -221,6 +231,28 @@ def main() -> None:
         lr_scheduler,
     ) = accelerator.prepare(model, optimizer, train_dataloader, lr_scheduler)
 
+    # ------------- Memory Snapshot ------------------------------------------#
+    if accelerator.is_main_process:
+        logger.info("Taking a VRAM snapshot after setup...")
+        # Detailed memory breakdown
+        param_mem = sum(p.numel() * p.element_size() for p in model.parameters())
+        logger.info(f" - Model parameters: {param_mem / 1024**2:.2f} MB")
+
+        # Optimizer states
+        opt_mem = 0
+        for group in optimizer.param_groups:
+            for p in group["params"]:
+                if p in optimizer.state:
+                    for state_name, state_val in optimizer.state[p].items():
+                        if torch.is_tensor(state_val):
+                            opt_mem += state_val.numel() * state_val.element_size()
+        logger.info(f" - Optimizer states: {opt_mem / 1024**2:.2f} MB")
+
+        # Full memory summary
+        for i in range(torch.cuda.device_count()):
+            logger.info(f"--- VRAM summary for GPU {i} ---")
+            logger.info(torch.cuda.memory_summary(device=i, abbreviated=False))
+
     # ------------- Training Loop --------------------------------------------#
     progress_bar = tqdm(
         range(total_update_steps),
@@ -233,15 +265,32 @@ def main() -> None:
 
     for epoch in range(args.num_train_epochs):
         for step, batch in enumerate(train_dataloader):
+            # --- Peak Memory Measurement (First Step) ---
+            if global_step == 0 and accelerator.is_main_process:
+                torch.cuda.reset_peak_memory_stats()
+
             with accelerator.accumulate(model):
                 outputs = model(**batch)
                 loss = outputs.loss
+
+                # Log memory after forward pass on the first step
+                if global_step == 0 and accelerator.is_main_process:
+                    logger.info(
+                        "Memory after first forward pass (activations): "
+                        f"{torch.cuda.memory_allocated() / 1024**2:.2f} MB"
+                    )
+
                 accelerator.backward(loss)
 
                 if accelerator.sync_gradients:
                     optimizer.step()
                     lr_scheduler.step()
                     optimizer.zero_grad()
+
+                    # Log peak memory after the first full step
+                    if global_step == 0 and accelerator.is_main_process:
+                        peak_mem = torch.cuda.max_memory_allocated() / 1024**2
+                        logger.info(f"Peak memory usage during first step: {peak_mem:.2f} MB")
 
                     # Logging (only on main process)
                     avg_loss = accelerator.gather(loss.detach()).mean().item()
