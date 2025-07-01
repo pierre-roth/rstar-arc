@@ -65,7 +65,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max_length", type=int, default=16384)
     parser.add_argument("--per_device_train_batch_size", type=int, default=1)
     parser.add_argument("--learning_rate", type=float, default=1e-5)
-    parser.add_argument("--gradient_accumulation_steps", type=int, default=32)
+    parser.add_argument("--gradient_accumulation_steps", type=int, default=16)
     parser.add_argument("--num_train_epochs", type=int, default=1)
     parser.add_argument("--num_warmup_steps", type=int, default=0)
     parser.add_argument(
@@ -234,10 +234,8 @@ def main() -> None:
     # ------------- Memory Snapshot ------------------------------------------#
     if accelerator.is_main_process:
         logger.info("Taking a VRAM snapshot after setup...")
-        # Detailed memory breakdown
         param_mem = sum(p.numel() * p.element_size() for p in model.parameters())
         logger.info(f" - Model parameters: {param_mem / 1024**2:.2f} MB")
-
         # Optimizer states
         opt_mem = 0
         for group in optimizer.param_groups:
@@ -246,7 +244,7 @@ def main() -> None:
                     for state_name, state_val in optimizer.state[p].items():
                         if torch.is_tensor(state_val):
                             opt_mem += state_val.numel() * state_val.element_size()
-        logger.info(f" - Optimizer states: {opt_mem / 1024**2:.2f} MB")
+        logger.info(f" - Optimizer states: {opt_mem / 1024 ** 2:.2f} MB")
 
         # Full memory summary
         for i in range(torch.cuda.device_count()):
