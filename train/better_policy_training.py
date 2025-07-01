@@ -166,7 +166,7 @@ class SFTTrainer:
         shift_logits = logits[..., :-1, :].contiguous().float()
         shift_labels = labels[..., 1:].contiguous()
 
-        loss_fct = torch.nn.CrossEntropyLoss(reduction="none")
+        loss_fct = torch.nn.CrossEntropyLoss(ignore_index=-100, reduction="none")
         per_token_loss = loss_fct(
             shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1)
         )
@@ -270,8 +270,6 @@ class SFTTrainer:
         """Main training loop with proper step counting and gradient clipping."""
         self.model.train()
 
-        completed_steps = 0
-
         for epoch in range(self.config.num_train_epochs):
             for step, batch in enumerate(train_dataloader):
                 with self.accelerator.accumulate(self.model):
@@ -300,7 +298,6 @@ class SFTTrainer:
                         optimizer.step()
                         lr_scheduler.step()
                         optimizer.zero_grad()
-                        completed_steps += 1
 
                 # Only increment global_step after optimization
                 if self.accelerator.sync_gradients:
@@ -312,7 +309,6 @@ class SFTTrainer:
                             "train/loss": loss.item(),
                             "train/learning_rate": lr_scheduler.get_last_lr()[0],
                             "train/epoch": epoch,
-                            "train/completed_steps": completed_steps,
                         }, step=self.metrics.global_step)
 
                     # Evaluation
@@ -338,7 +334,7 @@ class SFTTrainer:
                     if self.metrics.global_step % self.config.save_steps == 0:
                         self.save_checkpoint(is_best=False, step=self.metrics.global_step)
 
-                if completed_steps >= max_train_steps:
+                if self.metrics.global_step >= max_train_steps:
                     return
 
 
@@ -409,7 +405,8 @@ def main(config: Config):
     val_path = Path(NET_SCRATCH_PATH) / "sft_data" / f"round_{config.round_number}" / config.validation_dataset_name
 
     run_name = f"policy-ft-{Path(config.policy_model).name}"
-    output_dir = Path(NET_SCRATCH_PATH) / "models" / "fine_tuned" / "policy" / run_name
+    # output_dir = Path(NET_SCRATCH_PATH) / "models" / "fine_tuned" / "policy" / run_name
+    output_dir = Path("/scratch") / "net_scratch" / "models" / "fine_tuned" / "policy" / run_name
 
     # Initialize accelerator
     accelerator_config = {
@@ -459,14 +456,15 @@ def main(config: Config):
             model.resize_token_embeddings(len(tokenizer))
             logger.info(f"Resized token embeddings to {len(tokenizer)}")
 
-        if config.torch_compile:
-            logger.info("Compiling the model with torch.compile...")
-            model = torch.compile(model)
-
         # Configure model for training
         model.config.use_cache = False
         if config.gradient_checkpointing:
             model.gradient_checkpointing_enable()
+
+        if config.torch_compile:
+            logger.info("Compiling the model with torch.compile...")
+            model = torch.compile(model)
+
         model.enable_input_require_grads()
 
     except Exception as e:
@@ -602,7 +600,7 @@ def main(config: Config):
                 pin_memory=True,
             )
 
-    # Setup optimizer and scheduler
+    # Setup optimizer
     optimizer = AdamW(
         model.parameters(),
         lr=config.learning_rate,
@@ -611,12 +609,18 @@ def main(config: Config):
         eps=1e-8,
     )
 
-    # Calculate training steps correctly
+    # Prepare model, optimizer, and dataloader with accelerator
+    model, optimizer, train_dataloader = accelerator.prepare(
+        model, optimizer, train_dataloader
+    )
+
+    # --- FIX: Calculate training steps *after* accelerator has sharded the dataloader ---
     num_update_steps_per_epoch = math.ceil(
         len(train_dataloader) / config.gradient_accumulation_steps
     )
     max_train_steps = num_update_steps_per_epoch * config.num_train_epochs
 
+    # Now create the scheduler with the correct number of steps
     lr_scheduler = get_scheduler(
         name=config.lr_scheduler_type,
         optimizer=optimizer,
@@ -624,10 +628,8 @@ def main(config: Config):
         num_training_steps=max_train_steps,
     )
 
-    # Prepare with accelerator
-    model, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
-        model, optimizer, train_dataloader, lr_scheduler
-    )
+    # Prepare the scheduler
+    lr_scheduler = accelerator.prepare(lr_scheduler)
 
     # Prepare validation dataloaders
     prepared_val_dataloaders = {}
