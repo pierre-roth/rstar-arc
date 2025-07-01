@@ -347,8 +347,7 @@ for epoch in range(config.num_train_epochs):
                     if accelerator.is_main_process and eval_loss < best_eval_loss:
                         best_eval_loss = eval_loss
                         best_step = global_step
-                        logger.info(
-                            f"New best val_val loss: {best_eval_loss:.4f} at step {best_step}. Saving model to {BEST_MODEL_DIR}")
+                        logger.info(f"New best val_val loss: {best_eval_loss:.4f} at step {best_step}. Saving model to {BEST_MODEL_DIR}")
                         accelerator.wait_for_everyone()
                         unwrapped = accelerator.unwrap_model(model)
                         unwrapped.save_pretrained(BEST_MODEL_DIR, safe_serialization=True)
