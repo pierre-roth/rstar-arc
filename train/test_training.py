@@ -23,6 +23,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model_name_or_path", type=str, default="Qwen/Qwen2-0.5B",
                         help="HF Hub id of the base model.")
     parser.add_argument("--dataset_name", type=str, default="tatsu-lab/alpaca", help="HF Hub dataset repo id.")
+
     # Define default output path inside the function
     default_output_dir = Path("/scratch") / "net_scratch" / "models" / "fine_tuned" / "policy" / "policy-ft-test"
     parser.add_argument("--output_dir", type=str, default=str(default_output_dir),
