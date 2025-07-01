@@ -305,8 +305,10 @@ class SFTTrainer:
 
                     # Logging
                     if self.metrics.global_step % self.config.logging_steps == 0:
+                        # Gather loss from all processes for more accurate logging
+                        avg_loss = self.accelerator.gather_for_metrics(loss.detach()).mean()
                         self.accelerator.log({
-                            "train/loss": loss.item(),
+                            "train/loss": avg_loss.item(),
                             "train/learning_rate": lr_scheduler.get_last_lr()[0],
                             "train/epoch": epoch,
                         }, step=self.metrics.global_step)
@@ -323,6 +325,12 @@ class SFTTrainer:
                                 if eval_loss < self.metrics.best_eval_loss:
                                     self.metrics.best_eval_loss = eval_loss
                                     self.metrics.best_step = self.metrics.global_step
+
+                                    # Log best metrics to wandb
+                                    self.accelerator.log({
+                                        "val_val/best_loss": self.metrics.best_eval_loss,
+                                        "val_val/best_step": self.metrics.best_step,
+                                    }, step=self.metrics.global_step)
 
                                     logger.info(
                                         f"New best {name} loss: {eval_loss:.4f} "
@@ -413,7 +421,13 @@ def main(config: Config):
         "log_with": "wandb" if config.report_to == "wandb" else None,
         "mixed_precision": "bf16" if config.use_bf16 else "fp16",
         "gradient_accumulation_steps": config.gradient_accumulation_steps,
+        "dynamo_backend": "no"
     }
+    if config.torch_compile:
+        # A common backend is "inductor", but you can choose others.
+        # "reduce-overhead" is a good mode for inference-like workloads.
+        accelerator_config["dynamo_backend"] = "reduce-overhead"
+
     accelerator = Accelerator(**accelerator_config)
 
     if accelerator.is_main_process and config.report_to == "wandb":
@@ -422,6 +436,9 @@ def main(config: Config):
             config=asdict(config),
             init_kwargs={"wandb": {"name": run_name}},
         )
+
+    if not accelerator.is_main_process:
+        logging.getLogger().setLevel(logging.WARNING)
 
     # Load tokenizer and model
     logger.info(f"Loading tokenizer and model: {config.policy_model}")
@@ -463,7 +480,7 @@ def main(config: Config):
 
         if config.torch_compile:
             logger.info("Compiling the model with torch.compile...")
-            model = torch.compile(model)
+            model = torch.compile(model, mode="reduce-overhead")
 
         model.enable_input_require_grads()
 

@@ -455,7 +455,28 @@
   - tested semi-trained model accuracy against training set and validation set
     - training: pass@128: 15%
     - validation: pass@256: 5%
-  - started testing the limits of training models on CSCS
+  - started testing the limits of training models on CSCS: it seems like 3B is the best I can do for training with the required context length
+  - nearly finished writing the final accelerate policy model training code
+
+- **Issues and Questions**:
+  - ??
+
+- **Results**:
+  - ??
+
+- **Visuals**:
+  - ??
+
+### Week 18 (30.06.2025)
+
+- **Work planned**:
+  - train final 3B policy model on CSCS
+  - thoroughly test the model on training and validation set while collecting reward data
+  - start reward model training (start with a smaller model like 1.5B)
+  - Do inference with reward model to quantify the added performance from the reward model
+  - 
+
+- **Work done**:
   - 
 
 - **Issues and Questions**:

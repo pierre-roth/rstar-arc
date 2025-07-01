@@ -132,7 +132,7 @@ def evaluate(model, dataloader, accelerator: Accelerator, prefix: str, step: int
         weight_tensor = weight_tensor.to(loss_tensor.device)
 
         total_loss_tensor = (loss_tensor * weight_tensor).sum() / weight_tensor.sum().clamp_min(1e-8)
-        total_loss = total_loss_tensor.item()
+        total_loss = total_loss_tensor.detach().item()
 
         if config.report_to == "wandb":
             accelerator.log({f"{prefix}/loss": total_loss}, step=step)
@@ -337,7 +337,7 @@ for epoch in range(config.num_train_epochs):
             optimizer.zero_grad()
 
         if accelerator.is_main_process and global_step % config.logging_steps == 0:
-            accelerator.log({"train/loss": loss.item(), "lr": lr_scheduler.get_last_lr()[0]}, step=global_step)
+            accelerator.log({"train/loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0]}, step=global_step)
 
         if global_step % config.eval_steps == 0 and global_step > 0:
             for name, loader in prepared_val_loaders.items():
