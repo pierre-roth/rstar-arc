@@ -459,6 +459,10 @@ def main(config: Config):
             model.resize_token_embeddings(len(tokenizer))
             logger.info(f"Resized token embeddings to {len(tokenizer)}")
 
+        if config.torch_compile:
+            logger.info("Compiling the model with torch.compile...")
+            model = torch.compile(model)
+
         # Configure model for training
         model.config.use_cache = False
         if config.gradient_checkpointing:
