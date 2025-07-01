@@ -63,6 +63,9 @@ def main() -> None:
     args = parse_args()
     set_seed(args.seed)
 
+    os.environ["ACCELERATE_USE_DEEPSPEED"] = "false"
+    os.environ["ACCELERATE_USE_FSDP"] = "false"
+
     # --- 1. Load Model and Tokenizer ---
     logger.info(f"Loading model: {args.model_name_or_path}")
     # Using a smaller model for demonstration to make it runnable on more systems.
