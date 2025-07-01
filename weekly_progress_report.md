@@ -467,9 +467,11 @@
 - **Visuals**:
   - ??
 
+
 ### Week 18 (30.06.2025)
 
 - **Work planned**:
+  - figure what is using so much memory
   - train final 3B policy model on CSCS
   - thoroughly test the model on training and validation set while collecting reward data
   - start reward model training (start with a smaller model like 1.5B)

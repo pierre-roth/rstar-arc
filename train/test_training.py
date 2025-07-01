@@ -1,8 +1,4 @@
 #!/usr/bin/env python
-"""
-A minimal example demonstrating how to finetune an autoregressive language
-model using 🦉 Accelerate.  Designed to run on a single or multi‑GPU setup.
-"""
 
 import argparse
 import logging
@@ -26,7 +22,8 @@ from transformers import (
 
 os.environ["NCCL_DEBUG"] = "WARN"
 os.environ["WANDB_SILENT"] = "true"
-os.environ["FLASH_ATTENTION_SKIP_INIT_WARNING"] = "1"
+# os.environ["FLASH_ATTENTION_SKIP_INIT_WARNING"] = "1"
+# os.environ["TORCHDYNAMO_CAPTURE_SCALAR_OUTPUTS"] = "1"
 
 # -----------------------------------------------------------------------------#
 # 1. Utilities
@@ -35,13 +32,14 @@ os.environ["FLASH_ATTENTION_SKIP_INIT_WARNING"] = "1"
 
 NET_SCRATCH_PATH = f"/itet-stor/piroth/net_scratch"  # net-scratch directory
 run_name = f"policy-ft-test"
-out_dir = os.path.join(NET_SCRATCH_PATH, "models", "fine_tuned", "policy", run_name)
+# out_dir = os.path.join(NET_SCRATCH_PATH, "models", "fine_tuned", "policy", run_name)
+out_dir = Path("/scratch") / "net_scratch" / "models" / "fine_tuned" / "policy" / run_name
 
 
 def parse_args() -> argparse.Namespace:
     """Parse the command‑line arguments."""
     parser = argparse.ArgumentParser(
-        description="Tiny finetuning script showcasing 🦉 Accelerate."
+        description="Tiny finetuning script showcasing Accelerate."
     )
     parser.add_argument(
         "--model_name_or_path",
@@ -63,9 +61,9 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--max_length", type=int, default=16384)
-    parser.add_argument("--per_device_train_batch_size", type=int, default=2)
+    parser.add_argument("--per_device_train_batch_size", type=int, default=1)
     parser.add_argument("--learning_rate", type=float, default=1e-5)
-    parser.add_argument("--gradient_accumulation_steps", type=int, default=8)
+    parser.add_argument("--gradient_accumulation_steps", type=int, default=32)
     parser.add_argument("--num_train_epochs", type=int, default=1)
     parser.add_argument("--num_warmup_steps", type=int, default=0)
     parser.add_argument(
