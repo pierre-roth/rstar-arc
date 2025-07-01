@@ -74,13 +74,6 @@ def parse_args() -> argparse.Namespace:
         default="bf16",
         help="Precision for training.",
     )
-    parser.add_argument(
-        "--no_gradient_checkpointing",
-        dest="use_gradient_checkpointing",
-        action="store_false",
-        help="Disable gradient checkpointing.",
-    )
-    parser.set_defaults(use_gradient_checkpointing=True)
 
     return parser.parse_args()
 
@@ -186,23 +179,25 @@ def main() -> None:
         attn_implementation="flash_attention_2",  # or "flash_attention_3" if you built FA-3
         torch_dtype=torch.bfloat16,
         trust_remote_code=True,
-        use_cache=not args.use_gradient_checkpointing,
+        use_cache=False,
     )
 
     if not accelerator.is_main_process:
         warnings.resetwarnings()
 
-    if args.use_gradient_checkpointing:
-        model.gradient_checkpointing_enable()
+    model.gradient_checkpointing_enable()
+
+    if accelerator.is_main_process:
+        logger.info(f"Gradient checkpointing enabled: {model.is_gradient_checkpointing}")
 
     model.config.pad_token_id = tokenizer.pad_token_id
 
     # ------------- Dataset ---------------------------------------------------#
     raw_datasets = load_dataset(args.dataset_name, split="train")
-    logger.info(f"Loaded {len(raw_datasets):,} training examples.")
+    if accelerator.is_main_process:
+        logger.info(f"Loaded {len(raw_datasets):,} training examples.")
 
     def tokenize_fn(batch):
-        # 1️⃣  Build the instruction-style prompt per example
         prompts = [
             format_prompt(
                 {
@@ -216,8 +211,6 @@ def main() -> None:
             )
         ]
 
-        # 2️⃣  Tokenise the whole batch in one call
-        #     ⚠  Don't return PyTorch tensors here – let .set_format() handle that later.
         encoded = tokenizer(
             prompts,
             padding="max_length",
@@ -264,11 +257,13 @@ def main() -> None:
 
     # ------------- Memory Snapshot ------------------------------------------#
     baseline_mem = 0
+    current_baseline_mem = 0
     if accelerator.device.type == "cuda" and accelerator.is_main_process:
         logger.info("Taking a VRAM snapshot after setup...")
         baseline_mem = torch.cuda.memory_allocated()
+        current_baseline_mem = baseline_mem
         param_mem = parameters_memory(model)
-        opt_mem = optimizer_memory(optimizer)
+        opt_mem = optimizer_memory(optimizer)  # zero before the first optimizer update
         overhead = max(baseline_mem - param_mem - opt_mem, 0)
         logger.info(f"Initial VRAM usage: {_bytes(baseline_mem):.2f} MB")
         logger.info(f" - Weights          : {_bytes(param_mem):.2f} MB")
@@ -293,27 +288,29 @@ def main() -> None:
     for epoch in range(args.num_train_epochs):
         for step, batch in enumerate(train_dataloader):
             # --- Peak Memory Measurement (First Step) ---
-            if global_step == 0 and accelerator.is_main_process and accelerator.device.type == "cuda":
+            if global_step == 0 and step == 0 and accelerator.is_main_process and accelerator.device.type == "cuda":
                 torch.cuda.reset_peak_memory_stats()
 
             with accelerator.accumulate(model):
                 outputs = model(**batch)
                 loss = outputs.loss
 
-                if global_step == 0 and accelerator.is_main_process and accelerator.device.type == "cuda":
+                if global_step == 0 and step == 0 and accelerator.is_main_process and accelerator.device.type == "cuda":
                     after_fwd = torch.cuda.memory_allocated()
-                    activation_mem = max(after_fwd - baseline_mem, 0)
+                    activation_mem = max(after_fwd - current_baseline_mem, 0)
                     logger.info(f"Activation memory after forward: {_bytes(activation_mem):.2f} MB")
 
                 accelerator.backward(loss)
 
-                if global_step == 0 and accelerator.is_main_process and accelerator.device.type == "cuda":
+                if global_step == 0 and step == 0 and accelerator.is_main_process and accelerator.device.type == "cuda":
                     grad_mem = gradients_memory(model)
                     after_bwd = torch.cuda.memory_allocated()
-                    step_overhead = max(after_bwd - baseline_mem - activation_mem - grad_mem, 0)
+                    step_overhead = max(after_bwd - current_baseline_mem - grad_mem, 0)
                     logger.info(f"Gradient memory: {_bytes(grad_mem):.2f} MB")
                     logger.info(f"Additional overhead this step: {_bytes(step_overhead):.2f} MB")
                     logger.info(f"Total VRAM after backward: {_bytes(after_bwd):.2f} MB")
+                    # Update baseline to include persistent gradient buffers
+                    current_baseline_mem = after_bwd
 
                 if accelerator.sync_gradients:
                     optimizer.step()
@@ -321,7 +318,7 @@ def main() -> None:
                     optimizer.zero_grad()
 
                     # Log peak memory after the first full step
-                    if global_step == 0 and accelerator.is_main_process and accelerator.device.type == "cuda":
+                    if global_step == 0 and step == 0 and accelerator.is_main_process and accelerator.device.type == "cuda":
                         peak_mem = torch.cuda.max_memory_allocated()
                         logger.info(f"Peak memory usage during first step: {_bytes(peak_mem):.2f} MB")
 
