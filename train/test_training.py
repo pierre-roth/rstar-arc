@@ -123,7 +123,7 @@ def main() -> None:
         bf16=args.bf16,
         gradient_checkpointing=True,  # Reduces memory usage
         report_to="none",  # Disable wandb/tensorboard for simplicity
-        ddp_backend=None
+        local_rank=-1,
     )
 
     # --- 4. Initialize Trainer and Start Training ---
