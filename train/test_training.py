@@ -85,6 +85,37 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _bytes(obj_size: int) -> float:
+    """Convert bytes to megabytes."""
+    return obj_size / 1024 ** 2
+
+
+def parameters_memory(model: torch.nn.Module) -> int:
+    """Return total parameter memory in bytes."""
+    return sum(p.numel() * p.element_size() for p in model.parameters())
+
+
+def optimizer_memory(optimizer: torch.optim.Optimizer) -> int:
+    """Return the memory used by optimizer states in bytes."""
+    total = 0
+    for group in optimizer.param_groups:
+        for p in group["params"]:
+            state = optimizer.state.get(p, {})
+            for val in state.values():
+                if torch.is_tensor(val):
+                    total += val.numel() * val.element_size()
+    return total
+
+
+def gradients_memory(model: torch.nn.Module) -> int:
+    """Return the memory used by gradients in bytes."""
+    total = 0
+    for p in model.parameters():
+        if p.grad is not None:
+            total += p.grad.numel() * p.grad.element_size()
+    return total
+
+
 def format_prompt(example: dict) -> str:
     """Convert a single Alpaca record into an instruction‑style prompt."""
     instruction = example["instruction"]
@@ -232,19 +263,17 @@ def main() -> None:
     ) = accelerator.prepare(model, optimizer, train_dataloader, lr_scheduler)
 
     # ------------- Memory Snapshot ------------------------------------------#
-    if accelerator.is_main_process:
+    baseline_mem = 0
+    if accelerator.device.type == "cuda" and accelerator.is_main_process:
         logger.info("Taking a VRAM snapshot after setup...")
-        param_mem = sum(p.numel() * p.element_size() for p in model.parameters())
-        logger.info(f" - Model parameters: {param_mem / 1024**2:.2f} MB")
-        # Optimizer states
-        opt_mem = 0
-        for group in optimizer.param_groups:
-            for p in group["params"]:
-                if p in optimizer.state:
-                    for state_name, state_val in optimizer.state[p].items():
-                        if torch.is_tensor(state_val):
-                            opt_mem += state_val.numel() * state_val.element_size()
-        logger.info(f" - Optimizer states: {opt_mem / 1024 ** 2:.2f} MB")
+        baseline_mem = torch.cuda.memory_allocated()
+        param_mem = parameters_memory(model)
+        opt_mem = optimizer_memory(optimizer)
+        overhead = max(baseline_mem - param_mem - opt_mem, 0)
+        logger.info(f"Initial VRAM usage: {_bytes(baseline_mem):.2f} MB")
+        logger.info(f" - Weights          : {_bytes(param_mem):.2f} MB")
+        logger.info(f" - Optimizer states : {_bytes(opt_mem):.2f} MB")
+        logger.info(f" - Additional overhead: {_bytes(overhead):.2f} MB")
 
         # Full memory summary
         for i in range(torch.cuda.device_count()):
@@ -264,21 +293,27 @@ def main() -> None:
     for epoch in range(args.num_train_epochs):
         for step, batch in enumerate(train_dataloader):
             # --- Peak Memory Measurement (First Step) ---
-            if global_step == 0 and accelerator.is_main_process:
+            if global_step == 0 and accelerator.is_main_process and accelerator.device.type == "cuda":
                 torch.cuda.reset_peak_memory_stats()
 
             with accelerator.accumulate(model):
                 outputs = model(**batch)
                 loss = outputs.loss
 
-                # Log memory after forward pass on the first step
-                if global_step == 0 and accelerator.is_main_process:
-                    logger.info(
-                        "Memory after first forward pass (activations): "
-                        f"{torch.cuda.memory_allocated() / 1024**2:.2f} MB"
-                    )
+                if global_step == 0 and accelerator.is_main_process and accelerator.device.type == "cuda":
+                    after_fwd = torch.cuda.memory_allocated()
+                    activation_mem = max(after_fwd - baseline_mem, 0)
+                    logger.info(f"Activation memory after forward: {_bytes(activation_mem):.2f} MB")
 
                 accelerator.backward(loss)
+
+                if global_step == 0 and accelerator.is_main_process and accelerator.device.type == "cuda":
+                    grad_mem = gradients_memory(model)
+                    after_bwd = torch.cuda.memory_allocated()
+                    step_overhead = max(after_bwd - baseline_mem - activation_mem - grad_mem, 0)
+                    logger.info(f"Gradient memory: {_bytes(grad_mem):.2f} MB")
+                    logger.info(f"Additional overhead this step: {_bytes(step_overhead):.2f} MB")
+                    logger.info(f"Total VRAM after backward: {_bytes(after_bwd):.2f} MB")
 
                 if accelerator.sync_gradients:
                     optimizer.step()
@@ -286,9 +321,9 @@ def main() -> None:
                     optimizer.zero_grad()
 
                     # Log peak memory after the first full step
-                    if global_step == 0 and accelerator.is_main_process:
-                        peak_mem = torch.cuda.max_memory_allocated() / 1024**2
-                        logger.info(f"Peak memory usage during first step: {peak_mem:.2f} MB")
+                    if global_step == 0 and accelerator.is_main_process and accelerator.device.type == "cuda":
+                        peak_mem = torch.cuda.max_memory_allocated()
+                        logger.info(f"Peak memory usage during first step: {_bytes(peak_mem):.2f} MB")
 
                     # Logging (only on main process)
                     avg_loss = accelerator.gather(loss.detach()).mean().item()
