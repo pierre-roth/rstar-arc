@@ -23,12 +23,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model_name_or_path", type=str, default="Qwen/Qwen2-0.5B",
                         help="HF Hub id of the base model.")
     parser.add_argument("--dataset_name", type=str, default="tatsu-lab/alpaca", help="HF Hub dataset repo id.")
-    parser.add_argument("--output_dir", type=str, default="./alpaca-finetuned-model",
+    # Define default output path inside the function
+    default_output_dir = Path("/scratch") / "net_scratch" / "models" / "fine_tuned" / "policy" / "policy-ft-test"
+    parser.add_argument("--output_dir", type=str, default=str(default_output_dir),
                         help="Where to store the final model.")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--max_length", type=int, default=16384)  # Reduced for feasibility on consumer GPUs
     parser.add_argument("--per_device_train_batch_size", type=int, default=1)
-    parser.add_argument("--gradient_accumulation_steps", type=int, default=8)
+    parser.add_argument("--gradient_accumulation_steps", type=int, default=32)
     parser.add_argument("--learning_rate", type=float, default=1e-5)
     parser.add_argument("--num_train_epochs", type=int, default=1)
     parser.add_argument("--warmup_ratio", type=float, default=0.03)
@@ -68,7 +70,7 @@ def main() -> None:
         args.model_name_or_path,
         torch_dtype=torch.bfloat16 if args.bf16 else torch.float32,
         trust_remote_code=True,
-        use_cache=False,  # Important for training
+        use_cache=False,  # Important for training; cache is for inference.
     )
 
     tokenizer = AutoTokenizer.from_pretrained(args.model_name_or_path, trust_remote_code=True)
@@ -81,8 +83,12 @@ def main() -> None:
     dataset = load_dataset(args.dataset_name, split="train")
 
     def tokenize_function(examples):
-        # Format prompts and then tokenize
-        prompts = [format_prompt(ex) + tokenizer.eos_token for ex in examples]
+        # Reconstruct each example from the batch (which is a dict of lists)
+        prompts = []
+        # The number of examples in a batch is the length of any of its value lists.
+        for i in range(len(examples["instruction"])):
+            ex = {key: examples[key][i] for key in examples.keys()}
+            prompts.append(format_prompt(ex) + tokenizer.eos_token)
         tokenized_output = tokenizer(
             prompts,
             truncation=True,
@@ -126,9 +132,21 @@ def main() -> None:
         tokenizer=tokenizer,
     )
 
+    # --- Memory tracking ---
+    if torch.cuda.is_available():
+        torch.cuda.reset_peak_memory_stats()
+        start_mem = torch.cuda.memory_allocated()
+        logger.info(f"Initial GPU memory allocated: {start_mem / 1024 ** 2:.2f} MB")
+
     logger.info("Starting training...")
     trainer.train()
     logger.info("Training finished.")
+
+    if torch.cuda.is_available():
+        end_mem = torch.cuda.memory_allocated()
+        peak_mem = torch.cuda.max_memory_allocated()
+        logger.info(f"Final GPU memory allocated: {end_mem / 1024 ** 2:.2f} MB")
+        logger.info(f"Peak GPU memory allocated during training: {peak_mem / 1024 ** 2:.2f} MB")
 
     # --- 5. Save the Final Model ---
     logger.info(f"Saving model to {args.output_dir}")
