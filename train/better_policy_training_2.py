@@ -242,7 +242,7 @@ class SFTTrainer:
 
         save_dir.mkdir(parents=True, exist_ok=True)
 
-        # self.accelerator.wait_for_everyone()
+        self.accelerator.wait_for_everyone()
 
         if self.accelerator.is_main_process:
             unwrapped_model = self.accelerator.unwrap_model(self.model)
