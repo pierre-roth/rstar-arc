@@ -61,58 +61,62 @@ class DataCollatorForSFT:
         self._eos_token_id = tokenizer.eos_token_id
 
     def __call__(self, features: list[dict]) -> dict[str, torch.Tensor]:
-        prompts = []
-        completions = []
-        weights_list = []
+        """Collate a batch of raw or pre-tokenized examples."""
+        weights_list = [float(ex.get("weight", 1.0)) for ex in features]
 
-        for ex in features:
-            task_json = ex["task_json"]
-            solution = ex["solution"]
-            prompt = (
-                    SFT_SYSTEM_PROMPT
-                    + task_to_prompt(ARCTask.from_dict(task_json))
-                    + SFT_IN_BETWEEN_PROMPT
-            )
-            prompts.append(prompt)
-            completions.append(solution)
-            weights_list.append(float(ex.get("weight", 1.0)))
+        if "input_ids" in features[0] and "labels" in features[0]:
+            all_input_ids = [ex["input_ids"] for ex in features]
+            all_labels = [ex["labels"] for ex in features]
+        else:
+            prompts = []
+            completions = []
+            for ex in features:
+                task_json = ex["task_json"]
+                solution = ex["solution"]
+                prompt = (
+                        SFT_SYSTEM_PROMPT
+                        + task_to_prompt(ARCTask.from_dict(task_json))
+                        + SFT_IN_BETWEEN_PROMPT
+                )
+                prompts.append(prompt)
+                completions.append(solution)
+
+            prompt_tokens_batch = self.tokenizer(
+                prompts, add_special_tokens=False, padding=False
+            )["input_ids"]
+            completion_tokens_batch = self.tokenizer(
+                completions, add_special_tokens=False, padding=False
+            )["input_ids"]
+
+            all_input_ids = []
+            all_labels = []
+
+            for i in range(len(features)):
+                prompt_tokens = prompt_tokens_batch[i]
+                completion_tokens = completion_tokens_batch[i] + [self._eos_token_id]
+
+                # Combine and truncate if necessary
+                prompt_len = len(prompt_tokens)
+                total_tokens = prompt_tokens + completion_tokens
+
+                if len(total_tokens) > self.max_len:
+                    if prompt_len < self.max_len:
+                        total_tokens = total_tokens[: self.max_len]
+                        actual_prompt_len = prompt_len
+                    else:
+                        total_tokens = prompt_tokens[: self.max_len]
+                        actual_prompt_len = self.max_len
+                else:
+                    actual_prompt_len = prompt_len
+
+                labels = total_tokens[:]  # Copy all tokens first
+                # Now mask the prompt portion
+                labels[:actual_prompt_len] = [-100] * actual_prompt_len
+
+                all_input_ids.append(total_tokens)
+                all_labels.append(labels)
 
         weights = torch.tensor(weights_list, dtype=torch.float32)
-
-        prompt_tokens_batch = self.tokenizer(
-            prompts, add_special_tokens=False, padding=False
-        )["input_ids"]
-        completion_tokens_batch = self.tokenizer(
-            completions, add_special_tokens=False, padding=False
-        )["input_ids"]
-
-        all_input_ids = []
-        all_labels = []
-
-        for i in range(len(features)):
-            prompt_tokens = prompt_tokens_batch[i]
-            completion_tokens = completion_tokens_batch[i] + [self._eos_token_id]
-
-            # Combine and truncate if necessary
-            prompt_len = len(prompt_tokens)
-            total_tokens = prompt_tokens + completion_tokens
-
-            if len(total_tokens) > self.max_len:
-                if prompt_len < self.max_len:
-                    total_tokens = total_tokens[: self.max_len]
-                    actual_prompt_len = prompt_len
-                else:
-                    total_tokens = prompt_tokens[: self.max_len]
-                    actual_prompt_len = self.max_len
-            else:
-                actual_prompt_len = prompt_len
-
-            labels = total_tokens[:]  # Copy all tokens first
-            # Now mask the prompt portion
-            labels[:actual_prompt_len] = [-100] * actual_prompt_len
-
-            all_input_ids.append(total_tokens)
-            all_labels.append(labels)
 
         # Pad sequences efficiently
         batch = self._pad_sequences(all_input_ids, self.tokenizer.pad_token_id)
@@ -512,25 +516,50 @@ def main(config: Config):
     logger.info("Loading datasets...")
 
     cache_dir = Path(LOCAL_SCRATCH_PATH) / ".cache" / "huggingface" / "datasets"
-    num_proc = 18
+    num_proc = max(1, os.cpu_count() // accelerator.num_processes)
 
-    def _add_length_column(batch):
-        """Batched function to compute and add tokenized length."""
-        texts = []
-        for i in range(len(batch["solution"])):
-            task_json = batch["task_json"][i]
-            solution = batch["solution"][i]
-            text = (
-                    SFT_SYSTEM_PROMPT
-                    + task_to_prompt(ARCTask.from_dict(task_json))
-                    + SFT_IN_BETWEEN_PROMPT
-                    + solution
-                    + tokenizer.eos_token
+    def _tokenize_batch(batch):
+        """Tokenize a batch and compute lengths for filtering."""
+        prompts = []
+        completions = []
+        for j, sol in zip(batch["task_json"], batch["solution"]):
+            prompt = (
+                SFT_SYSTEM_PROMPT
+                + task_to_prompt(ARCTask.from_dict(j))
+                + SFT_IN_BETWEEN_PROMPT
             )
-            texts.append(text)
+            prompts.append(prompt)
+            completions.append(sol)
 
-        tokenized = tokenizer(texts)
-        return {"length": [len(ids) for ids in tokenized["input_ids"]]}
+        prompt_tokens = tokenizer(prompts, add_special_tokens=False, padding=False)["input_ids"]
+        completion_tokens = tokenizer(completions, add_special_tokens=False, padding=False)["input_ids"]
+
+        input_ids = []
+        labels = []
+        lengths = []
+
+        for p_tok, c_tok in zip(prompt_tokens, completion_tokens):
+            c_tok = c_tok + [tokenizer.eos_token_id]
+            total = p_tok + c_tok
+            p_len = len(p_tok)
+            if len(total) > config.max_seq_len:
+                if p_len < config.max_seq_len:
+                    total = total[: config.max_seq_len]
+                    actual_p_len = p_len
+                else:
+                    total = p_tok[: config.max_seq_len]
+                    actual_p_len = config.max_seq_len
+            else:
+                actual_p_len = p_len
+
+            lbl = total.copy()
+            lbl[:actual_p_len] = [-100] * actual_p_len
+
+            input_ids.append(total)
+            labels.append(lbl)
+            lengths.append(len(total))
+
+        return {"input_ids": input_ids, "labels": labels, "length": lengths}
 
     # Load and filter training data
     raw_train_data = load_dataset(
@@ -541,15 +570,16 @@ def main(config: Config):
 
     orig_train_len = len(raw_train_data)
     train_data_with_length = raw_train_data.map(
-        _add_length_column,
+        _tokenize_batch,
         batched=True,
         batch_size=1000,
         num_proc=num_proc,
+        remove_columns=[c for c in raw_train_data.column_names if c not in ["weight", "task_name"]],
     )
     filtered_train_data = train_data_with_length.filter(
         lambda x: x["length"] <= config.max_seq_len,
         num_proc=num_proc
-    )
+    ).remove_columns("length")
 
     logger.info(
         f"Filtered training data: {orig_train_len} -> {len(filtered_train_data)} "
@@ -570,15 +600,16 @@ def main(config: Config):
 
     orig_val_len = len(raw_val_data)
     val_data_with_length = raw_val_data.map(
-        _add_length_column,
+        _tokenize_batch,
         batched=True,
         batch_size=1000,
         num_proc=num_proc,
+        remove_columns=[c for c in raw_val_data.column_names if c not in ["weight", "task_name"]],
     )
     val_val_ds = val_data_with_length.filter(
         lambda x: x["length"] <= config.max_seq_len,
         num_proc=num_proc
-    )
+    ).remove_columns("length")
 
     logger.info(
         f"Filtered validation data: {orig_val_len} -> {len(val_val_ds)} "
@@ -598,6 +629,15 @@ def main(config: Config):
 
     # Shuffle training data
     train_ds = train_ds.shuffle(seed=config.seed or 42)
+
+    # Convert to torch format for faster dataloader operation
+    train_ds.set_format(type="torch")
+    if val_task_ds:
+        val_task_ds.set_format(type="torch")
+    if val_example_ds:
+        val_example_ds.set_format(type="torch")
+    if val_val_ds:
+        val_val_ds.set_format(type="torch")
 
     # Log dataset statistics
     logger.info(f"Dataset sizes:")
@@ -619,6 +659,7 @@ def main(config: Config):
         collate_fn=collator,
         num_workers=num_proc,
         pin_memory=True,
+        persistent_workers=True,
     )
 
     val_dataloaders = {}
@@ -635,6 +676,7 @@ def main(config: Config):
                 collate_fn=collator,
                 num_workers=num_proc,
                 pin_memory=True,
+                persistent_workers=True,
             )
 
     # Setup optimizer
