@@ -240,16 +240,11 @@ class SFTTrainer:
 
         save_dir.mkdir(parents=True, exist_ok=True)
 
-        logger.info(f"Before save state.")
         # save model and optimizer/scheduler with accelerate
         self.accelerator.save_state(str(save_dir))
-        logger.info(f"After save state.")
 
-        logger.info(f"Before tokenizer save.")
         if self.accelerator.is_main_process:
-            logger.info(f"During tokenizer save.")
             self.tokenizer.save_pretrained(save_dir)
-            logger.info(f"After tokenizer save.")
 
             # Save training state
             state = {
@@ -259,11 +254,8 @@ class SFTTrainer:
                 "config": asdict(self.config),
             }
             torch.save(state, save_dir / "training_state.pt")
-            logger.info(f"Checkpoint saved to {save_dir}")
 
-        logger.info("Before wait for everyone.")
-        self.accelerator.wait_for_everyone()
-        logger.info(f"After wait for everyone.")
+        # self.accelerator.wait_for_everyone()
 
     def train(
             self,
