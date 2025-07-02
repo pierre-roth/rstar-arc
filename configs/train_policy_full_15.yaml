@@ -1,9 +1,10 @@
 log-level: INFO
 round-number: 5
 
-task-validation-fraction: 0.05
+task-validation-fraction: 0.002
 example-validation-num: 1
 example-validation-threshold: 5
+example-validation-probability: 0.01
 
 max-seq-len: 16384
 
@@ -29,9 +30,9 @@ gradient-accumulation-steps: 32
 num-train-epochs: 1
 lr-scheduler-type: "cosine"
 warmup-ratio: 0.05
-logging-steps: 100
-eval-steps: 200
-save-steps: 200
+logging-steps: 125
+eval-steps: 250
+save-steps: 250
 save-total-limit: 3
 gradient-checkpointing: true
 

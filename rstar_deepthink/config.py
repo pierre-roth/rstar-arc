@@ -130,6 +130,7 @@ class Config:
 
     example_validation_num: int = 1  # number of examples to hold out from each remaining task for validation
     example_validation_threshold: int = 5  # minimum number of examples a task must have to hold out examples
+    example_validation_probability: float = 0.05  # probability of holding out an example for validation
 
     # If true, skips LoRA adapters and fine-tunes all model parameters
     full_finetune: bool = False

@@ -389,18 +389,21 @@ def create_validation_splits(
         if task in val_tasks:
             continue
 
-        indices_copy = list(indices)
-        rng.shuffle(indices_copy)
-
         # Take validation examples if task has enough samples
         if (config.example_validation_num > 0 and
-                len(indices_copy) >= config.example_validation_threshold):
+                len(indices) >= config.example_validation_threshold):
 
-            n_val = min(config.example_validation_num, len(indices_copy) // 2)
-            val_example_indices.extend(indices_copy[:n_val])
-            train_indices.extend(indices_copy[n_val:])
+            indices_copy = list(indices)
+            rng.shuffle(indices_copy)
+
+            n_val_candidates = min(config.example_validation_num * (rng.random() < config.example_validation_probability), len(indices_copy) // 2)
+            candidates = indices_copy[:n_val_candidates]
+            remaining_indices = indices_copy[n_val_candidates:]
+
+            val_example_indices.extend(candidates)
+            train_indices.extend(remaining_indices)
         else:
-            train_indices.extend(indices_copy)
+            train_indices.extend(indices)
 
     # Create dataset splits
     train_ds = dataset.select(train_indices)
