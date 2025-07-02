@@ -347,10 +347,11 @@ class SFTTrainer:
                                     self.save_checkpoint(is_best=True)
 
                     # Regular checkpointing with step number
-                    if self.metrics.global_step % self.config.save_steps == 0 :
+                    if self.metrics.global_step % self.config.save_steps == 0:
                         self.save_checkpoint(is_best=False, step=self.metrics.global_step)
 
                 if self.metrics.global_step >= max_train_steps:
+                    self.save_checkpoint(is_best=False, step=self.metrics.global_step)
                     return
         progress_bar.close()
 
