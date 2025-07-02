@@ -246,7 +246,7 @@ class SFTTrainer:
         if self.accelerator.is_main_process:
             self.tokenizer.save_pretrained(save_dir)
             # ensure a config.json exists for AutoModel loading
-            self.accelerator.unwrap_model(self.model).config.save_pretrained(save_dir)
+            # self.accelerator.unwrap_model(self.model).config.save_pretrained(save_dir)
 
             # Save training state
             state = {
@@ -470,8 +470,8 @@ def main(config: Config):
     logger.info(f"Loading tokenizer and model: {config.policy_model}")
 
     # Load from checkpoint if it exists, otherwise from the base model
-    model_load_path = resume_from_checkpoint or config.policy_model
-    tokenizer_load_path = resume_from_checkpoint or config.policy_model
+    model_load_path = config.policy_model
+    tokenizer_load_path = config.policy_model
     logger.info(f"Loading from path: {model_load_path}")
 
     try:
