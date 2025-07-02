@@ -441,10 +441,6 @@ def main(config: Config):
         "gradient_accumulation_steps": config.gradient_accumulation_steps,
         "dynamo_backend": "no",
     }
-    if config.torch_compile:
-        # A common backend is "inductor", but you can choose others.
-        # "reduce-overhead" is a good mode for inference-like workloads.
-        accelerator_config["dynamo_backend"] = "reduce-overhead"
 
     project_config = ProjectConfiguration(
         project_dir=str(output_dir),
