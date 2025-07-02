@@ -512,7 +512,7 @@ def main(config: Config):
     logger.info("Loading datasets...")
 
     cache_dir = Path(LOCAL_SCRATCH_PATH) / ".cache" / "huggingface" / "datasets"
-    num_proc = 18
+    num_proc = 36
 
     def _add_length_column(batch):
         """Batched function to compute and add tokenized length."""
