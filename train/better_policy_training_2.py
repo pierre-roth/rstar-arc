@@ -9,7 +9,7 @@ from tqdm.auto import tqdm
 
 import torch
 from accelerate import Accelerator
-from accelerate.utils import set_seed, broadcast
+from accelerate.utils import set_seed, broadcast, ProjectConfiguration
 from datasets import Dataset, load_dataset
 from torch.optim import AdamW
 from torch.utils.data import DataLoader
@@ -229,9 +229,7 @@ class SFTTrainer:
         total_loss_tensor = broadcast(total_loss_tensor, from_process=0)
         return total_loss_tensor.item()
 
-    def save_checkpoint(self, is_best: bool = False, step: int | None = None,
-                        optimizer: torch.optim.Optimizer | None = None,
-                        lr_scheduler: torch.optim.lr_scheduler.LRScheduler | None = None,):
+    def save_checkpoint(self, is_best: bool = False, step: int | None = None):
         """Save model checkpoint with proper synchronization and versioning."""
         if is_best:
             save_dir = self.best_model_dir
@@ -242,16 +240,16 @@ class SFTTrainer:
 
         save_dir.mkdir(parents=True, exist_ok=True)
 
-        self.accelerator.wait_for_everyone()
+        logger.info(f"Before save state.")
+        # save model and optimizer/scheduler with accelerate
+        self.accelerator.save_state(str(save_dir))
+        logger.info(f"After save state.")
 
+        logger.info(f"Before tokenizer save.")
         if self.accelerator.is_main_process:
-            unwrapped_model = self.accelerator.unwrap_model(self.model)
-            unwrapped_model.save_pretrained(
-                save_dir,
-                safe_serialization=True,
-                save_function=self.accelerator.save
-            )
+            logger.info(f"During tokenizer save.")
             self.tokenizer.save_pretrained(save_dir)
+            logger.info(f"After tokenizer save.")
 
             # Save training state
             state = {
@@ -261,13 +259,11 @@ class SFTTrainer:
                 "config": asdict(self.config),
             }
             torch.save(state, save_dir / "training_state.pt")
+            logger.info(f"Checkpoint saved to {save_dir}")
 
-            if optimizer:
-                torch.save(optimizer.state_dict(), save_dir / "optimizer.pt")
-            if lr_scheduler:
-                torch.save(lr_scheduler.state_dict(), save_dir / "scheduler.pt")
-
+        logger.info("Before wait for everyone.")
         self.accelerator.wait_for_everyone()
+        logger.info(f"After wait for everyone.")
 
     def train(
             self,
@@ -358,7 +354,7 @@ class SFTTrainer:
                                     self.save_checkpoint(is_best=True)
 
                     if self.metrics.global_step % self.config.save_steps == 0:
-                        self.save_checkpoint(is_best=False, step=self.metrics.global_step, optimizer=optimizer, lr_scheduler=lr_scheduler)
+                        self.save_checkpoint(is_best=False, step=self.metrics.global_step)
 
                 if self.metrics.global_step >= max_train_steps:
                     self.save_checkpoint(is_best=False, step=self.metrics.global_step)
@@ -451,14 +447,19 @@ def main(config: Config):
         "log_with": "wandb" if config.report_to == "wandb" else None,
         "mixed_precision": "bf16" if config.use_bf16 else "fp16",
         "gradient_accumulation_steps": config.gradient_accumulation_steps,
-        "dynamo_backend": "no"
+        "dynamo_backend": "no",
     }
     if config.torch_compile:
         # A common backend is "inductor", but you can choose others.
         # "reduce-overhead" is a good mode for inference-like workloads.
         accelerator_config["dynamo_backend"] = "reduce-overhead"
 
-    accelerator = Accelerator(**accelerator_config)
+    project_config = ProjectConfiguration(
+        project_dir=str(output_dir),
+        automatic_checkpoint_naming=False,
+        total_limit=config.save_total_limit,
+    )
+    accelerator = Accelerator(project_config=project_config, **accelerator_config)
 
     if accelerator.is_main_process and config.report_to == "wandb":
         accelerator.init_trackers(
@@ -514,10 +515,6 @@ def main(config: Config):
             model.gradient_checkpointing_enable()
 
         logger.info(f"Gradient checkpointing enabled: {config.gradient_checkpointing}")
-
-        if config.torch_compile:
-            logger.info("Compiling the model with torch.compile...")
-            model = torch.compile(model, mode="reduce-overhead")
 
         model.enable_input_require_grads()
 
@@ -684,14 +681,16 @@ def main(config: Config):
     # Prepare the scheduler
     lr_scheduler = accelerator.prepare(lr_scheduler)
 
+    # register scheduler so its state is checkpointed
+    accelerator.register_for_checkpointing(lr_scheduler)
+
     if resume_from_checkpoint:
-        logger.info("Loading optimizer and scheduler states...")
-        optimizer.load_state_dict(
-            torch.load(resume_from_checkpoint / "optimizer.pt", map_location=accelerator.device)
-        )
-        lr_scheduler.load_state_dict(
-            torch.load(resume_from_checkpoint / "scheduler.pt")
-        )
+        logger.info("Loading checkpoint state via Accelerate...")
+        accelerator.load_state(str(resume_from_checkpoint))
+
+    if config.torch_compile:
+        logger.info("Compiling the model with torch.compile...")
+        model = torch.compile(model)
 
     # Prepare validation dataloaders
     prepared_val_dataloaders = {}
