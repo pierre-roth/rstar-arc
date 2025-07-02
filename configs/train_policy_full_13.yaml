@@ -7,7 +7,7 @@ example-validation-threshold: 5
 
 max-seq-len: 16384
 
-resume-from-checkpoint: false
+resume-from-checkpoint: true
 
 policy-model: "Qwen/Qwen2.5-Coder-0.5B"
 training-dataset-name: "policy_dataset_training.jsonl"
