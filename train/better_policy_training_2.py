@@ -240,13 +240,19 @@ class SFTTrainer:
 
         save_dir.mkdir(parents=True, exist_ok=True)
 
+        logger.info("1")
         self.accelerator.wait_for_everyone()
+        logger.info("2")
 
         self.accelerator.save_state(str(save_dir))
+        logger.info("3")
 
         if self.accelerator.is_main_process:
+            logger.info("4")
             self.accelerator.unwrap_model(self.model).config.save_pretrained(save_dir)
+            logger.info("5")
             self.tokenizer.save_pretrained(save_dir)
+            logger.info("6")
 
             # Save training state
             state = {
@@ -257,6 +263,7 @@ class SFTTrainer:
             }
             torch.save(state, save_dir / "training_state.pt")
 
+        logger.info("7")
         self.accelerator.wait_for_everyone()
 
     def train(
