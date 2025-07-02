@@ -240,13 +240,13 @@ class SFTTrainer:
 
         save_dir.mkdir(parents=True, exist_ok=True)
 
-        # save model and optimizer/scheduler with accelerate
+        self.accelerator.wait_for_everyone()
+
         self.accelerator.save_state(str(save_dir))
 
         if self.accelerator.is_main_process:
+            self.accelerator.unwrap_model(self.model).config.save_pretrained(save_dir)
             self.tokenizer.save_pretrained(save_dir)
-            # ensure a config.json exists for AutoModel loading
-            # self.accelerator.unwrap_model(self.model).config.save_pretrained(save_dir)
 
             # Save training state
             state = {
@@ -452,7 +452,6 @@ def main(config: Config):
     project_config = ProjectConfiguration(
         project_dir=str(output_dir),
         automatic_checkpoint_naming=False,
-        total_limit=config.save_total_limit,
     )
     accelerator = Accelerator(project_config=project_config, **accelerator_config)
 
