@@ -229,7 +229,7 @@ class SFTTrainer:
         total_loss_tensor = broadcast(total_loss_tensor, from_process=0)
         return total_loss_tensor.item()
 
-    def save_checkpoint(self, is_best: bool = False, step: int | None = None, final: bool = False):
+    def save_checkpoint(self, is_best: bool = False, step: int | None = None):
         """Save model checkpoint with proper synchronization and versioning."""
         if is_best:
             save_dir = self.best_model_dir
@@ -245,10 +245,6 @@ class SFTTrainer:
         self.accelerator.save_state(str(save_dir))
 
         if self.accelerator.is_main_process:
-            if final:
-                self.accelerator.unwrap_model(self.model).config.save_pretrained(save_dir)
-            self.tokenizer.save_pretrained(save_dir)
-
             # Save training state
             state = {
                 "global_step": self.metrics.global_step,
@@ -353,7 +349,7 @@ class SFTTrainer:
                         self.save_checkpoint(is_best=False, step=self.metrics.global_step)
 
                 if self.metrics.global_step >= max_train_steps:
-                    self.save_checkpoint(is_best=False, step=self.metrics.global_step, final=True)
+                    self.save_checkpoint(is_best=False, step=self.metrics.global_step)
                     return
         progress_bar.close()
 
@@ -512,6 +508,10 @@ def main(config: Config):
         logger.info(f"Gradient checkpointing enabled: {config.gradient_checkpointing}")
 
         model.enable_input_require_grads()
+
+        if accelerator.is_main_process and not config.resume_from_checkpoint:
+            model.config.save_pretrained(output_dir)
+            tokenizer.save_pretrained(output_dir)
 
     except Exception as e:
         logger.error(f"Failed to load model or tokenizer: {e}")
