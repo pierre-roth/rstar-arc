@@ -245,6 +245,8 @@ class SFTTrainer:
 
         if self.accelerator.is_main_process:
             self.tokenizer.save_pretrained(save_dir)
+            # ensure a config.json exists for AutoModel loading
+            self.accelerator.unwrap_model(self.model).config.save_pretrained(save_dir)
 
             # Save training state
             state = {
