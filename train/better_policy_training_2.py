@@ -488,7 +488,7 @@ def main(config: Config):
         if config.gradient_checkpointing:
             model.gradient_checkpointing_enable()
 
-        logger.info(f"Gradient checkpointing enabled: {model.gradient_checkpointing}")
+        logger.info(f"Gradient checkpointing enabled: {config.gradient_checkpointing}")
 
         if config.torch_compile:
             logger.info("Compiling the model with torch.compile...")
