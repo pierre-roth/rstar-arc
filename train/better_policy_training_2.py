@@ -2,13 +2,14 @@ import logging
 import math
 import random
 import sys
+import os
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from tqdm.auto import tqdm
 
 import torch
 from accelerate import Accelerator
-from accelerate.utils import set_seed
+from accelerate.utils import set_seed, broadcast
 from datasets import Dataset, load_dataset
 from torch.optim import AdamW
 from torch.utils.data import DataLoader
@@ -59,7 +60,7 @@ class DataCollatorForSFT:
         self.max_len = max_len
         self._eos_token_id = tokenizer.eos_token_id
 
-    def __call__(self, features: List[Dict]) -> Dict[str, torch.Tensor]:
+    def __call__(self, features: list[dict]) -> dict[str, torch.Tensor]:
         prompts = []
         completions = []
         weights_list = []
@@ -125,7 +126,7 @@ class DataCollatorForSFT:
         }
 
     @staticmethod
-    def _pad_sequences(sequences: List[List[int]], pad_value: int) -> torch.Tensor:
+    def _pad_sequences(sequences: list[list[int]], pad_value: int) -> torch.Tensor:
         """Efficiently pad sequences to the same length."""
         max_len = max(len(seq) for seq in sequences)
         padded = torch.full((len(sequences), max_len), pad_value, dtype=torch.long)
@@ -183,7 +184,7 @@ class SFTTrainer:
         weighted_loss = (per_seq_loss * device_weights).sum() / device_weights.sum().clamp_min(1e-8)
         return weighted_loss
 
-    def evaluate(self, dataloader: DataLoader, prefix: str) -> Optional[float]:
+    def evaluate(self, dataloader: DataLoader, prefix: str) -> float | None:
         """Evaluate model on a validation set with correct distributed averaging."""
         self.model.eval()
         all_per_seq_losses = []
@@ -225,10 +226,10 @@ class SFTTrainer:
         total_loss_tensor = torch.tensor(
             total_loss if total_loss is not None else 0.0, device=self.accelerator.device
         )
-        total_loss_tensor = self.accelerator.broadcast(total_loss_tensor, from_process=0)
+        total_loss_tensor = broadcast(total_loss_tensor, from_process=0)
         return total_loss_tensor.item()
 
-    def save_checkpoint(self, is_best: bool = False, step: Optional[int] = None):
+    def save_checkpoint(self, is_best: bool = False, step: int | None = None):
         """Save model checkpoint with proper synchronization and versioning."""
         if is_best:
             save_dir = self.best_model_dir
@@ -262,13 +263,19 @@ class SFTTrainer:
     def train(
             self,
             train_dataloader: DataLoader,
-            val_dataloaders: Dict[str, DataLoader],
+            val_dataloaders: dict[str, DataLoader],
             optimizer: torch.optim.Optimizer,
             lr_scheduler: torch.optim.lr_scheduler._LRScheduler,
             max_train_steps: int,
     ):
         """Main training loop with proper step counting and gradient clipping."""
         self.model.train()
+
+        progress_bar = tqdm(
+            range(max_train_steps),
+            disable=not self.accelerator.is_main_process,
+            desc="Training"
+        )
 
         for epoch in range(self.config.num_train_epochs):
             for step, batch in enumerate(train_dataloader):
@@ -301,12 +308,15 @@ class SFTTrainer:
 
                 # Only increment global_step after optimization
                 if self.accelerator.sync_gradients:
+                    progress_bar.update(1)
                     self.metrics.global_step += 1
 
                     # Logging
                     if self.metrics.global_step % self.config.logging_steps == 0:
                         # Gather loss from all processes for more accurate logging
                         avg_loss = self.accelerator.gather_for_metrics(loss.detach()).mean()
+                        if self.accelerator.is_main_process:
+                            progress_bar.set_postfix(loss=avg_loss.item())
                         self.accelerator.log({
                             "train/loss": avg_loss.item(),
                             "train/learning_rate": lr_scheduler.get_last_lr()[0],
@@ -314,9 +324,7 @@ class SFTTrainer:
                         }, step=self.metrics.global_step)
 
                     # Evaluation
-                    if (self.metrics.global_step % self.config.eval_steps == 0 and
-                            self.metrics.global_step > 0):
-
+                    if self.metrics.global_step % self.config.eval_steps == 0 and self.metrics.global_step > 0:
                         for name, val_loader in val_dataloaders.items():
                             eval_loss = self.evaluate(val_loader, name)
 
@@ -339,23 +347,24 @@ class SFTTrainer:
                                     self.save_checkpoint(is_best=True)
 
                     # Regular checkpointing with step number
-                    if self.metrics.global_step % self.config.save_steps == 0:
+                    if self.metrics.global_step % self.config.save_steps == 0 :
                         self.save_checkpoint(is_best=False, step=self.metrics.global_step)
 
                 if self.metrics.global_step >= max_train_steps:
                     return
+        progress_bar.close()
 
 
 def create_validation_splits(
         dataset: Dataset,
         config: Config,
         seed: int = 42,
-) -> Tuple[Dataset, Optional[Dataset], Optional[Dataset]]:
+) -> tuple[Dataset, Dataset | None, Dataset | None]:
     """Create validation splits with clearer logic."""
     rng = random.Random(seed)
 
     # Group examples by task
-    task_to_indices: Dict[str, List[int]] = {}
+    task_to_indices: dict[str, list[int]] = {}
     for idx, ex in enumerate(dataset):
         task_to_indices.setdefault(ex["task_name"], []).append(idx)
 
@@ -407,6 +416,7 @@ def main(config: Config):
     # Setup
     set_seed(config.seed or 42)
     setup_logging(config.numeric_log_level)
+    os.environ["NCCL_DEBUG"] = "WARN"
 
     # Paths
     train_path = Path(NET_SCRATCH_PATH) / "sft_data" / f"round_{config.round_number}" / config.training_dataset_name
@@ -478,6 +488,8 @@ def main(config: Config):
         if config.gradient_checkpointing:
             model.gradient_checkpointing_enable()
 
+        logger.info(f"Gradient checkpointing enabled: {model.gradient_checkpointing}")
+
         if config.torch_compile:
             logger.info("Compiling the model with torch.compile...")
             model = torch.compile(model, mode="reduce-overhead")
@@ -492,7 +504,7 @@ def main(config: Config):
     logger.info("Loading datasets...")
 
     cache_dir = Path(LOCAL_SCRATCH_PATH) / ".cache" / "huggingface" / "datasets"
-    num_proc = max(1, config.cpus - 1)
+    num_proc = 18
 
     def _add_length_column(batch):
         """Batched function to compute and add tokenized length."""
@@ -597,7 +609,7 @@ def main(config: Config):
         batch_size=config.per_device_train_batch_size,
         shuffle=True,
         collate_fn=collator,
-        num_workers=min(4, config.cpus),
+        num_workers=num_proc,
         pin_memory=True,
     )
 
@@ -613,7 +625,7 @@ def main(config: Config):
                 batch_size=config.per_device_eval_batch_size,
                 shuffle=False,
                 collate_fn=collator,
-                num_workers=min(4, config.cpus),
+                num_workers=num_proc,
                 pin_memory=True,
             )
 
@@ -631,7 +643,6 @@ def main(config: Config):
         model, optimizer, train_dataloader
     )
 
-    # --- FIX: Calculate training steps *after* accelerator has sharded the dataloader ---
     num_update_steps_per_epoch = math.ceil(
         len(train_dataloader) / config.gradient_accumulation_steps
     )
