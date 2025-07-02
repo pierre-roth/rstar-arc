@@ -115,6 +115,8 @@ class Config:
     local_job_dir: Optional[str] = None  # Temporary path for the job
 
     # training related
+    resume_from_checkpoint: bool = False  # Whether to resume training from a checkpoint
+
     training_dataset_name: str = "policy_dataset_training.jsonl"
     validation_dataset_name: str = "policy_dataset_validation.jsonl"
 

@@ -229,7 +229,9 @@ class SFTTrainer:
         total_loss_tensor = broadcast(total_loss_tensor, from_process=0)
         return total_loss_tensor.item()
 
-    def save_checkpoint(self, is_best: bool = False, step: int | None = None):
+    def save_checkpoint(self, is_best: bool = False, step: int | None = None,
+                        optimizer: torch.optim.Optimizer | None = None,
+                        lr_scheduler: torch.optim.lr_scheduler.LRScheduler | None = None,):
         """Save model checkpoint with proper synchronization and versioning."""
         if is_best:
             save_dir = self.best_model_dir
@@ -260,21 +262,28 @@ class SFTTrainer:
             }
             torch.save(state, save_dir / "training_state.pt")
 
+            if optimizer:
+                torch.save(optimizer.state_dict(), save_dir / "optimizer.pt")
+            if lr_scheduler:
+                torch.save(lr_scheduler.state_dict(), save_dir / "scheduler.pt")
+
     def train(
             self,
             train_dataloader: DataLoader,
             val_dataloaders: dict[str, DataLoader],
             optimizer: torch.optim.Optimizer,
-            lr_scheduler: torch.optim.lr_scheduler._LRScheduler,
+            lr_scheduler: torch.optim.lr_scheduler.LRScheduler,
             max_train_steps: int,
     ):
         """Main training loop with proper step counting and gradient clipping."""
         self.model.train()
 
         progress_bar = tqdm(
-            range(max_train_steps),
+            initial=self.metrics.global_step,
+            total=max_train_steps,
             disable=not self.accelerator.is_main_process,
-            desc="Training"
+            desc="Training",
+            dynamic_ncols=True,
         )
 
         for epoch in range(self.config.num_train_epochs):
@@ -348,7 +357,7 @@ class SFTTrainer:
 
                     # Regular checkpointing with step number
                     if self.metrics.global_step % self.config.save_steps == 0:
-                        self.save_checkpoint(is_best=False, step=self.metrics.global_step)
+                        self.save_checkpoint(is_best=False, step=self.metrics.global_step, optimizer=optimizer, lr_scheduler=lr_scheduler)
 
                 if self.metrics.global_step >= max_train_steps:
                     self.save_checkpoint(is_best=False, step=self.metrics.global_step)
@@ -427,6 +436,15 @@ def main(config: Config):
     # output_dir = Path(NET_SCRATCH_PATH) / "models" / "fine_tuned" / "policy" / run_name
     output_dir = Path("/scratch") / "net_scratch" / "models" / "fine_tuned" / "policy" / run_name
 
+    resume_from_checkpoint = None
+    if config.resume_from_checkpoint and output_dir.exists():
+        checkpoint_dirs = [p for p in output_dir.glob("checkpoint-*") if p.is_dir()]
+        if checkpoint_dirs:
+            # Find the checkpoint with the highest step number
+            latest_checkpoint = max(checkpoint_dirs, key=lambda p: int(p.name.split('-')[-1]))
+            resume_from_checkpoint = latest_checkpoint
+            logger.info(f"Resuming training from checkpoint: {resume_from_checkpoint}")
+
     # Initialize accelerator
     accelerator_config = {
         "log_with": "wandb" if config.report_to == "wandb" else None,
@@ -454,9 +472,14 @@ def main(config: Config):
     # Load tokenizer and model
     logger.info(f"Loading tokenizer and model: {config.policy_model}")
 
+    # Load from checkpoint if it exists, otherwise from the base model
+    model_load_path = resume_from_checkpoint or config.policy_model
+    tokenizer_load_path = resume_from_checkpoint or config.policy_model
+    logger.info(f"Loading from path: {model_load_path}")
+
     try:
         tokenizer = AutoTokenizer.from_pretrained(
-            config.policy_model,
+            tokenizer_load_path,
             trust_remote_code=True
         )
 
@@ -473,7 +496,7 @@ def main(config: Config):
 
         # Load model
         model = AutoModelForCausalLM.from_pretrained(
-            config.policy_model,
+            model_load_path,
             torch_dtype=torch.bfloat16 if config.use_bf16 else torch.float16,
             trust_remote_code=True,
             attn_implementation=config.attn_implementation,
@@ -608,7 +631,7 @@ def main(config: Config):
     train_dataloader = DataLoader(
         train_ds,
         batch_size=config.per_device_train_batch_size,
-        shuffle=True,
+        shuffle=False,
         collate_fn=collator,
         num_workers=num_proc,
         pin_memory=True,
@@ -660,6 +683,15 @@ def main(config: Config):
     # Prepare the scheduler
     lr_scheduler = accelerator.prepare(lr_scheduler)
 
+    if resume_from_checkpoint:
+        logger.info("Loading optimizer and scheduler states...")
+        optimizer.load_state_dict(
+            torch.load(resume_from_checkpoint / "optimizer.pt", map_location=accelerator.device)
+        )
+        lr_scheduler.load_state_dict(
+            torch.load(resume_from_checkpoint / "scheduler.pt")
+        )
+
     # Prepare validation dataloaders
     prepared_val_dataloaders = {}
     for name, loader in val_dataloaders.items():
@@ -673,6 +705,21 @@ def main(config: Config):
         accelerator=accelerator,
         output_dir=output_dir,
     )
+
+    if resume_from_checkpoint:
+        logger.info("Loading training state...")
+        state = torch.load(resume_from_checkpoint / "training_state.pt")
+        trainer.metrics.global_step = state["global_step"]
+        trainer.metrics.best_eval_loss = state["best_eval_loss"]
+        trainer.metrics.best_step = state["best_step"]
+
+        # This is the number of update steps already completed
+        completed_steps = trainer.metrics.global_step
+        logger.info(f"Resuming from global step: {completed_steps}")
+
+        # Skip batches in the dataloader that have already been processed
+        # This is the key to starting in the middle of an epoch
+        train_dataloader = accelerator.skip_first_batches(train_dataloader, completed_steps * config.gradient_accumulation_steps)
 
     # Train
     logger.info(f"Starting training for {max_train_steps} steps...")
