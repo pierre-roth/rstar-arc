@@ -1,11 +1,10 @@
 import logging
 import math
+import os
 import random
 import sys
-import os
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from tqdm.auto import tqdm
 
 import torch
 from accelerate import Accelerator
@@ -13,6 +12,7 @@ from accelerate.utils import set_seed, broadcast, ProjectConfiguration
 from datasets import Dataset, load_dataset
 from torch.optim import AdamW
 from torch.utils.data import DataLoader
+from tqdm.auto import tqdm
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
@@ -69,9 +69,9 @@ class DataCollatorForSFT:
             task_json = ex["task_json"]
             solution = ex["solution"]
             prompt = (
-                SFT_SYSTEM_PROMPT
-                + task_to_prompt(ARCTask.from_dict(task_json))
-                + SFT_IN_BETWEEN_PROMPT
+                    SFT_SYSTEM_PROMPT
+                    + task_to_prompt(ARCTask.from_dict(task_json))
+                    + SFT_IN_BETWEEN_PROMPT
             )
             prompts.append(prompt)
             completions.append(solution)
@@ -161,7 +161,7 @@ class SFTTrainer:
         self.best_model_dir.mkdir(parents=True, exist_ok=True)
 
     def compute_loss(
-        self, logits: torch.Tensor, labels: torch.Tensor, weights: torch.Tensor, reduction: str = "mean"
+            self, logits: torch.Tensor, labels: torch.Tensor, weights: torch.Tensor, reduction: str = "mean"
     ) -> torch.Tensor:
         """Computes weighted cross-entropy loss. Can return total loss or per-sequence loss."""
         shift_logits = logits[..., :-1, :].contiguous().float()
@@ -255,7 +255,7 @@ class SFTTrainer:
             }
             torch.save(state, save_dir / "training_state.pt")
 
-        # self.accelerator.wait_for_everyone()
+        self.accelerator.wait_for_everyone()
 
     def train(
             self,
@@ -328,27 +328,28 @@ class SFTTrainer:
                             eval_loss = self.evaluate(val_loader, name)
 
                             # Check for best model on primary validation set
-                            if name == "val_val" and self.accelerator.is_main_process:
+                            if name == "val_val":
                                 if eval_loss < self.metrics.best_eval_loss:
                                     self.metrics.best_eval_loss = eval_loss
                                     self.metrics.best_step = self.metrics.global_step
 
-                                    # Log best metrics to wandb
-                                    self.accelerator.log({
-                                        "val_val/best_loss": self.metrics.best_eval_loss,
-                                        "val_val/best_step": self.metrics.best_step,
-                                    }, step=self.metrics.global_step)
+                                    if self.accelerator.is_main_process:
+                                        # Log best metrics to wandb
+                                        self.accelerator.log({
+                                            "val_val/best_loss": self.metrics.best_eval_loss,
+                                            "val_val/best_step": self.metrics.best_step,
+                                        }, step=self.metrics.global_step)
 
-                                    logger.info(
-                                        f"New best {name} loss: {eval_loss:.4f} "
-                                        f"at step {self.metrics.global_step}"
-                                    )
+                                        logger.info(
+                                            f"New best {name} loss: {eval_loss:.4f} "
+                                            f"at step {self.metrics.global_step}"
+                                        )
                                     self.save_checkpoint(is_best=True)
 
-                    if self.metrics.global_step % self.config.save_steps == 0 and self.accelerator.is_main_process:
+                    if self.metrics.global_step % self.config.save_steps == 0:
                         self.save_checkpoint(is_best=False, step=self.metrics.global_step)
 
-                if self.metrics.global_step >= max_train_steps and self.accelerator.is_main_process:
+                if self.metrics.global_step >= max_train_steps:
                     self.save_checkpoint(is_best=False, step=self.metrics.global_step)
                     return
         progress_bar.close()
@@ -711,7 +712,8 @@ def main(config: Config):
 
         # Skip batches in the dataloader that have already been processed
         # This is the key to starting in the middle of an epoch
-        train_dataloader = accelerator.skip_first_batches(train_dataloader, completed_steps * config.gradient_accumulation_steps)
+        train_dataloader = accelerator.skip_first_batches(train_dataloader,
+                                                          completed_steps * config.gradient_accumulation_steps)
 
     # Train
     logger.info(f"Starting training for {max_train_steps} steps...")
