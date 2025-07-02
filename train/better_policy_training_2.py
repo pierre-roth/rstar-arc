@@ -229,37 +229,31 @@ class SFTTrainer:
         total_loss_tensor = broadcast(total_loss_tensor, from_process=0)
         return total_loss_tensor.item()
 
-    def save_checkpoint(self, is_best: bool = False, step: int | None = None):
+    def save_checkpoint(self, is_best: bool = False, step: int | None = None,
+                        optimizer: torch.optim.Optimizer | None = None,
+                        lr_scheduler: torch.optim.lr_scheduler.LRScheduler | None = None,):
         """Save model checkpoint with proper synchronization and versioning."""
         if is_best:
             save_dir = self.best_model_dir
         elif step is not None:
             save_dir = self.output_dir / f"checkpoint-{step}"
         else:
-            # This case should ideally not be hit if we always provide a step for regular saves
-            save_dir = self.output_dir / f"checkpoint-{self.metrics.global_step}"
+            save_dir = self.output_dir
 
         save_dir.mkdir(parents=True, exist_ok=True)
 
-        # Use accelerator's save_state for robust distributed saving
-        # This saves the model, optimizer, and scheduler states.
-        self.accelerator.save_state(str(save_dir))
+        # self.accelerator.wait_for_everyone()
 
-        # The main process is responsible for saving components not handled by save_state
         if self.accelerator.is_main_process:
-            # The model weights are already saved by save_state, but we might want to
-            # save the config and other files in the standard Hugging Face format.
             unwrapped_model = self.accelerator.unwrap_model(self.model)
             unwrapped_model.save_pretrained(
                 save_dir,
-                is_main_process=self.accelerator.is_main_process,
-                save_function=self.accelerator.save,
-                state_dict=self.accelerator.get_state_dict(self.model),
                 safe_serialization=True,
+                save_function=self.accelerator.save
             )
             self.tokenizer.save_pretrained(save_dir)
 
-            # Save custom training state
+            # Save training state
             state = {
                 "global_step": self.metrics.global_step,
                 "best_eval_loss": self.metrics.best_eval_loss,
@@ -268,7 +262,11 @@ class SFTTrainer:
             }
             torch.save(state, save_dir / "training_state.pt")
 
-        # All processes must wait here until the main process has finished saving everything.
+            if optimizer:
+                torch.save(optimizer.state_dict(), save_dir / "optimizer.pt")
+            if lr_scheduler:
+                torch.save(lr_scheduler.state_dict(), save_dir / "scheduler.pt")
+
         self.accelerator.wait_for_everyone()
 
     def train(
@@ -360,7 +358,7 @@ class SFTTrainer:
                                     self.save_checkpoint(is_best=True)
 
                     if self.metrics.global_step % self.config.save_steps == 0:
-                        self.save_checkpoint(is_best=False, step=self.metrics.global_step)
+                        self.save_checkpoint(is_best=False, step=self.metrics.global_step, optimizer=optimizer, lr_scheduler=lr_scheduler)
 
                 if self.metrics.global_step >= max_train_steps:
                     self.save_checkpoint(is_best=False, step=self.metrics.global_step)
