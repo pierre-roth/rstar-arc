@@ -465,14 +465,9 @@ def main(config: Config):
     # Load tokenizer and model
     logger.info(f"Loading tokenizer and model: {config.policy_model}")
 
-    # Load from checkpoint if it exists, otherwise from the base model
-    model_load_path = config.policy_model
-    tokenizer_load_path = config.policy_model
-    logger.info(f"Loading from path: {model_load_path}")
-
     try:
         tokenizer = AutoTokenizer.from_pretrained(
-            tokenizer_load_path,
+            config.policy_model,
             trust_remote_code=True
         )
 
@@ -489,7 +484,7 @@ def main(config: Config):
 
         # Load model
         model = AutoModelForCausalLM.from_pretrained(
-            model_load_path,
+            config.policy_model,
             torch_dtype=torch.bfloat16 if config.use_bf16 else torch.float16,
             trust_remote_code=True,
             attn_implementation=config.attn_implementation,
