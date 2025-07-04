@@ -216,7 +216,7 @@ class SFTTrainer:
             lr_scheduler: torch.optim.lr_scheduler.LRScheduler,
             max_train_steps: int,
     ):
-        """Main training loop with proper step counting and gradient clipping."""
+
         self.model.train()
 
         progress_bar = tqdm(
@@ -635,11 +635,6 @@ def main(config: Config):
         eps=1e-8,
     )
 
-    # Prepare model, optimizer, and dataloader with accelerator
-    model, optimizer, train_dataloader = accelerator.prepare(
-        model, optimizer, train_dataloader
-    )
-
     num_update_steps_per_epoch = math.ceil(
         len(train_dataloader) / config.gradient_accumulation_steps
     )
@@ -653,8 +648,10 @@ def main(config: Config):
         num_training_steps=max_train_steps,
     )
 
-    # Prepare the scheduler
-    lr_scheduler = accelerator.prepare(lr_scheduler)
+    # Prepare model, optimizer, and dataloader with accelerator
+    model, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
+        model, optimizer, train_dataloader, lr_scheduler
+    )
 
     # register scheduler so its state is checkpointed
     accelerator.register_for_checkpointing(lr_scheduler)
