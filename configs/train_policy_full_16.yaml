@@ -8,7 +8,7 @@ example-validation-probability: 0.01
 
 max-seq-len: 14336
 
-resume-from-checkpoint: false
+resume-from-checkpoint: true
 
 policy-model: "Qwen/Qwen2.5-Coder-1.5B"
 training-dataset-name: "policy_dataset_training.jsonl"
