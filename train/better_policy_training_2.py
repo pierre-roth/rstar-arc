@@ -376,9 +376,10 @@ def main(config: Config):
     train_path = Path(NET_SCRATCH_PATH) / "sft_data" / f"round_{config.round_number}" / config.training_dataset_name
     val_path = Path(NET_SCRATCH_PATH) / "sft_data" / f"round_{config.round_number}" / config.validation_dataset_name
 
-    run_name = f"policy-ft-{Path(config.policy_model).name}"
+    run_name = f"policy-ft-{Path(config.policy_model).name}-new"
     # output_dir = Path(NET_SCRATCH_PATH) / "models" / "fine_tuned" / "policy" / run_name
     output_dir = Path("/scratch") / "net_scratch" / "models" / "fine_tuned" / "policy" / run_name
+    policy_model_dir = Path(NET_SCRATCH_PATH) / "models" / "policy"
 
     resume_from_checkpoint = None
     if config.resume_from_checkpoint and output_dir.exists():
@@ -418,7 +419,7 @@ def main(config: Config):
 
     try:
         tokenizer = AutoTokenizer.from_pretrained(
-            config.policy_model,
+            config.policy_model if not config.fine_tuned else str(policy_model_dir / config.policy_model),
             trust_remote_code=True
         )
 
@@ -429,20 +430,21 @@ def main(config: Config):
         tokenizer.padding_side = "right"
 
         # Add special tokens
-        num_added_tokens = tokenizer.add_special_tokens({
-            "additional_special_tokens": SPECIAL_TOKENS
-        })
+        if not config.fine_tuned:
+            num_added_tokens = tokenizer.add_special_tokens({
+                "additional_special_tokens": SPECIAL_TOKENS
+            })
 
         # Load model
         model = AutoModelForCausalLM.from_pretrained(
-            config.policy_model,
+            config.policy_model if not config.fine_tuned else str(policy_model_dir / config.policy_model),
             torch_dtype=torch.bfloat16 if config.use_bf16 else torch.float16,
             trust_remote_code=True,
             attn_implementation=config.attn_implementation,
         )
 
         # Resize embeddings if needed
-        if num_added_tokens > 0:
+        if not config.fine_tuned and num_added_tokens > 0:
             model.resize_token_embeddings(len(tokenizer))
             logger.info(f"Resized token embeddings to {len(tokenizer)}")
 
@@ -655,6 +657,8 @@ def main(config: Config):
 
     # register scheduler so its state is checkpointed
     accelerator.register_for_checkpointing(lr_scheduler)
+
+    max_train_steps //= accelerator.num_processes
 
     if resume_from_checkpoint:
         logger.info("Loading checkpoint state via Accelerate...")

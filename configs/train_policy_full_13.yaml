@@ -10,7 +10,8 @@ max-seq-len: 14336
 
 resume-from-checkpoint: false
 
-policy-model: "Qwen/Qwen2.5-Coder-0.5B"
+fine_tuned: true
+policy-model: "fine_tuned_0.5B_1_epoch"
 training-dataset-name: "policy_dataset_training.jsonl"
 validation-dataset-name: "policy_dataset_validation.jsonl"
 use-bf16: true
@@ -19,10 +20,10 @@ torch-compile: false
 
 full-finetune: true
 
-weight_decay: 0
 train-on-prompts: false
 
 learning-rate: 0.00001
+weight_decay: 0
 
 per-device-train-batch-size: 1
 per-device-eval-batch-size: 1
