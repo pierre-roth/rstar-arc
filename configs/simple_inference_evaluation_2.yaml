@@ -1,0 +1,21 @@
+search-mode: "mcts"
+log-level: "INFO"
+evaluation: true
+
+fine-tuned: true
+
+policy-model: "fine_tuned_1.5B_1_epoch"
+max-seq-len: 14336
+max-tokens: 2048
+
+length-pre-filtering: true
+
+dtype: "bfloat16"
+
+
+data-folder: "/itet-stor/piroth/net_scratch/task_data/evaluation"
+sort-by-length: false
+
+policy-temperature: 0.6
+
+num-rollouts: 256
