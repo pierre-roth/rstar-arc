@@ -1,5 +1,5 @@
 log-level: INFO
-round-number: 5
+round-number: 4
 
 task-validation-fraction: 0.002
 example-validation-num: 1
