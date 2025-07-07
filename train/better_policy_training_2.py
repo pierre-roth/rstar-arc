@@ -379,7 +379,7 @@ def main(config: Config):
     run_name = f"policy-ft-{Path(config.policy_model).name}-new"
     # output_dir = Path(NET_SCRATCH_PATH) / "models" / "fine_tuned" / "policy" / run_name
     output_dir = Path("/scratch") / "net_scratch" / "models" / "fine_tuned" / "policy" / run_name
-    policy_model_dir = Path(NET_SCRATCH_PATH) / "models" / "policy"
+    policy_model_dir = Path("/scratch") / "net_scratch" / "models" / "policy"
 
     resume_from_checkpoint = None
     if config.resume_from_checkpoint and output_dir.exists():
