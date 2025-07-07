@@ -4,7 +4,7 @@ evaluation: false
 
 fine-tuned: true
 
-policy-model: "fine_tuned_1.5B_1_epoch"
+policy-model: "fine_tuned_0.5B_1_epoch"
 max-seq-len: 14336
 max-tokens: 2048
 
