@@ -479,6 +479,8 @@
   - 
 
 - **Work done**:
+  - finishing touches to the distributed training code
+  - trained 0.5B, 1.5B and 3B policy models for one epoch on CSCS
   - 
 
 - **Issues and Questions**:
@@ -488,4 +490,28 @@
   - ??
 
 - **Visuals**:
+  - here is a histogram of the step count distribution for the training set:
+![step_count_histogram_training.png](images/step_count_histogram_training.png)
+
+
+### Week 19 (07.07.2025)
+
+- **Work planned**:
+  - Train policy models for another epoch with slightly lower learning rate to settle into the local minima
+  - 
+
+- **Work done**:
   - ??
+
+- **Issues and Questions**:
+  - ??
+
+- **Results**:
+  - ??
+
+- **Visuals**:
+  - ??
+
+
+
+

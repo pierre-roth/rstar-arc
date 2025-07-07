@@ -22,7 +22,7 @@ full-finetune: true
 
 train-on-prompts: false
 
-learning-rate: 0.0000075
+learning-rate: 0.000009
 weight_decay: 0
 
 per-device-train-batch-size: 1
