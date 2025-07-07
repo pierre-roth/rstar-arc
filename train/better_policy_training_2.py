@@ -84,7 +84,8 @@ class DataCollatorForSFT:
         padded = torch.full((len(sequences), max_len), pad_value, dtype=torch.long)
 
         for i, seq in enumerate(sequences):
-            padded[i, :len(seq)] = torch.tensor(seq, dtype=torch.long)
+            # padded[i, :len(seq)] = torch.tensor(seq, dtype=torch.long)
+            padded[i, :len(seq)] = seq
 
         return padded
 
