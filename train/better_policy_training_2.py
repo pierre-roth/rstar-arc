@@ -420,7 +420,7 @@ def main(config: Config):
 
     try:
         tokenizer = AutoTokenizer.from_pretrained(
-            config.policy_model if not config.fine_tuned else str(policy_model_dir / config.policy_model),
+            (config.policy_model if not config.fine_tuned else str(policy_model_dir / config.policy_model)) if not config.resume_from_checkpoint else output_dir,
             trust_remote_code=True
         )
 
@@ -438,7 +438,7 @@ def main(config: Config):
 
         # Load model
         model = AutoModelForCausalLM.from_pretrained(
-            config.policy_model if not config.fine_tuned else str(policy_model_dir / config.policy_model),
+            (config.policy_model if not config.fine_tuned else str(policy_model_dir / config.policy_model)) if not config.resume_from_checkpoint else resume_from_checkpoint,
             torch_dtype=torch.bfloat16 if config.use_bf16 else torch.float16,
             trust_remote_code=True,
             attn_implementation=config.attn_implementation,
