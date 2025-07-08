@@ -11,7 +11,8 @@ max-seq-len: 14336
 resume-from-checkpoint: true
 
 fine_tuned: false
-policy-model: "fine_tuned_3B_1_epoch"
+run-name: "policy-ft-fine_tuned_3B_1_epoch-new"
+policy-model: "Qwen/Qwen2.5-Coder-3B"
 training-dataset-name: "policy_dataset_training.jsonl"
 validation-dataset-name: "policy_dataset_validation.jsonl"
 use-bf16: true

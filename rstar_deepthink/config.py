@@ -37,6 +37,7 @@ class Config:
                                                                                                "00d62c1b"]])  # list of names of example tasks (to be used sequentially in different rollouts)
     rotate_example: bool = False  # Whether to rotate the example tasks in each rollout
 
+    run_name: str | None = None
     policy_model: str = "Qwen/Qwen2.5-Coder-7B-Instruct"  # Model that generates reasoning steps
     reward_model: str = "Qwen/Qwen2.5-Coder-7B-Instruct"  # Reward Model for evaluating steps
     model_initialization_times = {"policy": None, "reward": None}  # Time taken to initialize models

@@ -377,7 +377,7 @@ def main(config: Config):
     train_path = Path(NET_SCRATCH_PATH) / "sft_data" / f"round_{config.round_number}" / config.training_dataset_name
     val_path = Path(NET_SCRATCH_PATH) / "sft_data" / f"round_{config.round_number}" / config.validation_dataset_name
 
-    run_name = f"policy-ft-{Path(config.policy_model).name}-new"
+    run_name = config.run_name or f"policy-ft-{Path(config.policy_model).name}-new"
     # output_dir = Path(NET_SCRATCH_PATH) / "models" / "fine_tuned" / "policy" / run_name
     output_dir = Path("/scratch") / "net_scratch" / "models" / "fine_tuned" / "policy" / run_name
     policy_model_dir = Path("/scratch") / "net_scratch" / "models" / "policy"
@@ -420,7 +420,7 @@ def main(config: Config):
 
     try:
         tokenizer = AutoTokenizer.from_pretrained(
-            (config.policy_model if not config.fine_tuned else str(policy_model_dir / config.policy_model)) if not config.resume_from_checkpoint else output_dir,
+            config.policy_model if not config.fine_tuned else str(policy_model_dir / config.policy_model),
             trust_remote_code=True
         )
 
@@ -438,7 +438,7 @@ def main(config: Config):
 
         # Load model
         model = AutoModelForCausalLM.from_pretrained(
-            (config.policy_model if not config.fine_tuned else str(policy_model_dir / config.policy_model)) if not config.resume_from_checkpoint else resume_from_checkpoint,
+            config.policy_model if not config.fine_tuned else str(policy_model_dir / config.policy_model),
             torch_dtype=torch.bfloat16 if config.use_bf16 else torch.float16,
             trust_remote_code=True,
             attn_implementation=config.attn_implementation,
