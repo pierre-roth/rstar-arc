@@ -117,7 +117,7 @@ class SFTTrainer:
             self, logits: torch.Tensor, labels: torch.Tensor, weights: torch.Tensor, reduction: str = "mean"
     ) -> torch.Tensor:
         """Computes weighted cross-entropy loss. Can return total loss or per-sequence loss."""
-        shift_logits = logits[..., :-1, :].contiguous().float()
+        shift_logits = logits[..., :-1, :].contiguous()
         shift_labels = labels[..., 1:].contiguous()
 
         loss_fct = torch.nn.CrossEntropyLoss(ignore_index=-100, reduction="none")
@@ -244,6 +244,8 @@ class SFTTrainer:
 
                     # Backward pass
                     self.accelerator.backward(loss)
+                    del outputs
+                    # torch.cuda.empty_cache()
 
                     # Optimizer step (only when gradients are accumulated)
                     if self.accelerator.sync_gradients:
