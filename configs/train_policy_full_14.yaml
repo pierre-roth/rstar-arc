@@ -8,9 +8,9 @@ example-validation-probability: 0.01
 
 max-seq-len: 14336
 
-resume-from-checkpoint: false
+resume-from-checkpoint: true
 
-fine_tuned: true
+fine_tuned: false
 policy-model: "fine_tuned_1.5B_1_epoch"
 training-dataset-name: "policy_dataset_training.jsonl"
 validation-dataset-name: "policy_dataset_validation.jsonl"
