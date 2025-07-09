@@ -8,10 +8,10 @@ example-validation-probability: 0.01
 
 max-seq-len: 14336
 
-resume-from-checkpoint: true
+resume-from-checkpoint: false
 
 fine_tuned: false
-run-name: "policy-ft-fine_tuned_3B_1_epoch-new"
+run-name: "better-ft-policy-3B"
 policy-model: "Qwen/Qwen2.5-Coder-3B"
 training-dataset-name: "policy_dataset_training.jsonl"
 validation-dataset-name: "policy_dataset_validation.jsonl"
@@ -23,7 +23,7 @@ full-finetune: true
 
 train-on-prompts: false
 
-learning-rate: 0.000008
+learning-rate: 0.0000125
 weight_decay: 0
 
 per-device-train-batch-size: 1

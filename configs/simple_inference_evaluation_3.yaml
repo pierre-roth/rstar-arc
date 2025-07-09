@@ -4,7 +4,7 @@ evaluation: true
 
 fine-tuned: true
 
-policy-model: "final_policy_0.5B"
+policy-model: "final_policy_3B"
 max-seq-len: 14336
 max-tokens: 2048
 
