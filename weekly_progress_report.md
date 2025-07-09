@@ -498,10 +498,14 @@
 
 - **Work planned**:
   - Train policy models for another epoch with slightly lower learning rate to settle into the local minima
-  - 
+  - Test the trained models on the training and validation set.
 
 - **Work done**:
-  - ??
+  - Trained policy models for another epoch with slightly lower learning rate to settle into the local minima
+  - Started testing on the training and validation set
+    - 0.5B model: pass@128: 15%, pass@128: 5%
+    - 1.5B model: pass@128: 20%, pass@128: 10%
+    - 3B model: pass@128: 25%, pass@128: 15%
 
 - **Issues and Questions**:
   - ??
@@ -510,8 +514,6 @@
   - ??
 
 - **Visuals**:
-  - ??
-
-
-
+  - Tokens per step histogram for the training dataset: ![tokens_per_step_histogram.png](images/tokens_per_step_histogram.png)
+  - Tokens per solution histogram for the training dataset: ![tokens_per_solution_histogram.png](images/tokens_per_solution_histogram.png)
 
