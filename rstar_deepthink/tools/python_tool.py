@@ -5,9 +5,9 @@ import signal
 import subprocess
 import sys
 import textwrap
-# from timeout_decorator import timeout
+from contextlib import contextmanager
 
-import numpy as np  # Added for direct execution context
+import numpy as np
 
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if project_root not in sys.path:
@@ -17,10 +17,12 @@ from constants import CPU_TIMEOUT_SECONDS, WALL_TIMEOUT_SECONDS, CODE, CODE_END,
 
 logger = logging.getLogger(__name__)
 
-use_subprocess = True
-logger.info(f"Code execution method: {'Subprocess' if use_subprocess else 'Direct'}")
+GLOBAL_IMPORTS = (
+    "from train.common import *\n"
+    "import numpy as np\n"
+    "from typing import *\n"
+)
 
-GLOBAL_IMPORTS = "from train.common import *\nimport numpy as np\nfrom typing import *\n"
 
 # --- Get the path for the subprocess python ---
 SUBPROCESS_PYTHON_PATH = os.environ.get("SUBPROCESS_PYTHON_EXEC")
@@ -50,17 +52,11 @@ def comment_out_markers(code):
 def execute_code_in_subprocess(code_str, input_grids, expected_outputs):
     """
     Spawns a new Python interpreter (potentially minimal) to execute code.
-    (Original subprocess logic - kept for when use_subprocess is True)
     """
     wrapper_code = textwrap.dedent(f"""
         import resource
         import sys
         import json
-        # Ensure numpy is available in the subprocess environment if user code needs it
-        try:
-            import numpy as np
-        except ImportError:
-            np = None # Allow code to potentially run without numpy if not used
 
         # Set memory limit
         try:
@@ -87,7 +83,7 @@ def execute_code_in_subprocess(code_str, input_grids, expected_outputs):
 
         try:
             # Execute the user code to define solve()
-            exec_globals = {{"np": np}} # Pass numpy alias if available
+            exec_globals = {{}}
             exec(user_code, exec_globals)
 
             # Parse input data from command line arg
@@ -119,12 +115,17 @@ def execute_code_in_subprocess(code_str, input_grids, expected_outputs):
                     if i < len(expected_outputs) and expected_outputs[i] is not None:
                          if grid_result != expected_outputs[i]:
                             passed = False
+                            break
                 except Exception as e:
                     print(f"Error processing grid {{i}}: {{str(e)}}", file=sys.stderr)
                     results.append(None)
                     passed = False
                     error_occurred = True
-
+                    break
+            
+            while len(results) < len(input_grids):
+                results.append(None)
+            
             print(json.dumps({{"error": error_occurred, "passed": passed, "results": results}}))
 
         except Exception as e:
@@ -206,73 +207,97 @@ def execute_code_in_subprocess(code_str, input_grids, expected_outputs):
         return True, False, []
 
 
-# @timeout(WALL_TIMEOUT_SECONDS)
+@contextmanager
+def _time_limit(seconds: int):
+    """Raise TimeoutError if the enclosed block exceeds *seconds* wall-clock seconds."""
+    def _raise_timeout(signum, frame):  # pragma: no cover
+        raise TimeoutError(f"Execution exceeded {seconds}s")
+
+    previous_handler = signal.signal(signal.SIGALRM, _raise_timeout)
+    signal.setitimer(signal.ITIMER_REAL, seconds)
+    try:
+        yield
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)          # cancel timer
+        signal.signal(signal.SIGALRM, previous_handler)  # restore
+
+
 def execute_code_directly(code_str, input_grids, expected_outputs):
     """
-    Executes the code directly in the current process.
-    WARNING: Lacks isolation, resource limits, and subprocess timeouts.
+    Executes user code in the current Python process.
+    Mirrors the behaviour of `execute_code_in_subprocess`, but without
+    spawning an external interpreter, so it still lacks full isolation.
+    Returns (error_occurred, passed, results).
     """
-    results = []
+    results: list = []
     passed = True
     error_occurred = False
-    exec_globals = {"np": np}  # Provide numpy alias
+    exec_globals: dict = {}
 
     try:
-        # Execute the user code string in the controlled context
+        # Compile and execute the submission – defines solve()
         exec(code_str, exec_globals)
 
-        if 'solve' not in exec_globals:
+        if "solve" not in exec_globals:
             logger.debug("Direct execution failed: Function 'solve' not defined.")
-            return True, False, []  # Error, Not Passed, Empty Results
+            return True, False, []
 
-        solve_func = exec_globals['solve']
+        solve_func = exec_globals["solve"]
 
-        # Ensure expected_outputs has the same length as input_grids
+        # Normalise expected_outputs length
         if expected_outputs is None:
             expected_outputs = [None] * len(input_grids)
 
-        # Run solve on each input grid
-        for i, grid in enumerate(input_grids):
-            try:
-                # Potentially time the individual call if needed for debugging
-                # start_time = time.time()
-                grid_result = solve_func(grid)
-                # elapsed = time.time() - start_time
-                # logger.debug(f"Direct execution grid {i} took {elapsed:.4f}s")
+        # ---- ONE wall-clock timer for the entire batch ----
+        with _time_limit(WALL_TIMEOUT_SECONDS):
+            for i, grid in enumerate(input_grids):
+                try:
+                    grid_result = solve_func(grid)
 
-                # Convert numpy arrays to lists if necessary (less likely needed here, but for consistency)
-                if hasattr(grid_result, 'tolist'):
-                    grid_result = grid_result.tolist()
+                    # JSON-safe conversion for numpy arrays (no module import needed)
+                    if hasattr(grid_result, "tolist"):
+                        grid_result = grid_result.tolist()
 
-                results.append(grid_result)
+                    results.append(grid_result)
 
-                # Check against expected output if provided
-                if i < len(expected_outputs) and expected_outputs[i] is not None:
-                    if grid_result != expected_outputs[i]:
-                        passed = False  # Failed this specific test case
-            except Exception as e:
-                # Error occurred processing this specific grid
-                logger.debug(f"Error during direct execution of solve() on grid {i}: {str(e)}")
-                # traceback.print_exc() # Uncomment for full traceback during debugging
-                results.append(None)  # Append None for this grid's result
-                passed = False  # If any grid fails or errors, overall 'passed' is False
-                error_occurred = True  # Mark that an error happened
+                    # Early-stop on first wrong answer
+                    if (expected_outputs[i] is not None and
+                            grid_result != expected_outputs[i]):
+                        passed = False
+                        break
+                except Exception as e:
+                    logger.debug(f"Error on grid {i}: {e}")
+                    results.append(None)
+                    passed = False
+                    error_occurred = True
+                    break
+
+    except TimeoutError as e:
+        logger.debug(f"Overall execution timed out: {e}")
+        error_occurred = True
+        passed = False
 
     except Exception as e:
-        # Catch errors during the initial exec call
-        logger.debug(f"Error executing provided code string directly: {str(e)}")
-        # traceback.print_exc() # Uncomment for full traceback during debugging
+        logger.debug(f"Error executing submission: {e}")
         error_occurred = True
-        passed = False  # Mark as not passed if exec fails
+        passed = False
+
+    # Pad results so caller always receives len(input_grids) items
+    if len(results) < len(input_grids):
+        results.extend([None] * (len(input_grids) - len(results)))
 
     return error_occurred, passed, results
 
 
-def execute_code_with_task(code: str, input_grids: list[list[list[int]]],
-                           expected_outputs: list) -> (bool, bool, list[list[list[int]]]):
+
+def execute_code_with_task(
+        code: str,
+        input_grids: list[list[list[int]]],
+        expected_outputs: list,
+        config=None
+) -> (bool, bool, list[list[list[int]]]):
     """
-    Execute code against multiple input grids using either a subprocess (default)
-    or direct execution based on the global 'use_subprocess' flag.
+    Execute code against multiple input grids using either a subprocess or direct execution.
     """
     if not code.strip():
         logger.debug("Cannot execute empty code!")
@@ -280,7 +305,10 @@ def execute_code_with_task(code: str, input_grids: list[list[list[int]]],
 
     code = GLOBAL_IMPORTS + code
 
-    if use_subprocess:
+    environment_var_sub = os.environ.get("RSTAR_SUBPROCESS_EXECUTION")
+    use_subprocess_execution = environment_var_sub is not None and environment_var_sub == "1"
+
+    if use_subprocess_execution or (config is not None and config.execute_in_subprocess):
         logger.debug("Executing code via subprocess.")
         return execute_code_in_subprocess(code, input_grids, expected_outputs)
     else:
@@ -292,6 +320,7 @@ def run_examples(
         task,
         code: str,
         test_test: bool = False,
+        config=None
 ) -> (bool, bool, list[list[list[int]]]):
     """
     Run code against all examples in a single process.
@@ -305,7 +334,7 @@ def run_examples(
         expected_outputs += [example.output_grid.grid for example in task.test_examples]
     else:
         expected_outputs += [None] * len(task.test_examples)
-    return execute_code_with_task(code, input_grids, expected_outputs)
+    return execute_code_with_task(code, input_grids, expected_outputs, config=config)
 
 
 def test_correct(node) -> (bool, bool, list[list[list[int]]]):
@@ -383,8 +412,12 @@ def test_correct(node) -> (bool, bool, list[list[list[int]]]):
     return success, prefix_errors, err_full, passed_full, results_full"""
 
 
-def verify_prefixes_and_code(code: str, input_grids: list[list[list[int]]],
-                             expected_outputs: list | None) -> tuple[bool, list[bool], bool, bool, list]:
+def verify_prefixes_and_code(
+        code: str,
+        input_grids: list[list[list[int]]],
+        expected_outputs: list | None,
+        config=None
+) -> tuple[bool, list[bool], bool, bool, list]:
     """
     Execute each code prefix and the full code, returning aggregated results.
     Uses batching to avoid command-line argument length limits.
@@ -409,7 +442,7 @@ def verify_prefixes_and_code(code: str, input_grids: list[list[list[int]]],
         if not prefix_code_to_run.strip():
             prefix_errors.append(False)  # Empty prefix is not an error
             continue
-        err, _, _ = execute_code_with_task(prefix_code_to_run, prefix_check_inputs, [None])
+        err, _, _ = execute_code_with_task(prefix_code_to_run, prefix_check_inputs, [None], config=config)
         prefix_errors.append(err)
 
     if any(prefix_errors):
@@ -435,7 +468,8 @@ def verify_prefixes_and_code(code: str, input_grids: list[list[list[int]]],
         input_batch = input_grids[i:i + BATCH_SIZE]
         output_batch = expected_outputs[i:i + BATCH_SIZE]
 
-        err_full, passed_full, results_full = execute_code_with_task(full_code, input_batch, output_batch)
+        err_full, passed_full, results_full = execute_code_with_task(full_code, input_batch, output_batch,
+                                                                     config=config)
 
         if err_full:
             any_error_occurred = True
