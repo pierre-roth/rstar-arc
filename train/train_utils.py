@@ -7,6 +7,7 @@ from collections import defaultdict
 import torch
 from datasets import Dataset
 from peft import LoraConfig, get_peft_model
+from tqdm.auto import tqdm
 from transformers import PreTrainedTokenizerBase
 
 
@@ -55,17 +56,33 @@ def maybe_peft_wrap(model, config):
     return get_peft_model(model, lora_cfg)
 
 
-def renormalize_task_weights(ds: Dataset) -> Dataset:
+def renormalize_task_weights(
+        ds: Dataset,
+        num_proc: int | None = None,
+        batch_size: int = 1000,
+) -> Dataset:
     """Ensure per-task weights in the dataset sum to 1."""
+    # 1. Sum weights per task
     totals = defaultdict(float)
-    for row in ds:
+    for row in tqdm(ds, desc="Summing weights"):
         totals[row["task_name"]] += float(row.get("weight", 0.0))
 
-    def _scale(ex, totals=totals):
-        total = totals.get(ex["task_name"], 1.0)
-        return {"weight": float(ex["weight"]) / total if total else 0.0}
+    # 2. Scale each batch
+    def _scale(batch, totals=totals):
+        total_per_row = [totals.get(t, 1.0) for t in batch["task_name"]]
+        scaled = [
+            float(w) / total if total else 0.0
+            for w, total in zip(batch["weight"], total_per_row)
+        ]
+        return {"weight": scaled}
 
-    return ds.map(_scale)
+    return ds.map(
+        _scale,
+        batched=True,
+        batch_size=batch_size,
+        num_proc=num_proc,
+        desc="Renormalizing task weights",
+    )
 
 
 class WeightedCollator:

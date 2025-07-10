@@ -1,16 +1,15 @@
 import logging
 import math
 import os
-import random
 import sys
 from collections import deque
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+import datasets
 import torch
 from accelerate import Accelerator
 from accelerate.utils import set_seed, broadcast, ProjectConfiguration
-from datasets import Dataset, load_dataset
 from torch.optim import AdamW
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
@@ -28,16 +27,9 @@ if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
 from constants import (
-    LOCAL_SCRATCH_PATH,
     NET_SCRATCH_PATH,
-    SFT_IN_BETWEEN_PROMPT,
-    SFT_SYSTEM_PROMPT,
-    SPECIAL_TOKENS,
 )
 from rstar_deepthink import Config
-from rstar_deepthink.arc_task import ARCTask
-from rstar_deepthink.arc_task.task_utils import task_to_prompt
-from train_utils import renormalize_task_weights
 from utils import setup_logging
 
 logger = logging.getLogger(__name__)
@@ -85,7 +77,6 @@ class DataCollatorForSFT:
         padded = torch.full((len(sequences), max_len), pad_value, dtype=torch.long)
 
         for i, seq in enumerate(sequences):
-            # padded[i, :len(seq)] = torch.tensor(seq, dtype=torch.long)
             padded[i, :len(seq)] = seq
 
         return padded
@@ -321,80 +312,16 @@ class SFTTrainer:
         progress_bar.close()
 
 
-def create_validation_splits(
-        dataset: Dataset,
-        config: Config,
-        seed: int = 42,
-) -> tuple[Dataset, Dataset | None, Dataset | None]:
-    """Create validation splits with clearer logic."""
-    rng = random.Random(seed)
-
-    # Group examples by task
-    task_to_indices: dict[str, list[int]] = {}
-    for idx, ex in enumerate(dataset):
-        task_to_indices.setdefault(ex["task_name"], []).append(idx)
-
-    # Split by task
-    val_task_indices = []
-    if config.task_validation_fraction > 0:
-        all_tasks = list(task_to_indices.keys())
-        rng.shuffle(all_tasks)
-
-        n_val_tasks = int(len(all_tasks) * config.task_validation_fraction)
-        val_tasks = set(all_tasks[:n_val_tasks])
-
-        for task in val_tasks:
-            val_task_indices.extend(task_to_indices[task])
-    else:
-        val_tasks = set()
-
-    # Split remaining tasks by example
-    val_example_indices = []
-    train_indices = []
-
-    for task, indices in task_to_indices.items():
-        if task in val_tasks:
-            continue
-
-        # Take validation examples if task has enough samples
-        if (config.example_validation_num > 0 and
-                len(indices) >= config.example_validation_threshold):
-
-            indices_copy = list(indices)
-            rng.shuffle(indices_copy)
-
-            n_val_candidates = min(
-                config.example_validation_num * (rng.random() < config.example_validation_probability),
-                len(indices_copy) // 2)
-            candidates = indices_copy[:n_val_candidates]
-            remaining_indices = indices_copy[n_val_candidates:]
-
-            val_example_indices.extend(candidates)
-            train_indices.extend(remaining_indices)
-        else:
-            train_indices.extend(indices)
-
-    # Create dataset splits
-    train_ds = dataset.select(train_indices)
-    val_task_ds = dataset.select(val_task_indices) if val_task_indices else None
-    val_example_ds = dataset.select(val_example_indices) if val_example_indices else None
-
-    return train_ds, val_task_ds, val_example_ds
-
-
 def main(config: Config):
     """Main training function with improved structure."""
     # Setup
+    processed_dataset_dir = Path(NET_SCRATCH_PATH) / "sft_data" / f"round_{config.round_number}"
+
     set_seed(config.seed or 42)
     setup_logging(config.numeric_log_level)
     os.environ["NCCL_DEBUG"] = "WARN"
 
-    # Paths
-    train_path = Path(NET_SCRATCH_PATH) / "sft_data" / f"round_{config.round_number}" / config.training_dataset_name
-    val_path = Path(NET_SCRATCH_PATH) / "sft_data" / f"round_{config.round_number}" / config.validation_dataset_name
-
     run_name = config.run_name or f"policy-ft-{Path(config.policy_model).name}-new"
-    # output_dir = Path(NET_SCRATCH_PATH) / "models" / "fine_tuned" / "policy" / run_name
     output_dir = Path("/scratch") / "net_scratch" / "models" / "fine_tuned" / "policy" / run_name
     policy_model_dir = Path("/scratch") / "net_scratch" / "models" / "policy"
 
@@ -431,46 +358,36 @@ def main(config: Config):
     if not accelerator.is_main_process:
         logging.getLogger().setLevel(logging.WARNING)
 
-    # Load tokenizer and model
-    logger.info(f"Loading tokenizer and model: {config.policy_model}")
-
+    logger.info("Loading tokenizer and model …")
     try:
-        tokenizer = AutoTokenizer.from_pretrained(
-            config.policy_model if not config.fine_tuned else str(policy_model_dir / config.policy_model),
-            trust_remote_code=True
-        )
+        tokenizer_path = processed_dataset_dir / "tokenizer"
+        tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, trust_remote_code=True)
 
-        # Setup tokenizer
+        # padding settings (identical to before – the saved vocab already contains SPECIAL_TOKENS)
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
             tokenizer.pad_token_id = tokenizer.eos_token_id
         tokenizer.padding_side = "right"
 
-        # Add special tokens
-        if not config.fine_tuned:
-            num_added_tokens = tokenizer.add_special_tokens({
-                "additional_special_tokens": SPECIAL_TOKENS
-            })
-
-        # Load model
+        # model comes from HF / fine-tuned checkpoint exactly as before
+        model_source = (
+            config.policy_model
+            if not config.fine_tuned
+            else str(policy_model_dir / config.policy_model)
+        )
         model = AutoModelForCausalLM.from_pretrained(
-            config.policy_model if not config.fine_tuned else str(policy_model_dir / config.policy_model),
+            model_source,
             torch_dtype=torch.bfloat16 if config.use_bf16 else torch.float16,
             trust_remote_code=True,
             attn_implementation=config.attn_implementation,
         )
-
-        # Resize embeddings if needed
-        if not config.fine_tuned and num_added_tokens > 0:
-            model.resize_token_embeddings(len(tokenizer))
-            logger.info(f"Resized token embeddings to {len(tokenizer)}")
+        model.resize_token_embeddings(len(tokenizer))  # no-op if size unchanged
 
         # Configure model for training
         model.config.use_cache = False
         if config.gradient_checkpointing:
             model.gradient_checkpointing_enable()
-
-        logger.info(f"Gradient checkpointing enabled: {config.gradient_checkpointing}")
+            logger.info(f"Gradient checkpointing enabled: {config.gradient_checkpointing}")
 
         model.enable_input_require_grads()
 
@@ -482,129 +399,25 @@ def main(config: Config):
         logger.error(f"Failed to load model or tokenizer: {e}")
         raise
 
-    # Load datasets
-    logger.info("Loading datasets...")
+    # ------------------------------------------------------------------------ datasets
+    logger.info("Opening pre-processed Arrow datasets from %s", processed_dataset_dir)
+    ds_root = processed_dataset_dir
 
-    cache_dir = Path(LOCAL_SCRATCH_PATH) / ".cache" / "huggingface" / "datasets"
-    num_proc = max(1, os.cpu_count() // accelerator.num_processes - 1)
+    def must_load(name: str):
+        p = ds_root / name
+        if not p.exists():
+            raise FileNotFoundError(f"Required split {name!r} is missing under {ds_root}")
+        return datasets.load_from_disk(p)
 
-    def _tokenize_batch(batch):
-        """Tokenize a batch and compute lengths for filtering."""
-        prompts = []
-        completions = []
-        for j, sol in zip(batch["task_json"], batch["solution"]):
-            prompt = (
-                    SFT_SYSTEM_PROMPT
-                    + task_to_prompt(ARCTask.from_dict(j))
-                    + SFT_IN_BETWEEN_PROMPT
-            )
-            prompts.append(prompt)
-            completions.append(sol)
+    train_ds = must_load("train")
+    val_task_ds = must_load("val_task") if (ds_root / "val_task").exists() else None
+    val_example_ds = must_load("val_example") if (ds_root / "val_example").exists() else None
+    val_val_ds = must_load("val_val")
 
-        prompt_tokens = tokenizer(prompts, add_special_tokens=False, padding=False)["input_ids"]
-        completion_tokens = tokenizer(completions, add_special_tokens=False, padding=False)["input_ids"]
-
-        input_ids = []
-        labels = []
-        lengths = []
-
-        for p_tok, c_tok in zip(prompt_tokens, completion_tokens):
-            c_tok = c_tok + [tokenizer.eos_token_id]
-            total = p_tok + c_tok
-            p_len = len(p_tok)
-            if len(total) > config.max_seq_len:
-                if p_len < config.max_seq_len:
-                    total = total[: config.max_seq_len]
-                    actual_p_len = p_len
-                else:
-                    total = p_tok[: config.max_seq_len]
-                    actual_p_len = config.max_seq_len
-            else:
-                actual_p_len = p_len
-
-            lbl = total.copy()
-            lbl[:actual_p_len] = [-100] * actual_p_len
-
-            input_ids.append(total)
-            labels.append(lbl)
-            lengths.append(len(total))
-
-        return {"input_ids": input_ids, "labels": labels, "length": lengths}
-
-    # Load and filter training data
-    raw_train_data = load_dataset(
-        "json",
-        data_files={"train": str(train_path)},
-        cache_dir=str(cache_dir),
-    )["train"]
-
-    orig_train_len = len(raw_train_data)
-    train_data_with_length = raw_train_data.map(
-        _tokenize_batch,
-        batched=True,
-        batch_size=1000,
-        num_proc=num_proc,
-        remove_columns=[c for c in raw_train_data.column_names if c not in ["weight", "task_name"]],
-    )
-    filtered_train_data = train_data_with_length.filter(
-        lambda x: x["length"] <= config.max_seq_len,
-        num_proc=num_proc
-    ).remove_columns("length")
-
-    logger.info(
-        f"Filtered training data: {orig_train_len} -> {len(filtered_train_data)} "
-        f"({orig_train_len - len(filtered_train_data)} examples removed)"
-    )
-
-    # Create validation splits
-    train_ds, val_task_ds, val_example_ds = create_validation_splits(
-        filtered_train_data, config, config.seed or 42
-    )
-
-    # Load external validation data
-    raw_val_data = load_dataset(
-        "json",
-        data_files={"validation": str(val_path)},
-        cache_dir=str(cache_dir),
-    )["validation"]
-
-    orig_val_len = len(raw_val_data)
-    val_data_with_length = raw_val_data.map(
-        _tokenize_batch,
-        batched=True,
-        batch_size=1000,
-        num_proc=num_proc,
-        remove_columns=[c for c in raw_val_data.column_names if c not in ["weight", "task_name"]],
-    )
-    val_val_ds = val_data_with_length.filter(
-        lambda x: x["length"] <= config.max_seq_len,
-        num_proc=num_proc
-    ).remove_columns("length")
-
-    logger.info(
-        f"Filtered validation data: {orig_val_len} -> {len(val_val_ds)} "
-        f"({orig_val_len - len(val_val_ds)} examples removed)"
-    )
-
-    # Renormalize weights
-    train_ds = renormalize_task_weights(train_ds)
-    if val_task_ds:
-        val_task_ds = renormalize_task_weights(val_task_ds)
-    if val_example_ds:
-        val_example_ds = renormalize_task_weights(val_example_ds)
-    val_val_ds = renormalize_task_weights(val_val_ds)
-
-    # Shuffle training data
-    train_ds = train_ds.shuffle(seed=config.seed or 42)
-
-    # Convert to torch format for faster dataloader operation
-    train_ds.set_format(type="torch")
-    if val_task_ds:
-        val_task_ds.set_format(type="torch")
-    if val_example_ds:
-        val_example_ds.set_format(type="torch")
-
-    val_val_ds.set_format(type="torch")
+    # set correct format (retained by save_to_disk, but explicit is clearer)
+    for ds in (train_ds, val_task_ds, val_example_ds, val_val_ds):
+        if ds is not None:
+            ds.set_format(type="torch")
 
     # Log dataset statistics
     logger.info(f"Dataset sizes:")
@@ -617,11 +430,12 @@ def main(config: Config):
 
     # Create data loaders
     collator = DataCollatorForSFT(tokenizer=tokenizer, max_len=config.max_seq_len)
+    num_proc = max(1, os.cpu_count() // accelerator.num_processes - 1)
 
     train_dataloader = DataLoader(
         train_ds,
         batch_size=config.per_device_train_batch_size,
-        shuffle=False,
+        shuffle=False,  # Already shuffled
         collate_fn=collator,
         num_workers=num_proc,
         pin_memory=True,
@@ -714,8 +528,6 @@ def main(config: Config):
         # This is the key to starting in the middle of an epoch
         train_dataloader = accelerator.skip_first_batches(train_dataloader,
                                                           completed_steps * config.gradient_accumulation_steps)
-
-    # torch.cuda.empty_cache()
 
     # Train
     logger.info(f"Starting training for {max_train_steps} steps...")
