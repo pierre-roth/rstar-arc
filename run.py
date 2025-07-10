@@ -115,6 +115,7 @@ def main():
         "env": DEFAULT_ENV_CONFIG.copy(),
         "script_args": "",
         "yaml_config": None,
+        "submission_count": 1,
     }
 
     # Load config from YAML if provided
@@ -135,6 +136,8 @@ def main():
                     config['script_args'] = yaml_config['script_args']
                 if 'yaml_config' in yaml_config:
                     config['yaml_config'] = yaml_config['yaml_config']
+                if 'submission_count' in yaml_config:
+                    config['submission_count'] = yaml_config['submission_count']
             print("Configuration loaded successfully.")
         except FileNotFoundError:
             print(f"Error: Config file '{args.config_file}' not found. Proceeding with interactive prompts.")
@@ -224,6 +227,16 @@ def main():
             "Enter any additional arguments for the python script:",
             default=config.get("script_args", ""),
         )
+
+    # 5. Number of Submissions
+    print("\n--- Submission Configuration ---")
+    if 'submission_count' not in config or not args.config_file:
+        config["submission_count"] = int(ask_question(
+            "text",
+            "How many times do you want to submit this job?",
+            default=str(config["submission_count"]),
+            validate=lambda text: text.isdigit() and int(text) > 0 or "Please enter a positive number",
+        ))
 
     sbatch_script_content = f"""#!/bin/bash
 #SBATCH --mail-type=NONE # mail configuration: NONE, BEGIN, END, FAIL, REQUEUE, ALL
@@ -542,16 +555,23 @@ exit ${{EXIT_CODE}}
     submit_job = ask_question("confirm", "Submit this job to SLURM?", default=True)
 
     if submit_job:
+        temp_script_path = None
         try:
             # Use a temporary file for the sbatch script
             with tempfile.NamedTemporaryFile(mode="w", suffix=".sh", delete=False) as temp_script:
                 temp_script.write(sbatch_script_content)
                 temp_script_path = temp_script.name
 
-            print(f"Submitting job using temporary script: {temp_script_path}")
-            result = subprocess.run(["sbatch", temp_script_path], capture_output=True, text=True, check=True)
-            print("SLURM Output:\n", result.stdout)
-            print(f"Job submitted successfully!")
+            submission_count = config.get("submission_count", 1)
+            plural_s = "s" if submission_count > 1 else ""
+
+            print(f"\nSubmitting job {submission_count} time{plural_s} using temporary script: {temp_script_path}")
+
+            for i in range(submission_count):
+                print(f"--- Submission {i + 1} of {submission_count} ---")
+                result = subprocess.run(["sbatch", temp_script_path], capture_output=True, text=True, check=True)
+                print("SLURM Output:\n", result.stdout.strip())
+                print(f"Job {i + 1} submitted successfully!")
 
         except FileNotFoundError:
             print("Error: 'sbatch' command not found. Make sure SLURM is installed and in your PATH.")
@@ -565,7 +585,7 @@ exit ${{EXIT_CODE}}
             print(f"An unexpected error occurred during submission: {e}")
         finally:
             # Clean up the temporary script file
-            if 'temp_script_path' in locals() and os.path.exists(temp_script_path):
+            if temp_script_path and os.path.exists(temp_script_path):
                 try:
                     os.remove(temp_script_path)
                     print(f"Temporary script {temp_script_path} deleted.")
