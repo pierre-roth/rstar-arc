@@ -2,6 +2,7 @@ search-mode: "mcts"
 log-level: "INFO"
 
 fine-tuned: true
+execute-in-subprocess: true
 
 save-for-visualization: true
 round-number: 6
