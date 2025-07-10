@@ -5,9 +5,8 @@ import signal
 import subprocess
 import sys
 import textwrap
-from contextlib import contextmanager
 
-import numpy as np
+# import numpy as np
 
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if project_root not in sys.path:
@@ -207,21 +206,6 @@ def execute_code_in_subprocess(code_str, input_grids, expected_outputs):
         return True, False, []
 
 
-@contextmanager
-def _time_limit(seconds: int):
-    """Raise TimeoutError if the enclosed block exceeds *seconds* wall-clock seconds."""
-    def _raise_timeout(signum, frame):  # pragma: no cover
-        raise TimeoutError(f"Execution exceeded {seconds}s")
-
-    previous_handler = signal.signal(signal.SIGALRM, _raise_timeout)
-    signal.setitimer(signal.ITIMER_REAL, seconds)
-    try:
-        yield
-    finally:
-        signal.setitimer(signal.ITIMER_REAL, 0)          # cancel timer
-        signal.signal(signal.SIGALRM, previous_handler)  # restore
-
-
 def execute_code_directly(code_str, input_grids, expected_outputs):
     """
     Executes user code in the current Python process.
@@ -248,34 +232,27 @@ def execute_code_directly(code_str, input_grids, expected_outputs):
         if expected_outputs is None:
             expected_outputs = [None] * len(input_grids)
 
-        # ---- ONE wall-clock timer for the entire batch ----
-        with _time_limit(WALL_TIMEOUT_SECONDS):
-            for i, grid in enumerate(input_grids):
-                try:
-                    grid_result = solve_func(grid)
+        for i, grid in enumerate(input_grids):
+            try:
+                grid_result = solve_func(grid)
 
-                    # JSON-safe conversion for numpy arrays (no module import needed)
-                    if hasattr(grid_result, "tolist"):
-                        grid_result = grid_result.tolist()
+                # JSON-safe conversion for numpy arrays (no module import needed)
+                if hasattr(grid_result, "tolist"):
+                    grid_result = grid_result.tolist()
 
-                    results.append(grid_result)
+                results.append(grid_result)
 
-                    # Early-stop on first wrong answer
-                    if (expected_outputs[i] is not None and
-                            grid_result != expected_outputs[i]):
-                        passed = False
-                        break
-                except Exception as e:
-                    logger.debug(f"Error on grid {i}: {e}")
-                    results.append(None)
+                # Early-stop on first wrong answer
+                if (expected_outputs[i] is not None and
+                        grid_result != expected_outputs[i]):
                     passed = False
-                    error_occurred = True
                     break
-
-    except TimeoutError as e:
-        logger.debug(f"Overall execution timed out: {e}")
-        error_occurred = True
-        passed = False
+            except Exception as e:
+                logger.debug(f"Error on grid {i}: {e}")
+                results.append(None)
+                passed = False
+                error_occurred = True
+                break
 
     except Exception as e:
         logger.debug(f"Error executing submission: {e}")
@@ -287,7 +264,6 @@ def execute_code_directly(code_str, input_grids, expected_outputs):
         results.extend([None] * (len(input_grids) - len(results)))
 
     return error_occurred, passed, results
-
 
 
 def execute_code_with_task(

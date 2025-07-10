@@ -36,7 +36,7 @@ def batch(iterable, n=-1):
         yield chunk
 
 
-def setup_logging(numeric_log_level: int):
+def setup_logging(numeric_log_level: int) -> None:
     """
     Set up the logging configuration based on settings.
 

@@ -64,7 +64,7 @@ class Node:
             self.terminal_reason = TERMINAL_MAX_DEPTH
             self.terminal = True
 
-        if self.token_count >= self.config.max_seq_len:
+        if self.token_count is not None and self.token_count >= self.config.max_seq_len:
             self.terminal_reason = TERMINAL_TOKEN_LIMIT
             self.terminal = True
 
@@ -169,7 +169,7 @@ class Node:
             logger.debug(f"Successfully extracted code ({len(code.splitlines())} lines)")
             logger.debug("Validating by testing for errors by testing on input grids ...")
 
-            error, passed, self.execution_outputs = run_examples(self.task, code)
+            error, passed, self.execution_outputs = run_examples(self.task, code, config=self.config)
 
             if error:
                 self.valid = False

@@ -183,8 +183,10 @@ def test_solution_on_rearc_example(solution_code: str, rearc_example: dict[str, 
     try:
         code_to_execute = remove_markers(solution_code)  # Keep remove_markers if solutions might have them
         # code_to_execute = solution_code # Use if solutions are known to be clean
-        error, passed, _ = execute_code_with_task(code_to_execute, [rearc_example['input']],
-                                                  [rearc_example['output']])
+        error, passed, _ = execute_code_with_task(
+            code_to_execute,
+            [rearc_example['input']],
+            [rearc_example['output']])
         return not error and passed
     except Exception as e:
         logger.debug(f"Exception during solution test: {e}")

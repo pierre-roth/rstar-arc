@@ -63,9 +63,9 @@ def _make_simple_task():
 
 
 def test_node_validity_and_terminal(monkeypatch, tmp_path):
-    python_tool.use_subprocess = False
     cfg = Config()
     cfg.local_job_dir = tmp_path.as_posix()
+    cfg.execute_in_subprocess = False
     task = _make_simple_task()
 
     root = Node(cfg)
@@ -82,8 +82,8 @@ def test_node_validity_and_terminal(monkeypatch, tmp_path):
 
 
 def test_node_invalid_solution(monkeypatch):
-    python_tool.use_subprocess = False
     cfg = Config()
+    cfg.execute_in_subprocess = False
     task = _make_simple_task()
     root = Node(cfg)
     root.task = task
@@ -96,9 +96,9 @@ def test_node_invalid_solution(monkeypatch):
 
 
 def test_serialize_and_load_nodes(tmp_path, monkeypatch):
-    python_tool.use_subprocess = False
     cfg = Config()
     cfg.local_job_dir = tmp_path.as_posix()
+    cfg.execute_in_subprocess = False
     task = _make_simple_task()
 
     root = Node(cfg)
@@ -122,8 +122,8 @@ def test_serialize_and_load_nodes(tmp_path, monkeypatch):
 
 
 def test_node_updates_and_metadata(monkeypatch):
-    python_tool.use_subprocess = False
     cfg = Config()
+    cfg.execute_in_subprocess = False
     task = _make_simple_task()
 
     root = Node(cfg)
@@ -186,13 +186,13 @@ def test_node_updates_and_metadata(monkeypatch):
 
 
 def test_run_examples_and_correctness(monkeypatch):
-    python_tool.use_subprocess = False
     cfg = Config()
+    cfg.execute_in_subprocess = False
     task = _make_simple_task()
 
     code = CODE_PREFIX + "return I\n" + CODE_END
     err, passed, outputs = python_tool.run_examples(
-        task, python_tool.remove_markers(code), test_test=True
+        task, python_tool.remove_markers(code), test_test=True, config=cfg
     )
     assert not err
     assert passed

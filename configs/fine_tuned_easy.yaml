@@ -14,7 +14,7 @@ max-seq-len: 14336
 max-tokens: 512
 dtype: "bfloat16"
 
-data-folder: "/itet-stor/piroth/net_scratch/task_data/training"
+data-folder: "/home/piroth/rstar-arc/data_sample/easy"
 sort-by-length: false
 length-pre-filtering: true
 
