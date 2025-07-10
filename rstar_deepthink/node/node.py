@@ -3,7 +3,7 @@ import time
 
 import numpy as np
 
-from constants import CODE_END, TERMINAL_CODE_END, TERMINAL_MAX_DEPTH, TERMINAL_INVALID
+from constants import CODE_END, TERMINAL_CODE_END, TERMINAL_MAX_DEPTH, TERMINAL_INVALID, TERMINAL_TOKEN_LIMIT
 from rstar_deepthink.arc_task import ARCTask
 from rstar_deepthink.config import Config
 from rstar_deepthink.tools import run_examples
@@ -28,6 +28,7 @@ class Node:
         self.temperature: float | None = None  # Temperature used to generate this node
         self.depth: int = 0
         self.tag = "0"
+        self.token_count: int | None = None  # Number of tokens in the code
 
         self.inited = False
 
@@ -63,6 +64,10 @@ class Node:
             self.terminal_reason = TERMINAL_MAX_DEPTH
             self.terminal = True
 
+        if self.token_count >= self.config.max_seq_len:
+            self.terminal_reason = TERMINAL_TOKEN_LIMIT
+            self.terminal = True
+
         # Check if ended with code end marker
         if self.state["code"].strip().endswith(CODE_END):
             self.terminal_reason = TERMINAL_CODE_END
@@ -74,7 +79,7 @@ class Node:
 
         return self.terminal
 
-    def add_child(self, code: str, current_temperature: float, current_example: str) -> "Node":
+    def add_child(self, code: str, current_temperature: float, current_example: str, token_count=None) -> "Node":
         """
         Add a child node to this node.
 
@@ -82,6 +87,7 @@ class Node:
             :param code:
             :param current_temperature:
             :param current_example:
+            :param token_count: Optional token count
         """
         child = Node(self.config)
 
@@ -90,6 +96,7 @@ class Node:
         child.tag = f"{self.tag}.{len(self.children)}"
         child.task = self.task
         child.state["code"] = code
+        child.token_count = token_count
 
         logger.debug(f"Code for child node {child.tag}: {code}")
 

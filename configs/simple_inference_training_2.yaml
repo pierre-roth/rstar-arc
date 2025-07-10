@@ -1,6 +1,7 @@
 search-mode: "mcts"
 log-level: "INFO"
 evaluation: false
+round-number: 6
 
 fine-tuned: true
 

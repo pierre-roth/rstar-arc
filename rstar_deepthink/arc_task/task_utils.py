@@ -112,7 +112,7 @@ def filter_tasks_by_length(
 
         length = len(tokenizer.encode(prompt))
 
-        total = length + config.max_depth * config.max_tokens
+        total = length + config.max_tokens + 1
         if total <= config.max_seq_len:
             filtered.append(task)
         else:

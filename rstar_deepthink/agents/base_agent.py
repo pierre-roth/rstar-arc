@@ -119,30 +119,21 @@ class Agent:
 
         # For each current node, expand with corresponding outputs
         for current_node, request_output in zip(self.current_nodes, outputs):
-            if self.config.log_level == "DEBUG":
-                if request_output.prompt_token_ids is not None:
-                    prompt_token_count = len(request_output.prompt_token_ids)
-                else:
-                    prompt_token_count = "N/A"
+            prompt_token_count = len(request_output.prompt_token_ids)
 
-                logger.debug(
-                    f"Expanding node at depth {current_node.depth} with {len(request_output.outputs)} children")
-                logger.debug(f"Prompt token count: {prompt_token_count}")
+            logger.debug(f"Expanding node at depth {current_node.depth} with {len(request_output.outputs)} children")
+            logger.debug(f"Prompt token count: {prompt_token_count}")
 
             # Create children from outputs
             new_children = []
             # Create children from outputs and log token counts for each generation
             for output in request_output.outputs:
-                # Only count if log level is debug:
-                if self.config.log_level == "DEBUG":
-                    if output.token_ids is not None:
-                        child_token_count = len(output.token_ids)
-                    else:
-                        child_token_count = "N/A"
-                    logger.debug(f"Generated child with token count: {child_token_count}")
+                child_token_count = len(output.token_ids)
+
+                logger.debug(f"Generated child with token count: {child_token_count}")
 
                 # Validation happens here when add_child is called
-                child = current_node.add_child(output.text, self.current_temperature, self.example_name)
+                child = current_node.add_child(output.text, self.current_temperature, self.example_name, prompt_token_count + child_token_count)
                 new_children.append(child)
 
             # Add all new children to candidate nodes for evaluation

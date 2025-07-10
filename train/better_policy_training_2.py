@@ -3,6 +3,7 @@ import math
 import os
 import random
 import sys
+from collections import deque
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -108,6 +109,10 @@ class SFTTrainer:
         self.output_dir = output_dir
         self.best_model_dir = output_dir / "best_model"
         self.metrics = TrainingMetrics()
+
+        self.loss_window: deque[torch.Tensor] = deque(
+            maxlen=config.logging_steps  # keeps exactly the last N steps
+        )
 
         # Create directories
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -265,19 +270,26 @@ class SFTTrainer:
                     self.metrics.global_step += 1
 
                     # Logging
+                    batch_loss = self.accelerator.gather_for_metrics(loss.detach()).mean()
+                    self.loss_window.append(batch_loss)
+
                     if self.metrics.global_step % self.config.logging_steps == 0:
-                        # Gather loss from all processes for more accurate logging
-                        avg_loss = self.accelerator.gather_for_metrics(loss.detach()).mean()
+                        # torch.stack is safe: deque always contains tensors of identical shape
+                        avg_loss = torch.stack(list(self.loss_window)).mean()
+
                         if self.accelerator.is_main_process:
-                            progress_bar.set_postfix(loss=avg_loss.item())
-                        self.accelerator.log({
-                            "train/loss": avg_loss.item(),
-                            "train/learning_rate": lr_scheduler.get_last_lr()[0],
-                            "train/epoch": epoch,
-                        }, step=self.metrics.global_step)
+                            progress_bar.set_postfix(loss=f"{avg_loss.item():.4f}")
+
+                        self.accelerator.log(
+                            {
+                                "train/loss": avg_loss.item(),
+                                "train/learning_rate": lr_scheduler.get_last_lr()[0],
+                            },
+                            step=self.metrics.global_step,
+                        )
 
                     # Evaluation
-                    if self.metrics.global_step % self.config.eval_steps == 0 and self.metrics.global_step > 0:
+                    if (self.metrics.global_step % self.config.eval_steps == 0 and self.metrics.global_step > 0) or self.metrics.global_step >= max_train_steps:
                         for name, val_loader in val_dataloaders.items():
                             eval_loss = self.evaluate(val_loader, name)
 
@@ -351,7 +363,9 @@ def create_validation_splits(
             indices_copy = list(indices)
             rng.shuffle(indices_copy)
 
-            n_val_candidates = min(config.example_validation_num * (rng.random() < config.example_validation_probability), len(indices_copy) // 2)
+            n_val_candidates = min(
+                config.example_validation_num * (rng.random() < config.example_validation_probability),
+                len(indices_copy) // 2)
             candidates = indices_copy[:n_val_candidates]
             remaining_indices = indices_copy[n_val_candidates:]
 
@@ -480,9 +494,9 @@ def main(config: Config):
         completions = []
         for j, sol in zip(batch["task_json"], batch["solution"]):
             prompt = (
-                SFT_SYSTEM_PROMPT
-                + task_to_prompt(ARCTask.from_dict(j))
-                + SFT_IN_BETWEEN_PROMPT
+                    SFT_SYSTEM_PROMPT
+                    + task_to_prompt(ARCTask.from_dict(j))
+                    + SFT_IN_BETWEEN_PROMPT
             )
             prompts.append(prompt)
             completions.append(sol)
@@ -701,6 +715,8 @@ def main(config: Config):
         train_dataloader = accelerator.skip_first_batches(train_dataloader,
                                                           completed_steps * config.gradient_accumulation_steps)
 
+    # torch.cuda.empty_cache()
+
     # Train
     logger.info(f"Starting training for {max_train_steps} steps...")
     trainer.train(
@@ -710,20 +726,6 @@ def main(config: Config):
         lr_scheduler=lr_scheduler,
         max_train_steps=max_train_steps,
     )
-
-    # Final evaluation
-    logger.info("Running final evaluation...")
-    for name, loader in prepared_val_dataloaders.items():
-        eval_loss = trainer.evaluate(loader, f"final_{name}")
-        if accelerator.is_main_process:
-            logger.info(f"Final {name} loss: {eval_loss:.4f}")
-
-    # Log best results
-    if accelerator.is_main_process:
-        logger.info(
-            f"Training completed. Best validation loss: {trainer.metrics.best_eval_loss:.4f} "
-            f"at step {trainer.metrics.best_step}"
-        )
 
     # Cleanup
     if config.report_to == "wandb":

@@ -32,7 +32,7 @@ class PolicyModel:
             download_dir=self.config.policy_model_dir,
             tensor_parallel_size=self.config.gpus,
             dtype=self.config.dtype,
-            max_model_len=self.config.max_seq_len,
+            max_model_len=self.config.max_seq_len + self.config.max_tokens,
             enforce_eager=self.config.enforce_eager,
             # max_num_seqs=self.config.max_num_seqs,
             # max_num_batched_tokens=self.config.max_num_batched_tokens,

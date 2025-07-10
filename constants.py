@@ -26,6 +26,7 @@ TERMINAL_INVALID = "Invalid code"  # Terminal marker for invalid code
 TERMINAL_CODE_END = "Code end marker"  # Terminal marker for end of code tag
 TERMINAL_MAX_DEPTH = "Maximum depth reached"  # Terminal marker for reaching max depth
 TERMINAL_SUBTREE_TERMINAL = "Subtree terminal"  # Terminal marker for subtree terminal
+TERMINAL_TOKEN_LIMIT = "Token limit reached"  # Terminal marker for reaching token limit
 
 # special markers for language model
 STEP_END = "<end_of_step>"  # Marks the end of a reasoning step
