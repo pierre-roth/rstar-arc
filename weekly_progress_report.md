@@ -503,9 +503,11 @@
 - **Work done**:
   - Trained policy models for another epoch with slightly lower learning rate to settle into the local minima
   - Started testing on the training and validation set
-    - 0.5B model: pass@128: 15%, pass@128: 5%
-    - 1.5B model: pass@128: 20%, pass@128: 10%
-    - 3B model: pass@128: 25%, pass@128: 15%
+    - 0.5B model: pass@128: 8%, pass@128: 1.5%
+    - 1.5B model: pass@128: 11.5%, pass@128: 2%
+    - 3B model: pass@128: 14.4%, pass@128: 3%
+  - Started MCTS data-collection runs on training, validation, training_extended and training_synthetic datasets
+    - tbd
 
 - **Issues and Questions**:
   - ??
@@ -516,4 +518,5 @@
 - **Visuals**:
   - Tokens per step histogram for the training dataset: ![tokens_per_step_histogram.png](images/tokens_per_step_histogram.png)
   - Tokens per solution histogram for the training dataset: ![tokens_per_solution_histogram.png](images/tokens_per_solution_histogram.png)
+
 

@@ -11,46 +11,44 @@ from constants import NET_SCRATCH_SFT_DATA_DIR, NET_SCRATCH_TASK_DATA_DIR
 
 def calculate_coverage(round_num: int):
     solutions_path_training = os.path.join(NET_SCRATCH_SFT_DATA_DIR, f"round_{round_num}", "solutions_training.jsonl")
-    solutions_path_evaluation = os.path.join(NET_SCRATCH_SFT_DATA_DIR, f"round_{round_num}",
-                                             "solutions_evaluation.jsonl")
+    solutions_path_evaluation = os.path.join(NET_SCRATCH_SFT_DATA_DIR, f"round_{round_num}", "solutions_evaluation.jsonl")
     task_path = NET_SCRATCH_TASK_DATA_DIR
 
     task_names = set()
 
-    # Collect all task names from the task data
-    with open(solutions_path_training, "r", encoding="utf-8") as f:
-        for line in f:
-            if line.strip():
-                solution = json.loads(line)
-                task_names.add(solution["task_name"] + ".json")
+    # Collect all task names from the solution files
+    for path in [solutions_path_training, solutions_path_evaluation]:
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as f:
+                for line in f:
+                    if line.strip():
+                        solution = json.loads(line)
+                        task_names.add(solution["task_name"] + ".json")
 
-    with open(solutions_path_evaluation, "r", encoding="utf-8") as f:
-        for line in f:
-            if line.strip():
-                solution = json.loads(line)
-                task_names.add(solution["task_name"] + ".json")
-
-    # per folder covered tasks
     folders = {}
     solved = {}
 
-    # go through every directory in task path and calculate coverage for each one
-    for dir_name in os.listdir(task_path):
-        dir_path = os.path.join(task_path, dir_name)
-        if os.path.isdir(dir_path):
+    # Recursively walk through the task path
+    for dirpath, dirnames, filenames in os.walk(task_path):
+        # Skip folders that contain sub-folders, process only leaf directories
+        if not dirnames:
+            relative_dir_path = os.path.relpath(dirpath, task_path)
             total_tasks = 0
             covered_tasks = 0
 
-            folders[dir_name] = set()
-            solved[dir_name] = set()
-            for task_file in os.listdir(dir_path):
+            folders[relative_dir_path] = set()
+            solved[relative_dir_path] = set()
+
+            for task_file in filenames:
                 if task_file.endswith(".json"):
                     total_tasks += 1
-                    folders[dir_name].add(task_file)
+                    folders[relative_dir_path].add(task_file)
                     if task_file in task_names:
-                        solved[dir_name].add(task_file)
+                        solved[relative_dir_path].add(task_file)
                         covered_tasks += 1
-            print(f"{dir_name}: {covered_tasks}/{total_tasks} = {covered_tasks / total_tasks:.2%} coverage")
+
+            if total_tasks > 0:
+                print(f"{relative_dir_path}: {covered_tasks}/{total_tasks} = {covered_tasks / total_tasks:.2%} coverage")
 
     print(f"Total unique tasks: {len(task_names)}")
     return folders, solved

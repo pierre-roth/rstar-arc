@@ -1,6 +1,8 @@
 search-mode: "mcts"
 log-level: "INFO"
 
+evaluation: false
+
 fine-tuned: true
 execute-in-subprocess: true
 
@@ -15,7 +17,7 @@ max-seq-len: 14336
 max-tokens: 512
 dtype: "bfloat16"
 
-data-folder: "/home/piroth/rstar-arc/data_sample/easy"
+data-folder: "/itet-stor/piroth/net_scratch/task_data/training_extended"
 sort-by-length: false
 length-pre-filtering: true
 
@@ -23,7 +25,7 @@ variable-temperature: true
 min-policy-temperature: 0.55
 max-policy-temperature: 0.9
 
-num-rollouts: 32
+num-rollouts: 64
 branching-factor: 8
 max-depth: 16
 
