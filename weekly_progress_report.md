@@ -520,3 +520,21 @@
   - Tokens per solution histogram for the training dataset: ![tokens_per_solution_histogram.png](images/tokens_per_solution_histogram.png)
 
 
+### Week 20 (14.07.2025)
+
+- **Work planned**:
+  - Finish preparing reward datasets and start training the reward model
+  - Test the reward model on the training and validation set
+
+- **Work done**:
+  - ??
+
+- **Issues and Questions**:
+  - ??
+
+- **Results**:
+  - ??
+
+- **Visuals**:
+  - ??
+
