@@ -91,6 +91,7 @@ class Config:
     positive_reward: float = 1.0  # Positive reward for correct code
 
     batch_size: int = -1  # Batch size for parallel inference (-1 means all at once, otherwise batch size)
+    skip_batches: int = 0  # Number of batches to skip
 
     job_id: int = int(os.getenv("SLURM_JOB_ID", 0))  # Job ID (read from environment variable)
     cpus: int = int(os.getenv("SLURM_CPUS_PER_TASK", 72))  # Number of CPUs available
@@ -134,7 +135,7 @@ class Config:
     example_validation_probability: float = 0.015  # probability of holding out an example for validation
 
     # If true, skips LoRA adapters and fine-tunes all model parameters
-    full_finetune: bool = False
+    full_finetune: bool = True
     learning_rate: float = 2e-5
     num_train_epochs: int = 1
     per_device_train_batch_size: int = 1

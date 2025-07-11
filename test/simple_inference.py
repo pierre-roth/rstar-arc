@@ -83,6 +83,7 @@ def _compute_pass_at_m(c: int, n: int, m: int) -> float:
 
 def main() -> None:
     config = Config()
+    config.sort_by_length = True  # Ensure tasks are sorted by length for batch skipping
     setup_logging(config.numeric_log_level)
 
     tasks = load_tasks(config)
@@ -167,7 +168,13 @@ def main() -> None:
     )
 
     os.makedirs(config.local_job_dir, exist_ok=True)
+
     stats_file_path = os.path.join(config.local_job_dir, "pass_stats.json")
+
+    batch_stats_file_path = os.path.join(
+        config.local_job_dir, "pass_stats_batches.jsonl"
+    )
+
 
     # -------------------------------------------------------------------
     # Statistics containers
@@ -177,7 +184,11 @@ def main() -> None:
 
     workers = max(1, config.cpus - 1)
     with ProcessPool(max_workers=workers) as pool:
-        for batch_start in range(0, len(tasks), batch_size):
+        for i, batch_start in enumerate(range(0, len(tasks), batch_size)):
+            if i < config.skip_batches:
+                logger.info(f"Skipping batch {i + 1} of {len(tasks) // batch_size + 1}")
+                continue
+
             batch_tasks = tasks[batch_start:batch_start + batch_size]
 
             # Build prompts on the fly to save memory
@@ -194,6 +205,9 @@ def main() -> None:
             )
 
             request_outputs = llm.generate(batch_prompts, sampling_params)
+
+            batch_task_stats: List[dict] = []
+            batch_pass_flags: List[bool] = []
 
             for task, output in zip(batch_tasks, request_outputs):
                 generations = [o.text for o in output.outputs]
@@ -222,6 +236,7 @@ def main() -> None:
 
                 passed = successes > 0
                 overall_pass_flags.append(passed)
+                batch_pass_flags.append(passed)
                 logger.info(
                     f"Task {task.name}: {successes}/{n} correct → pass@{n}={passed}"
                 )
@@ -243,6 +258,35 @@ def main() -> None:
                         "pass_at_m": pass_at_m,
                     }
                 )
+
+                batch_task_stats.append(
+                    {
+                        "task_name": task.name,
+                        "successes": successes,
+                        "pass_at_m": pass_at_m,
+                    }
+                )
+
+            batch_overall_pass_at_n = (
+                    sum(batch_pass_flags) / len(batch_pass_flags)
+            )
+            batch_overall_pass_at_m = {
+                m: sum(t["pass_at_m"][m] for t in batch_task_stats) / len(batch_task_stats)
+                for m in m_values
+            }
+
+            batch_stats_payload = {
+                "batch_index": i,  # zero-based
+                "num_tasks": len(batch_task_stats),
+                "overall_pass_at_m": batch_overall_pass_at_m,
+                "overall_pass_at_n": batch_overall_pass_at_n,
+                "tasks": batch_task_stats,
+            }
+
+            # append **one line** to the JSONL file
+            with open(batch_stats_file_path, "a", encoding="utf-8") as f:
+                json.dump(batch_stats_payload, f)
+                f.write("\n")
 
     # -------------------------------------------------------------------
     # Aggregate statistics
