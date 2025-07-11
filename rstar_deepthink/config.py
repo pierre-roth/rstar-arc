@@ -92,6 +92,7 @@ class Config:
 
     batch_size: int = -1  # Batch size for parallel inference (-1 means all at once, otherwise batch size)
     skip_batches: int = 0  # Number of batches to skip
+    num_batches: int = -1  # Number of batches to process (-1 means all batches)
 
     job_id: int = int(os.getenv("SLURM_JOB_ID", 0))  # Job ID (read from environment variable)
     cpus: int = int(os.getenv("SLURM_CPUS_PER_TASK", 72))  # Number of CPUs available

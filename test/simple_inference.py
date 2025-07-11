@@ -175,7 +175,6 @@ def main() -> None:
         config.local_job_dir, "pass_stats_batches.jsonl"
     )
 
-
     # -------------------------------------------------------------------
     # Statistics containers
     # -------------------------------------------------------------------
@@ -186,8 +185,14 @@ def main() -> None:
     with ProcessPool(max_workers=workers) as pool:
         for i, batch_start in enumerate(range(0, len(tasks), batch_size)):
             if i < config.skip_batches:
-                logger.info(f"Skipping batch {i + 1} of {len(tasks) // batch_size + 1}")
+                logger.info(f"Skipping batch index {i}")
                 continue
+
+            if config.num_batches > 0:
+                config.num_batches -= 1
+            elif config.num_batches == 0:
+                logger.info("Reached the limit of batches to process. Stopping.")
+                break
 
             batch_tasks = tasks[batch_start:batch_start + batch_size]
 

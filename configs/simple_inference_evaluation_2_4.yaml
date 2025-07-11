@@ -17,8 +17,10 @@ dtype: "bfloat16"
 data-folder: "/itet-stor/piroth/net_scratch/task_data/evaluation"
 sort-by-length: false
 
-policy-temperature: 0.8
+policy-temperature: 0.9
 
-num-rollouts: 1024
+num-rollouts: 2048
 
-batch-size: 50
+batch-size: 25
+skip-batches: 12
+num-batches: 4
