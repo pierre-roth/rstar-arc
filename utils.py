@@ -102,6 +102,8 @@ def serialize_nodes(nodes):
                 node_data[key] = [child.tag for child in value]
             elif key == "task":
                 node_data[key] = value.name if value is not None else None
+            elif key == "execution_outputs":
+                continue
             else:
                 node_data[key] = make_serializable(value)
         data[node.tag] = node_data
