@@ -328,13 +328,12 @@ def run_examples(
 def test_correct(node) -> (bool, bool, list[list[list[int]]]):
     """Test correctness against test examples based on prior execution results."""
     try:
-        if not node.valid:
+        if not node.valid or not node.state["code"].count(STEP_END) >= 1:
             logger.debug(f"Node {getattr(node, 'id', 'N/A')} is not valid, skipping correctness test.")
             return True, False, []
 
         num_training = len(node.task.training_examples)
-        if not hasattr(node, 'execution_outputs') or node.execution_outputs is None or len(
-                node.execution_outputs) < num_training + len(node.task.test_examples):
+        if node.execution_outputs is None or len(node.execution_outputs) < num_training + len(node.task.test_examples):
             logger.warning(
                 f"Node {getattr(node, 'id', 'N/A')} execution outputs missing or incomplete. Cannot test correctness.")
             return True, False, []
