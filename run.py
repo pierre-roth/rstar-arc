@@ -35,7 +35,7 @@ SCRIPTS = [
 DEFAULT_SLURM_CONFIG = {
     "cpus_per_task": 16,
     "mem": "62G",
-    "gpu_type": "geforce_rtx_2080",  # Default GPU type
+    "gpu_type": "geforce_rtx_3090",  # Default GPU type
     "num_gpus": 1,  # Default number of GPUs if type is selected
 }
 
