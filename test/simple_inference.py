@@ -101,7 +101,7 @@ def main() -> None:
         download_dir=config.policy_model_dir,
         dtype=config.dtype,
         max_model_len=config.max_seq_len,
-        gpu_memory_utilization=config.policy_vram_percentage,
+        gpu_memory_utilization=0.8,
     )
 
     tokenizer = llm.get_tokenizer()
