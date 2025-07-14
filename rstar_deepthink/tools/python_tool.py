@@ -110,9 +110,9 @@ def execute_code_in_subprocess(code_str, input_grids, expected_outputs):
                     # Basic grid validation could be added here if needed
                     
                     if grid_result is not None:
-                        if not isinstance(grid_result, list) or not all(isinstance(row, list) for row in grid_result):
+                        if not (isinstance(grid_result, list) and all(isinstance(row, list) for row in grid_result)):
                             raise ValueError("The result must be a 2D list (grid).")
-                        elif not len(grid_result) <= 30 or not all(len(row) <= 30 for row in grid_result):
+                        if len(grid_result) > 30 or any(len(row) > 30 for row in grid_result):
                             raise ValueError("The result grid must not exceed 30x30 in size.")
                     
                     results.append(grid_result)
@@ -247,9 +247,9 @@ def execute_code_directly(code_str, input_grids, expected_outputs):
                     grid_result = grid_result.tolist()
 
                 if grid_result is not None:
-                    if not isinstance(grid_result, list) or not all(isinstance(row, list) for row in grid_result):
+                    if not (isinstance(grid_result, list) and all(isinstance(row, list) for row in grid_result)):
                         raise ValueError("The result must be a 2D list (grid).")
-                    elif not len(grid_result) <= 30 or not all(len(row) <= 30 for row in grid_result):
+                    if len(grid_result) > 30 or any(len(row) > 30 for row in grid_result):
                         raise ValueError("The result grid must not exceed 30x30 in size.")
 
                 results.append(grid_result)
@@ -328,7 +328,7 @@ def run_examples(
 def test_correct(node) -> (bool, bool, list[list[list[int]]]):
     """Test correctness against test examples based on prior execution results."""
     try:
-        if not node.valid or not node.state["code"].count(STEP_END) >= 1:
+        if not node.valid or not node.collect_code().count(STEP_END) >= 1:
             logger.debug(f"Node {getattr(node, 'id', 'N/A')} is not valid, skipping correctness test.")
             return True, False, []
 

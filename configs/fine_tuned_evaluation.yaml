@@ -6,9 +6,9 @@ evaluation: true
 fine-tuned: true
 execute-in-subprocess: true
 
-save-for-visualization: true
+save-for-visualization: false
 round-number: 6
-solve-only-unsolved: false
+solve-only-unsolved: true
 # solutions-per-task: 32
 save-sft-data: true
 
@@ -22,7 +22,7 @@ sort-by-length: false
 length-pre-filtering: true
 
 variable-temperature: true
-min-policy-temperature: 0.55
+min-policy-temperature: 0.7
 max-policy-temperature: 0.9
 
 num-rollouts: 64

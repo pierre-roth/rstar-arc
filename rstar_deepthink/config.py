@@ -20,7 +20,6 @@ class Config:
     loading configuration from a YAML file and providing default values.
     """
 
-    arc_prize: bool = False  # Whether this is a competition submission
     evaluation: bool = False  # Whether the model is running on the evaluation set
 
     log_level: str = "INFO"  # Logging level: DEBUG, INFO, WARNING, ERROR, CRITICAL
@@ -196,10 +195,6 @@ class Config:
         This method runs automatically after the dataclass is instantiated,
         loading configuration from a file (if specified) and calculating derived values.
         """
-        if self.arc_prize:
-            self.save_for_visualization = False
-            self.save_sft_data = False
-            # TODO: adapt config to ARC prize competition settings
 
         # Parse command line arguments to get config file path
         parser = argparse.ArgumentParser(description='rSTAR meets ARC')
