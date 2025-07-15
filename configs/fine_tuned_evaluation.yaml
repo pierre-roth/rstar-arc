@@ -30,4 +30,5 @@ branching-factor: 8
 max-depth: 16
 
 batch-size: 40
+num-tasks: 30
 

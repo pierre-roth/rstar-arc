@@ -32,8 +32,7 @@ class Config:
     save_sft_data: bool = True  # Whether to save SFT data
 
     num_examples: int = -1  # Number of examples to use for training (default: all)
-    example_names: list[list[str]] = field(default_factory=lambda: [["6d0aefbc", "1cf80156"], ["1cf80156",
-                                                                                               "00d62c1b"]])  # list of names of example tasks (to be used sequentially in different rollouts)
+    example_names: list[list[str]] = field(default_factory=lambda: [["6d0aefbc", "1cf80156"], ["1cf80156", "00d62c1b"]])  # list of names of example tasks (to be used sequentially in different rollouts)
     rotate_example: bool = False  # Whether to rotate the example tasks in each rollout
 
     run_name: str | None = None

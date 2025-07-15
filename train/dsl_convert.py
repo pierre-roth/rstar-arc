@@ -23,14 +23,14 @@ logger = logging.getLogger(__name__)
 # --- CONFIGURATION ---
 # Hardcode configuration variables for easy modification.
 # DATASET_PATH = "/Users/piroth/Downloads/round_2_2/policy_dataset_validation.jsonl"
-DATASET_PATH = "/Users/piroth/Downloads/round_2_2/solutions_training_augmented.jsonl"
+DATASET_PATH = "/Users/piroth/Downloads/dsl_convertable.jsonl"
 MODEL_NAME = "o4-mini"
 # MODEL_NAME = "gpt-4.1"
 # MODEL_NAME = "google/gemini-2.5-flash-preview-05-20"
-REASONING_EFFORT = "medium"  # "low", "medium", or "high"
+REASONING_EFFORT = "high"  # "low", "medium", or "high"
 MAX_WORKERS = 1  # Number of parallel requests to the API
-OUTPUT_FILE = "/Users/piroth/Downloads/dsl_dataset.jsonl"
-PROCESSED_TASKS_FILE = "/Users/piroth/Downloads/dsl_processed_tasks.txt"
+OUTPUT_FILE = "/Users/piroth/Downloads/additional_dsl_dataset.jsonl"
+PROCESSED_TASKS_FILE = "/Users/piroth/Downloads/additional_dsl_processed_tasks.txt"
 
 OPENAI_MODELS = ["o4-mini", "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano", "o3"]
 
@@ -160,16 +160,16 @@ def process_item(args: Tuple[int, Dict], client: OpenAI, processed_tasks: Set[st
     Processes a single item from the dataset. This function is called by the thread pool.
     """
     index, item = args
-    # task_name = item['task_name']
-    task_name = item['original_task_name']
+    task_name = item['task_name']
+    # task_name = item['original_task_name']
 
     try:
         # 1. Pre-process the data
         # main_logic = item['solution']
-        # task_json = item['task_json']
-        # weight = item['weight']
-        main_logic = item['solution_code']
-        examples = item['examples']
+        task_json = item['task_json']
+        weight = item.get('weight', 1.0)
+        main_logic = item['solution']
+        # examples = item['examples']
 
         # 2. Construct the LLM prompt
         prompt = USER_PROMPT_TEMPLATE.format(original_code=main_logic)
@@ -206,31 +206,31 @@ def process_item(args: Tuple[int, Dict], client: OpenAI, processed_tasks: Set[st
             solution_code = parsed_output.solution_code
 
         # 4. Verify the generated code with prefix checks
-        # input_grids = [ex["input"] for ex in task_json['train']] + [ex["input"] for ex in task_json['test']]
-        # expected_outputs = [ex["output"] for ex in task_json['train']] + [ex["output"] for ex in task_json['test']]
+        input_grids = [ex["input"] for ex in task_json['train']] + [ex["input"] for ex in task_json['test']]
+        expected_outputs = [ex["output"] for ex in task_json['train']] + [ex["output"] for ex in task_json['test']]
 
-        input_grids = [ex["input"] for ex in examples]
-        expected_outputs = [ex["output"] for ex in examples]
+        # input_grids = [ex["input"] for ex in examples]
+        # expected_outputs = [ex["output"] for ex in examples]
 
         success, _, err_full, passed_full, _ = verify_prefixes_and_code(
             solution_code, input_grids, expected_outputs
         )
 
-        """final_data = {
+        final_data = {
             "task_name": task_name,
             "task_json": task_json,
             "solution": solution_code,
             "weight": weight,
             "index": str(index),
-        }"""
+        }
 
-        final_data = {
+        """final_data = {
             "task_name": f"{index:08x}",
             "original_task_name": task_name,
             "solution_code": solution_code,
             "examples": examples,
             "index": str(index),
-        }
+        }"""
 
         if not (success and not err_full and passed_full):
             return False, final_data
@@ -303,7 +303,7 @@ def main():
                         attempted_count += 1
                         success, result_data = fut.result()
                         if success:
-                            print(success, result_data['original_task_name'], result_data['solution_code'])
+                            # print(success, result_data['original_task_name'], result_data['solution_code'])
                             success_count += 1
                             processed_lines.add(result_data['index'])
                             save_processed_task(result_data['index'], PROCESSED_TASKS_FILE)
@@ -331,7 +331,7 @@ def main():
                     attempted_count += 1
                     success, result_data = fut.result()
                     if success:
-                        print(success, result_data['original_task_name'], result_data['solution_code'])
+                        # print(success, result_data['original_task_name'], result_data['solution_code'])
                         success_count += 1
                         processed_lines.add(result_data['index'])
                         save_processed_task(result_data['index'], PROCESSED_TASKS_FILE)
