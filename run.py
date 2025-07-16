@@ -20,14 +20,14 @@ SCRIPTS = [
     "train/generate_policy_training_dataset.py",
     "train/generate_policy_validation_dataset.py",
     "train/train_policy.py",
-    "train/better_policy_training_1.py",
-    "train/better_policy_training_2.py",
+    "train/better_policy_training.py",
     "test/merge_policy_lora.py",
     "test/simple_inference.py",
     "train/augment_reward_data.py",
     "train/generate_reward_training_dataset.py",
     "train/generate_reward_validation_dataset.py",
     "train/train_reward.py",
+    "train/better_reward_training.py",
     "test/merge_reward_lora.py"
 ]
 

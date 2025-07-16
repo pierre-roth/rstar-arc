@@ -1,0 +1,33 @@
+search-mode: "mcts"
+log-level: "INFO"
+
+evaluation: false
+
+fine-tuned: true
+execute-in-subprocess: true
+
+save-for-visualization: false
+round-number: 6
+solve-only-unsolved: false
+# solutions-per-task: 32
+save-sft-data: true
+
+policy-model: "final_policy_3B"
+max-seq-len: 14336
+max-tokens: 512
+dtype: "bfloat16"
+
+data-folder: "/itet-stor/piroth/net_scratch/task_data/training_synthetic/training_synthetic_19"
+sort-by-length: false
+length-pre-filtering: true
+
+variable-temperature: true
+min-policy-temperature: 0.55
+max-policy-temperature: 0.9
+
+num-rollouts: 64
+branching-factor: 8
+max-depth: 16
+
+batch-size: 40
+
