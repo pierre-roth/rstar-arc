@@ -104,7 +104,7 @@ class Config:
     output_dir: str = os.path.join(NET_SCRATCH_PATH, "outputs")  # Directory to save results
     sft_data_dir: str = os.path.join(NET_SCRATCH_PATH, "sft_data")  # Directory to save SFT data
     task_dir: str = os.path.join(NET_SCRATCH_PATH, "task_data")  # Directory to save task data
-    round_number: int = 3  # "rStar-Math round number"
+    round_number: int = 6  # "rStar-Math round number"
 
     config_file: str = ""  # Path to YAML config file
 

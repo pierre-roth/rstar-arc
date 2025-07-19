@@ -54,7 +54,7 @@ def main(config: Config):
             n_test = len(original_task_json.get('test', []))
             chunk_size = n_train + n_test
 
-            # Total output entries = one per complete chunk + one full-task entry
+            # Total output entries = one per complete chunk and one full-task entry
             num_complete_chunks = len(augmented_examples) // chunk_size if chunk_size > 0 else 0
             total_output_entries_per_pair[line_num] = num_complete_chunks + 1
             total_output_entries_per_task[original_task_name] = total_output_entries_per_task.get(original_task_name, 0) + num_complete_chunks + 1

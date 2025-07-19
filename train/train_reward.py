@@ -1,24 +1,8 @@
-"""
-Train a reward model on positive–negative preference pairs.
-
-Everything is driven by rstar_deepthink.Config:
-  • model and dataset paths
-  • LoRA hyper-params
-  • batch-size, LR, logging, etc.
-Multi-GPU training is handled via Accelerate.
-
-Launch with:
-  # Example: 4 GPUs with torchrun
-  torchrun --nproc_per_node 4 train/train_reward.py --config-file configs/train_reward.yaml
-or
-  # Example: via Accelerate
-  accelerate launch train/train_reward.py --config-file configs/train_reward.yaml
-"""
-
 from __future__ import annotations
 
 import logging
 import os
+import random
 import sys
 from functools import partial
 from typing import Any, Sequence, Dict, List
@@ -26,9 +10,8 @@ from typing import Any, Sequence, Dict, List
 import torch
 import torch.nn.functional as F  # Renamed for conventional alias
 import wandb
-from datasets import load_dataset
-import random
 from datasets import DatasetDict
+from datasets import load_dataset
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
@@ -39,13 +22,13 @@ from transformers import (
     PreTrainedTokenizerBase,
 )
 
-# Ensure project root is in path to import custom modules
+# Ensure project root is in a path to import custom modules
 # This assumes the script is in a subdirectory like 'train/'
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from train_utils import maybe_peft_wrap, renormalize_task_weights  # Assuming train_utils.py is in the same directory or accessible
+from train_utils import maybe_peft_wrap, renormalize_task_weights
 from constants import (
     NET_SCRATCH_PATH,
     LOCAL_SCRATCH_PATH,
@@ -370,7 +353,8 @@ else:
     raw_datasets = DatasetDict({"train": train_ds, "validation": val_ds})
 
 # Columns to remove after tokenization (original text columns)
-columns_to_remove = [c for c in ("task_json", "prefix", "chosen", "rejected") if c in raw_datasets["train"].column_names]
+columns_to_remove = [c for c in ("task_json", "prefix", "chosen", "rejected") if
+                     c in raw_datasets["train"].column_names]
 preprocess_fn = partial(preprocess_for_pairwise_pref, tokenizer=tok, max_len=config.max_seq_len)
 
 logger.info("Tokenizing datasets...")
@@ -426,7 +410,7 @@ training_args = TrainingArguments(
 if config.report_to == "wandb":
     logger.info("Initializing Weights & Biases for experiment tracking.")
     os.environ["WANDB_SILENT"] = "true"  # Suppress W&B informational messages
-    os.environ["WANDB_CONSOLE"] = "off"   # Hide live updating console to reduce clutter
+    os.environ["WANDB_CONSOLE"] = "off"  # Hide live updating console to reduce clutter
     wandb.init(
         project=config.wandb_project,
         entity=config.wandb_entity,
