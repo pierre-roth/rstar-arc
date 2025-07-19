@@ -9,7 +9,7 @@ from rstar_deepthink.node import Node
 from rstar_deepthink.tools import python_tool
 import utils
 from utils import batch, serialize_nodes, load_nodes
-from constants import CODE_PREFIX, CODE_END
+from constants import CODE_PREFIX, CODE_END, STEP_END
 
 
 @pytest.fixture(autouse=True)
@@ -202,6 +202,7 @@ def test_run_examples_and_correctness(monkeypatch):
     node.task = task
     node.valid = True
     node.execution_outputs = outputs
+    node.state["code"] = CODE_PREFIX + STEP_END + "return I\n" + CODE_END
 
     err, passed_test, test_outs = python_tool.test_correct(node)
     assert not err

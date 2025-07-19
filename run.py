@@ -37,6 +37,7 @@ DEFAULT_SLURM_CONFIG = {
     "mem": "62G",
     "gpu_type": "geforce_rtx_3090",  # Default GPU type
     "num_gpus": 1,  # Default number of GPUs if type is selected
+    "nice": 0,  # Default nice value for sbatch priority
 }
 
 GPU_OPTIONS = ["none", "geforce_rtx_3090", "rtx_a6000", "a100", "titan_rtx", "geforce_rtx_2080", "other"]
@@ -207,6 +208,14 @@ def main():
                     validate=lambda text: text.isdigit() or "Please enter a valid number",
                 ))
 
+    if 'nice' not in config['slurm'] or not args.config_file:
+        config["slurm"]["nice"] = int(ask_question(
+            "text",
+            "Nice value for job priority (0=default)?",
+            default=str(config["slurm"]["nice"]),
+            validate=lambda text: text.isdigit() or "Please enter a valid number",
+        ))
+
     # 4. Environment Setup
     print("\n--- Environment Configuration ---")
     if 'install_python' not in config['env'] or not args.config_file:
@@ -245,6 +254,7 @@ def main():
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task={config['slurm']['cpus_per_task']}
 #SBATCH --mem={config['slurm']['mem']}
+#SBATCH --nice={config['slurm']['nice']}
 """
     # Add GPU resource request if a GPU is selected
     if config["slurm"]["gpu_type"] != "none":
