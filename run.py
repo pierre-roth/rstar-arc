@@ -27,6 +27,7 @@ SCRIPTS = [
     "train/generate_reward_training_dataset.py",
     "train/generate_reward_validation_dataset.py",
     "train/train_reward.py",
+    "train/train_reward_2.py",
     "train/better_reward_training.py",
     "test/merge_reward_lora.py"
 ]
