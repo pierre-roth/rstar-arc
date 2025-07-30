@@ -8,8 +8,6 @@ example-validation-probability: 0.02
 
 max-seq-len: 14336
 
-
-
 full-finetune: true
 reward-value-head-dropout: 0.1
 
