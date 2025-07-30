@@ -306,7 +306,7 @@ raw_dataset = load_dataset(
 logger.info(f"Loaded {len(raw_dataset['train'])} examples from {TRAIN_PATH}")
 
 # Split dataset into training and validation
-if config.task_validation_fraction > 0 or config.example_validation_fraction > 0:
+if config.task_validation_fraction > 0 or config.example_validation_probability > 0:
     rng = random.Random(config.seed or 42)
     task_to_indices: dict[str, list[int]] = {}
     for idx, ex in enumerate(raw_dataset["train"]):
@@ -325,13 +325,13 @@ if config.task_validation_fraction > 0 or config.example_validation_fraction > 0
         if task in val_tasks:
             val_indices.extend(indices)
         else:
-            n_val = int(len(indices) * config.example_validation_fraction)
+            n_val = int(len(indices) * config.example_validation_probability)
             val_indices.extend(indices[:n_val])
             train_indices.extend(indices[n_val:])
 
     logger.info(
         f"Split {len(all_tasks)} tasks with {len(val_tasks)} held-out tasks and {len(val_indices)} validation examples "
-        f"(task fraction={config.task_validation_fraction}, example fraction={config.example_validation_fraction})"
+        f"(task fraction={config.task_validation_fraction}, example fraction={config.example_validation_probability})"
     )
 
     train_ds = renormalize_task_weights(raw_dataset["train"].select(train_indices))
@@ -472,7 +472,7 @@ if config.report_to == "wandb":
 
 logger.info(f"Script finished. Model and validation metrics saved in {OUT_DIR}")
 
-if config.task_validation_fraction > 0 or config.example_validation_fraction > 0:
+if config.task_validation_fraction > 0 or config.example_validation_probability > 0:
     # ------------------- final test evaluation -------------------
     logger.info("Loading test preference pairs for evaluation from: %s", VAL_PATH)
     raw_test = load_dataset(
