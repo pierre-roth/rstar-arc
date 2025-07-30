@@ -8,14 +8,17 @@ example-validation-probability: 0.015
 
 max-seq-len: 14336
 
-reward-model: "Qwen/Qwen2.5-Coder-0.5B"
-use-bf16: true
+
 
 full-finetune: true
 reward-value-head-dropout: 0.1
 
+reward-model: "Qwen/Qwen2.5-Coder-0.5B"
 training-dataset-name: "reward_dataset_training.jsonl"
 validation-dataset-name: "reward_dataset_validation.jsonl"
+use-bf16: true
+attn-implementation: "spda"
+torch-compile: false
 
 train-on-prompts: false
 
