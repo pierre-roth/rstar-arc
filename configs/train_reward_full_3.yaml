@@ -11,7 +11,7 @@ max-seq-len: 14336
 full-finetune: true
 reward-value-head-dropout: 0.1
 
-reward-model: "Qwen/Qwen2.5-Coder-0.5B"
+reward-model: "final_policy_0.5B"
 training-dataset-name: "reward_dataset_training.jsonl"
 validation-dataset-name: "reward_dataset_validation.jsonl"
 use-bf16: true
@@ -25,15 +25,15 @@ weight_decay: 0.05
 
 per-device-train-batch-size: 1
 per-device-eval-batch-size: 1
-gradient-accumulation-steps: 128
+gradient-accumulation-steps: 256
 
-num-train-epochs: 2
+num-train-epochs: 1
 
 lr-scheduler-type: "cosine"
 warmup-ratio: 0.1
-logging-steps: 100
-eval-steps: 200
-save-steps: 200
+logging-steps: 50
+eval-steps: 100
+save-steps: 100
 save-total-limit: 2
 gradient-checkpointing: true
 
