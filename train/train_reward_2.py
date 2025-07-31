@@ -4,6 +4,7 @@ import logging
 import os
 import random
 import sys
+import json
 from functools import partial
 from typing import Any, Sequence, Dict, List
 
@@ -21,6 +22,7 @@ from transformers import (
     set_seed,
     PreTrainedTokenizerBase,
 )
+from transformers.trainer_utils import get_last_checkpoint
 
 # Ensure project root is in a path to import custom modules
 # This assumes the script is in a subdirectory like 'train/'
@@ -55,6 +57,7 @@ dir_name_parts = [
     f"ft-{base_model_name}",
     str(config.max_seq_len),
     str(config.learning_rate),
+    str(config.gradient_accumulation_steps),
     "barc"
 ]
 
@@ -374,6 +377,7 @@ training_args = TrainingArguments(
     save_strategy="steps",
     save_steps=config.save_steps,
     save_total_limit=config.save_total_limit,
+    max_grad_norm=config.max_grad_norm,
     save_safetensors=False,
     # Precision
     bf16=config.use_bf16,
@@ -390,15 +394,55 @@ training_args = TrainingArguments(
     weight_decay=config.weight_decay
 )
 
-# ------------------- weights & biases integration -------------------
+# ------------------- trainer initialization -------------------
+trainer = PairwiseTrainer(
+    model=model,
+    args=training_args,
+    train_dataset=tokenized_datasets["train"],
+    eval_dataset={
+        "val_task": tokenized_datasets["val_task"],
+        "val_example": tokenized_datasets["val_example"],
+        "val_val": tokenized_val_val,
+    },
+    data_collator=PairwiseCollator(tokenizer=tok, padding="longest"),
+    compute_metrics=compute_accuracy,
+)
+
+# ------------------- checkpoint and wandb setup -------------------
+last_checkpoint = None
+if config.resume_from_checkpoint:
+    last_checkpoint = get_last_checkpoint(training_args.output_dir)
+    if last_checkpoint is None:
+        logger.warning(
+            f"`resume_from_checkpoint` was set to True, but no checkpoint was found in `{training_args.output_dir}`. "
+            f"Starting a new training run."
+        )
+
 if config.report_to == "wandb":
     logger.info("Initializing Weights & Biases for experiment tracking.")
     os.environ["WANDB_SILENT"] = "true"
     os.environ["WANDB_CONSOLE"] = "off"
+
+    wandb_run_id = None
+    if last_checkpoint:
+        trainer_state_path = os.path.join(last_checkpoint, "trainer_state.json")
+        if os.path.exists(trainer_state_path):
+            with open(trainer_state_path, "r") as f:
+                state = json.load(f)
+                wandb_run_id = state.get("wandb_id")
+                if wandb_run_id:
+                    logger.info(f"Found wandb run ID ({wandb_run_id}) to resume.")
+                else:
+                    logger.warning("Could not find wandb run ID in checkpoint state. Starting a new run.")
+        else:
+            logger.warning(f"trainer_state.json not found in {last_checkpoint}. Starting a new wandb run.")
+
     wandb.init(
         project=config.wandb_project,
         entity=config.wandb_entity,
         name=training_args.run_name,
+        id=wandb_run_id,
+        resume="allow",
         config={
             "learning_rate": training_args.learning_rate,
             "train_batch_size": training_args.per_device_train_batch_size * \
@@ -416,24 +460,15 @@ if config.report_to == "wandb":
         }
     )
 
-# ------------------- trainer initialization and execution -------------------
-trainer = PairwiseTrainer(
-    model=model,
-    args=training_args,
-    train_dataset=tokenized_datasets["train"],
-    eval_dataset={
-        "val_task": tokenized_datasets["val_task"],
-        "val_example": tokenized_datasets["val_example"],
-        "val_val": tokenized_val_val,
-    },
-    data_collator=PairwiseCollator(tokenizer=tok, padding="longest"),
-    compute_metrics=compute_accuracy,
-)
+# ------------------- training execution -------------------
+if last_checkpoint:
+    logger.info(f"Resuming training from {last_checkpoint}")
+else:
+    logger.info(f"Starting a new training run.")
 
-logger.info(
-    f"Starting training. Evaluation every {training_args.eval_steps} steps. Logging every {training_args.logging_steps} steps.")
-train_result = trainer.train()
+train_result = trainer.train(resume_from_checkpoint=last_checkpoint)
 trainer.save_metrics("train", train_result.metrics)
+
 
 if config.report_to == "wandb":
     wandb.log({f"train/{k}": v for k, v in train_result.metrics.items()})
