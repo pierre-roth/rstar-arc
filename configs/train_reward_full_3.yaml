@@ -13,7 +13,7 @@ resume-from-checkpoint: false
 full-finetune: true
 reward-value-head-dropout: 0.1
 
-reward-model: "final_policy_0.5B"
+reward-model: "/itet-stor/piroth/net_scratch/models/policy/final_policy_0.5B"
 training-dataset-name: "reward_dataset_training.jsonl"
 validation-dataset-name: "reward_dataset_validation.jsonl"
 use-bf16: true
