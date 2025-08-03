@@ -8,7 +8,7 @@ example-validation-probability: 0.05
 
 max-seq-len: 14336
 
-resume-from-checkpoint: false
+resume-from-checkpoint: true
 
 full-finetune: true
 reward-value-head-dropout: 0.1
