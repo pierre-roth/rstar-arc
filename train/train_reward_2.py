@@ -58,6 +58,8 @@ dir_name_parts = [
     str(config.max_seq_len),
     str(config.learning_rate),
     str(config.gradient_accumulation_steps),
+    str(config.weight_decay),
+    str(config.reward_value_head_dropout),
     "barc"
 ]
 
