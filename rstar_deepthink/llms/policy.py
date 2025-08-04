@@ -45,13 +45,14 @@ class PolicyModel:
         end = datetime.now()
         self.config.model_initialization_times["policy"] = end - start
 
-    def generate(self, prompts: list[str], temperature: float):
+    def generate(self, prompts: list[str], temperature: float, rollout: int):
         """
         Generate completions for a given list of prompts
 
         Args:
             prompts: the list of prompts to generate completions for
             temperature: the temperature to use for sampling (optional)
+            rollout: the current rollout index (used for branching factor)
 
         Returns:
             List of RequestOutput objects
@@ -64,7 +65,7 @@ class PolicyModel:
             top_p=self.config.top_p,
             repetition_penalty=self.config.repetition_penalty,
             max_tokens=self.config.max_tokens,
-            n=self.config.branching_factor,
+            n=self.config.branching_factor if rollout != 0 else 2*self.config.branching_factor,
             stop_token_ids=self.stop_token_ids,
             include_stop_str_in_output=True,
             skip_special_tokens=False

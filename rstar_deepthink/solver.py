@@ -130,7 +130,7 @@ class Solver:
                 if not valid_agents + expanded_agents:
                     break
 
-                outputs = self.policy.generate(prompts, temperature)
+                outputs = self.policy.generate(prompts, temperature, rollout)
 
                 logger.debug(f"Number of outputs: {len(outputs)}")
 
