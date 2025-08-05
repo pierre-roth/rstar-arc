@@ -14,7 +14,7 @@ save-sft-data: true
 
 use-reward-model: true
 policy-vram-percentage: 0.45
-reward-batch-size: 8
+reward-batch-size: 1
 
 policy-model: "final_policy_0.5B"
 reward-model: "final_reward_0.5B"
