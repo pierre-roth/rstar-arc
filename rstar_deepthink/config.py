@@ -40,7 +40,7 @@ class Config:
     reward_model: str = "Qwen/Qwen2.5-Coder-7B-Instruct"  # Reward Model for evaluating steps
     model_initialization_times = {"policy": None, "reward": None}  # Time taken to initialize models
     enforce_eager: bool = False
-    policy_vram_percentage: float = 0.8  # Percentage of VRAM to use for the policy model
+    policy_vram_percentage: float = 0.45  # Percentage of VRAM to use for the policy model
 
     use_reward_model: bool = False  # Whether to use the reward model
     fine_tuned: bool = False  # Whether the model is fine-tuned
