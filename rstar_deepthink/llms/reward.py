@@ -114,12 +114,13 @@ class RewardModelModule(nn.Module):
         outputs = self.backbone(
             input_ids=input_ids,
             attention_mask=attention_mask,
-            output_hidden_states=True,
+            # output_hidden_states=True,
             return_dict=True,
         )
 
         # Get the hidden states of the last layer
-        last_hidden = outputs.hidden_states[-1]  # Shape: (B, L, H)
+        # last_hidden = outputs.hidden_states[-1]  # Shape: (B, L, H)
+        last_hidden = outputs.last_hidden_state  # Shape: (B, L, H)
 
         # Find the sequence lengths from the attention mask
         # (sum of non-padding tokens, then subtract 1 for 0-based indexing)
