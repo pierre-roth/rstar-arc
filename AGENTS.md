@@ -95,11 +95,6 @@ python run.py --config-file configs/custom.yaml
 
 
 ## Training and Evaluation
-Training scripts live in the `train/` folder and use the same `Config` system as the solver. For example, to fine‑tune the policy model with LoRA adapters:
-```bash
-python train/train_policy.py --config-file configs/train_policy_full_1.yaml
-```
-Validation datasets and LoRA merging utilities are provided under `test/`.
 
 
 ## Visualization and Debugging
