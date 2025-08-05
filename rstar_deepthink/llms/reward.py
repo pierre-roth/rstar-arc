@@ -47,25 +47,28 @@ class RewardModelModule(nn.Module):
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
 
         # Import heavy ML libs only when initializing
-        from transformers import AutoModelForCausalLM, AutoTokenizer, PreTrainedModel
-        from peft import PeftModel
+        from transformers import AutoModel, AutoTokenizer, PreTrainedModel
 
         model_name_for_tokenizer: str
 
-        if isinstance(model_or_name, (PreTrainedModel, PeftModel)):
-            self.backbone = model_or_name.to(self.device)
+        if isinstance(model_or_name, PreTrainedModel):
+            backbone = model_or_name
+
+            # Keep the unwrapping for standard *ForCausalLM models
+            if hasattr(backbone, "model"):
+                backbone = backbone.model
+
+            self.backbone = backbone.to(self.device)
+
             # Attempt to infer tokenizer name from the model object
             if hasattr(self.backbone, "name_or_path") and self.backbone.name_or_path:
                 model_name_for_tokenizer = self.backbone.name_or_path
-            elif hasattr(self.backbone, "base_model") and \
-                    hasattr(self.backbone.base_model, "model") and \
-                    hasattr(self.backbone.base_model.model, "name_or_path") and \
-                    self.backbone.base_model.model.name_or_path:  # For PeftModel
-                model_name_for_tokenizer = self.backbone.base_model.model.name_or_path
+            elif hasattr(model_or_name, "name_or_path") and model_or_name.name_or_path:
+                model_name_for_tokenizer = model_or_name.name_or_path
             else:
                 model_name_for_tokenizer = str(model_or_name)
         else:
-            self.backbone = AutoModelForCausalLM.from_pretrained(
+            self.backbone = AutoModel.from_pretrained(
                 model_or_name,
                 torch_dtype=dtype,
                 trust_remote_code=True,
@@ -184,18 +187,15 @@ class RewardModelModule(nn.Module):
         logger.info(f"Saving reward model components to {output_dir}")
 
         from transformers import PreTrainedModel
-        from peft import PeftModel
 
         # Save backbone model
-        if isinstance(self.backbone, (PreTrainedModel, PeftModel)):
+        if isinstance(self.backbone, PreTrainedModel):
             self.backbone.save_pretrained(output_dir)
             logger.info(f"Backbone ({type(self.backbone).__name__}) saved using save_pretrained.")
         else:
-            # Fallback for models not supporting save_pretrained (e.g., plain nn.Module)
-            backbone_path = os.path.join(output_dir, "pytorch_model.bin")  # Standard name
+            backbone_path = os.path.join(output_dir, "pytorch_model.bin")
             torch.save(self.backbone.state_dict(), backbone_path)
             logger.info(f"Backbone ({type(self.backbone).__name__}) state_dict saved to {backbone_path}.")
-            # Note: If the backbone isn't a PreTrainedModel, its config might need manual saving/handling.
 
         # Save value head weights
         v_head_path = os.path.join(output_dir, "v_head.bin")
@@ -230,12 +230,12 @@ class RewardModelModule(nn.Module):
         dev = device or ("cuda" if torch.cuda.is_available() else "cpu")
         logger.info(f"Loading RewardModelModule from {model_dir} onto device {dev} with dtype {dtype}")
 
-        from transformers import AutoModelForCausalLM  # Heavy import
+        from transformers import AutoModel  # Heavy import
 
         # Load backbone model
-        # This assumes the backbone was saved in a way AutoModelForCausalLM can load it
+        # This assumes the backbone was saved in a way AutoModel can load it
         # (e.g., via save_pretrained or as a compatible pytorch_model.bin with a config.json)
-        backbone = AutoModelForCausalLM.from_pretrained(
+        backbone = AutoModel.from_pretrained(
             model_dir,
             torch_dtype=dtype,
             trust_remote_code=True,  # Necessary for some custom model architectures
