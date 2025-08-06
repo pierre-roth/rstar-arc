@@ -10,6 +10,8 @@ from constants import NET_SCRATCH_SFT_DATA_DIR, NET_SCRATCH_TASK_DATA_DIR
 
 
 def calculate_coverage(round_num: int):
+    print(f"Calculating coverage for round {round_num}")
+
     solutions_path_training = os.path.join(NET_SCRATCH_SFT_DATA_DIR, f"round_{round_num}", "solutions_training.jsonl")
     solutions_path_evaluation = os.path.join(NET_SCRATCH_SFT_DATA_DIR, f"round_{round_num}", "solutions_evaluation.jsonl")
     task_path = NET_SCRATCH_TASK_DATA_DIR
