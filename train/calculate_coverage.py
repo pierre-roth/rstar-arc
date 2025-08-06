@@ -56,11 +56,12 @@ def calculate_coverage(round_num: int):
 
 if __name__ == "__main__":
     # Example usage
-    round_number = int(input("Round number: "))
+    from_round_number = int(input("From round number: "))
+    to_round_number = int(input("To round number: "))
 
     coverages = []
-    print(f"Calculating coverage for round {round_number}: ")
-    coverages.append(calculate_coverage(round_number))
+    for i in range(from_round_number, to_round_number + 1):
+        coverages.append(calculate_coverage(i))
     print("\n")
 
     all_tasks = {}
