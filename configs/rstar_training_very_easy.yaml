@@ -6,7 +6,7 @@ evaluation: false
 fine-tuned: true
 execute-in-subprocess: true
 
-save-for-visualization: false
+save-for-visualization: true
 round-number: 7
 solve-only-unsolved: false
 # solutions-per-task: 32
