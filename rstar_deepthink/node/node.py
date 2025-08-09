@@ -188,55 +188,40 @@ class Node:
 
         return self.valid
 
+    def _ancestors_root_to_self(self) -> list["Node"]:
+        """Return a list of nodes from the root down to this node."""
+        nodes: list[Node] = []
+        node: Node | None = self
+        while node is not None:
+            nodes.append(node)
+            node = node.parent
+        nodes.reverse()
+        return nodes
+
     def collect_prompt_and_code(self) -> str:
-        # from leaf to root, and reverse
-        node = self
-        trajectory = []
-        while node:
-            trajectory.append(
-                node.state["system_prompt"] + node.state["example_prompt"] + node.state["task_prompt"]
-                + node.state["hint"] + node.state["code"])
-            node = node.parent
+        """Concatenate prompts and code along the path from root to this node."""
+        parts: list[str] = []
+        for node in self._ancestors_root_to_self():
+            parts.append(
+                node.state["system_prompt"]
+                + node.state["example_prompt"]
+                + node.state["task_prompt"]
+                + node.state["hint"]
+                + node.state["code"]
+            )
+        return "".join(parts)
 
-        return "".join(reversed(trajectory))
-
-    def collect_code(self):
-        # Collect code from the node and its ancestors
-        node = self
-        code = []
-        while node:
-            code.append(node.state["code"])
-            node = node.parent
-
-        return "".join(reversed(code)).strip()
+    def collect_code(self) -> str:
+        """Collect just the code segments from root to this node."""
+        return "".join(node.state["code"] for node in self._ancestors_root_to_self()).strip()
 
     def collect_metadata(self) -> dict:
-        """Calculate the average Q-value of the node."""
-        q_values = []
-        node = self
-        while node:
-            q_values.append(node.q_value())
-            node = node.parent
-        q_values.reverse()
-
-        examples_used = []
-        node = self
-        while node:
-            examples_used.append(node.example_name)
-            node = node.parent
-        examples_used.reverse()
-
-        temperatures = []
-        node = self
-        while node:
-            temperatures.append(node.temperature)
-            node = node.parent
-        temperatures.reverse()
-
+        """Collect q_values, examples, and temperatures along the trajectory."""
+        path = self._ancestors_root_to_self()
         return {
-            "q_values": q_values,
-            "examples": examples_used,
-            "temperatures": temperatures
+            "q_values": [n.q_value() for n in path],
+            "examples": [n.example_name for n in path],
+            "temperatures": [n.temperature for n in path],
         }
 
     def is_valid_final_answer_node(self) -> bool:
