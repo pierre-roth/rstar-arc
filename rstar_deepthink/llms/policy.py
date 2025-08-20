@@ -60,16 +60,29 @@ class PolicyModel:
 
         # Import heavy vllm SamplingParams only when generating
         from vllm import SamplingParams
-        sampling_parameters = SamplingParams(
-            temperature=temperature,
-            top_p=self.config.top_p,
-            repetition_penalty=self.config.repetition_penalty,
-            max_tokens=self.config.max_tokens,
-            n=self.config.branching_factor if rollout != 0 else 2*self.config.branching_factor,
-            stop_token_ids=self.stop_token_ids,
-            include_stop_str_in_output=True,
-            skip_special_tokens=False
-        )
+
+        if self.config.fine_tuned:
+            sampling_parameters = SamplingParams(
+                temperature=temperature,
+                top_p=self.config.top_p,
+                repetition_penalty=self.config.repetition_penalty,
+                max_tokens=self.config.max_tokens,
+                n=self.config.branching_factor if rollout != 0 else 2*self.config.branching_factor,
+                stop_token_ids=self.stop_token_ids,
+                include_stop_str_in_output=True,
+                skip_special_tokens=False
+            )
+        else:
+            sampling_parameters = SamplingParams(
+                temperature=temperature,
+                top_p=self.config.top_p,
+                repetition_penalty=self.config.repetition_penalty,
+                max_tokens=self.config.max_tokens,
+                n=self.config.branching_factor if rollout != 0 else 2 * self.config.branching_factor,
+                include_stop_str_in_output=True,
+                skip_special_tokens=False,
+                stop=[STEP_END, CODE_END]
+            )
 
         request_outputs = self.llm.generate(prompts, sampling_params=sampling_parameters)
 
