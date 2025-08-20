@@ -30,8 +30,8 @@ variable-temperature: true
 min-policy-temperature: 0.65
 max-policy-temperature: 0.9
 
-num-rollouts: 32
-branching-factor: 8
+num-rollouts: 16
+branching-factor: 4
 max-depth: 16
 
 batch-size: 40
