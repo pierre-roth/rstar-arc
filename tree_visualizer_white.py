@@ -6,7 +6,7 @@ import igraph
 import numpy as np
 import plotly.graph_objects as go
 
-from rstar_deepthink.tools.python_tool import comment_out_markers
+from rstar_deepthink.tools.python_tool import remove_markers
 from utils import load_nodes
 
 
@@ -27,7 +27,9 @@ def build_graph_from_nodes(nodes):
     for node in nodes:
         # Extract raw Python code and other data
         try:
-            code = comment_out_markers(node.collect_code())
+            # Show only the last step's code, remove markers, then drop empty lines locally
+            code = remove_markers(node.state["code"])  # do not alter global behavior
+            code = "\n".join([ln for ln in code.splitlines() if ln.strip()])
             q_value = node.q_value() if node.visit_count > 0 else 0
 
             # Handle the case when parent is None (root node)
@@ -112,7 +114,7 @@ def compute_layout(G):
 
 
 def _add_scatter_nodes(fig, G, nodes, Xn, Yn):
-    size = 22 if len(nodes) < 64 else (14 if len(nodes) < 256 else 8)
+    size = 24 if len(nodes) < 64 else (14 if len(nodes) < 256 else 8)
     marker = dict(symbol="circle-dot", size=size,
                   color=[G.vs[idx]["color"] for idx in range(len(G.vs))],
                   line=dict(color="rgb(50,50,50)", width=1))
@@ -156,7 +158,7 @@ def create_figure(G, nodes, Xn, Yn, Xe, Ye):
             x=Xe,
             y=Ye,
             mode="lines",
-            line=dict(color="rgb(210,210,210)", width=1),
+            line=dict(color="rgb(150,150,150)", width=2),
             hoverinfo="none",
             name="edges",
         )
@@ -173,16 +175,16 @@ def create_figure(G, nodes, Xn, Yn, Xe, Ye):
         yaxis=axis,
         margin=dict(l=40, r=40, b=85, t=100),
         hovermode="closest",
-        plot_bgcolor="rgb(30,30,30)",
-        paper_bgcolor="rgb(30,30,30)",
-        font_color="white",
+        plot_bgcolor="white",
+        paper_bgcolor="white",
+        font_color="black",
         hoverlabel=dict(
-            bgcolor="black",
+            bgcolor="white",
             font_size=12,
             font_family="monospace",
-            font_color="white",
+            font_color="black",
             align="left",
-            bordercolor="#333333",
+            bordercolor="#cccccc",
             namelength=-1,
         ),
     )
@@ -250,7 +252,7 @@ def visualize_tree(json_filename, open_website=True):
     """
 
     json_dir = os.path.dirname(os.path.abspath(json_filename))
-    output_html = os.path.join(json_dir, f"tree_{nodes[0].task}_visualization.html")
+    output_html = os.path.join(json_dir, f"tree_{nodes[0].task}_visualization_white.html")
 
     # Generate the HTML file with custom div ID and our JS script
     with open(output_html, 'w') as f:
