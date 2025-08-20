@@ -7,7 +7,7 @@ fine-tuned: true
 execute-in-subprocess: true
 
 save-for-visualization: true
-round-number: 7
+round-number: 6
 solve-only-unsolved: false
 # solutions-per-task: 32
 save-sft-data: true
