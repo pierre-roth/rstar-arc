@@ -1,13 +1,10 @@
 import logging
 from random import choice
 
-from constants import (
-    SFT_SYSTEM_PROMPT,
-    SFT_IN_BETWEEN_PROMPT,
-    CODE_PREFIX,
-    BOOTSTRAP_SYSTEM_PROMPT,
-    BOOTSTRAP_TASK_PROMPT,
-)
+# Removed static import of RequestOutput to avoid heavy dependency at module import.
+
+from constants import SFT_SYSTEM_PROMPT, SFT_IN_BETWEEN_PROMPT, CODE_PREFIX, BOOTSTRAP_SYSTEM_PROMPT, \
+    BOOTSTRAP_TASK_PROMPT
 from rstar_deepthink.arc_task import ARCTask
 from rstar_deepthink.config import Config
 from rstar_deepthink.node import Node
@@ -17,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 class Agent:
+
     def __init__(self, config: Config, task: ARCTask):
         self.config: Config = config
 
@@ -51,18 +49,18 @@ class Agent:
         self.candidate_nodes.append(self.root)
 
     def update(self, rollout_idx: int, current_temperature: float) -> None:
-        """Update rollout index, temperature and (optionally) the example prompt."""
+        """Set the example for the root node."""
         self.rollout_idx = rollout_idx
         self.current_temperature = current_temperature
 
         if not self.config.fine_tuned:
-            # Choose example names either in rotation or randomly
-            if self.config.rotate_example:
+            if self.config.rotate_example:  # Rotate example
                 self.example_name = self.config.example_names[self.rollout_idx % len(self.config.example_names)]
+                self.root.state["example_prompt"] = get_example_prompt(self.config, self.example_name)
             else:
                 self.example_name = choice(self.config.example_names)
-
-            self.root.state["example_prompt"] = get_example_prompt(self.config, self.example_name)
+                self.root.state["example_prompt"] = get_example_prompt(self.config, self.example_name)
+            # Set the example name for the root node
             logger.debug(f"Update root for task {self.task.name} with example: {self.example_name}")
             logger.debug(f"Current example prompt: \n{self.root.state['example_prompt']}")
 
