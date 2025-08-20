@@ -124,10 +124,19 @@ class Agent:
             logger.debug(f"Expanding node at depth {current_node.depth} with {len(request_output.outputs)} children")
             logger.debug(f"Prompt token count: {prompt_token_count}")
 
-            # Create children from outputs
-            new_children = []
-            # Create children from outputs and log token counts for each generation
+            # Deduplicate outputs by exact text to avoid identical children
+            seen_texts = set()
+            deduped_outputs = []
             for output in request_output.outputs:
+                text = output.text
+                if text not in seen_texts:
+                    seen_texts.add(text)
+                    deduped_outputs.append(output)
+
+            # Create children from deduplicated outputs
+            new_children = []
+            # Log token counts for each generation
+            for output in deduped_outputs:
                 child_token_count = len(output.token_ids)
 
                 logger.debug(f"Generated child with token count: {child_token_count}")
