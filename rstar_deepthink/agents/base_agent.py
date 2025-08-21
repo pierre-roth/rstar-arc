@@ -104,8 +104,20 @@ class Agent:
         for current_node in current_nodes:
             if not is_value_only and current_node.is_terminal():
                 continue
-            prompt = current_node.collect_prompt_and_code()
-            prompts.append(prompt)
+            # For value-only scoring with a non-fine-tuned policy and an active reward model,
+            # reformat the prompt to the SFT-style minimal format expected by the reward model.
+            if is_value_only and self.config.use_reward_model and not self.config.fine_tuned:
+                code_only = current_node.collect_code()
+                sft_prompt = (
+                    SFT_SYSTEM_PROMPT
+                    + task_to_prompt(self.task)
+                    + SFT_IN_BETWEEN_PROMPT
+                    + code_only
+                )
+                prompts.append(sft_prompt)
+            else:
+                prompt = current_node.collect_prompt_and_code()
+                prompts.append(prompt)
 
         return prompts
 
