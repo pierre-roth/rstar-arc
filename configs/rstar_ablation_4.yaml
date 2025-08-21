@@ -1,7 +1,7 @@
 search-mode: "mcts"
 log-level: "INFO"
 
-evaluation: false
+evaluation: true
 
 fine-tuned: true
 execute-in-subprocess: true

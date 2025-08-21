@@ -1,13 +1,13 @@
 search-mode: "mcts"
 log-level: "INFO"
 
-evaluation: true
+evaluation: false
 
-fine-tuned: true
+fine-tuned: false
 execute-in-subprocess: true
 
 save-for-visualization: false
-round-number: 21
+round-number: 23
 solve-only-unsolved: false
 # solutions-per-task: 32
 save-sft-data: true
@@ -16,13 +16,13 @@ use-reward-model: true
 policy-vram-percentage: 0.45
 reward-batch-size: 1
 
-policy-model: "final_policy_0.5B"
-reward-model: "final_reward_3B"
+policy-model: "Qwen/Qwen2.5-Coder-3B-Instruct"
+reward-model: "final_reward_0.5B"
 max-seq-len: 14336
 max-tokens: 512
 dtype: "bfloat16"
 
-data-folder: "/itet-stor/piroth/net_scratch/task_data/evaluation"
+data-folder: "/itet-stor/piroth/net_scratch/task_data/training"
 sort-by-length: false
 length-pre-filtering: true
 
