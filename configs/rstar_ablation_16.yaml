@@ -7,7 +7,7 @@ fine-tuned: true
 execute-in-subprocess: true
 
 save-for-visualization: false
-round-number: 30
+round-number: 32
 solve-only-unsolved: false
 # solutions-per-task: 32
 save-sft-data: true
@@ -16,8 +16,8 @@ use-reward-model: true
 policy-vram-percentage: 0.45
 reward-batch-size: 1
 
-policy-model: "final_policy_1.5B"
-reward-model: "final_reward_3B"
+policy-model: "final_policy_0.5B"
+reward-model: "final_reward_1.5B"
 max-seq-len: 14336
 max-tokens: 512
 dtype: "bfloat16"
