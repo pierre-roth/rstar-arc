@@ -207,7 +207,7 @@ class Config:
             self._load_from_file()
 
         # Set computed model directories and other derived values
-        if self.fine_tuned or self.max_seq_len > 32768:
+        if self.fine_tuned or self.use_reward_model:
             self.policy_model_dir = os.path.join(self.net_scratch_model_base_path, "policy")
             self.reward_model_dir = os.path.join(self.net_scratch_model_base_path, "reward")
         else:
