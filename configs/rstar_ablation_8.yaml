@@ -7,7 +7,7 @@ fine-tuned: false
 execute-in-subprocess: true
 
 save-for-visualization: false
-round-number: 24
+round-number: 41
 solve-only-unsolved: false
 # solutions-per-task: 32
 save-sft-data: true
@@ -18,13 +18,16 @@ reward-batch-size: 1
 
 policy-model: "Qwen/Qwen2.5-Coder-3B-Instruct"
 reward-model: "final_reward_3B"
-max-seq-len: 14336
+max-seq-len: 18432
 max-tokens: 512
 dtype: "bfloat16"
 
 data-folder: "/itet-stor/piroth/net_scratch/task_data/evaluation"
 sort-by-length: false
 length-pre-filtering: true
+
+num-examples: 1
+example-names: [["1cf80156"]]
 
 variable-temperature: true
 min-policy-temperature: 0.7

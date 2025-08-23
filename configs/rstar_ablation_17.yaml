@@ -3,11 +3,11 @@ log-level: "INFO"
 
 evaluation: false
 
-fine-tuned: false
+fine-tuned: true
 execute-in-subprocess: true
 
 save-for-visualization: false
-round-number: 40
+round-number: 42
 solve-only-unsolved: false
 # solutions-per-task: 32
 save-sft-data: true
@@ -16,9 +16,9 @@ use-reward-model: true
 policy-vram-percentage: 0.45
 reward-batch-size: 1
 
-policy-model: "Qwen/Qwen2.5-Coder-3B-Instruct"
+policy-model: "final_policy_3B"
 reward-model: "final_reward_3B"
-max-seq-len: 18432
+max-seq-len: 14336
 max-tokens: 512
 dtype: "bfloat16"
 
@@ -26,15 +26,12 @@ data-folder: "/itet-stor/piroth/net_scratch/task_data/training"
 sort-by-length: false
 length-pre-filtering: true
 
-num-examples: 1
-example-names: [["1cf80156"]]
-
 variable-temperature: true
-min-policy-temperature: 0.65
+min-policy-temperature: 0.7
 max-policy-temperature: 0.9
 
 num-rollouts: 32
-branching-factor: 8
+branching-factor: 32
 max-depth: 16
 
 batch-size: 40
