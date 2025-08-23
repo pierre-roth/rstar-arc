@@ -7,6 +7,7 @@ import itertools
 from rstar_deepthink.config import Config
 from rstar_deepthink.node import Node
 from rstar_deepthink.tools import test_correct
+from collections import Counter
 from rstar_deepthink.tools.python_tool import comment_out_markers
 
 logger = logging.getLogger(__name__)
@@ -171,8 +172,61 @@ def save_summary(config: Config, node_lists: list[list[Node]], batch_number: int
         # sort nodes by solution length
         correct_answer_nodes.sort(key=lambda node: len(node.collect_code()))
 
-        if correct_answer_nodes:
+        # Majority-vote correctness over test predictions of training-passing solutions
+        def _majority_vote_task_correct(nodelist: list[Node]) -> bool:
+            if not nodelist:
+                return False
+
+            task = nodelist[0].task
+            num_training = len(task.training_examples)
+            test_expected = [ex.output_grid.grid for ex in task.test_examples]
+            num_test = len(test_expected)
+
+            if num_test == 0:
+                return False
+
+            # Collect predictions per test example index from solutions that pass training
+            preds_per_test: list[list[tuple]] = [[] for _ in range(num_test)]
+            for node in nodelist:
+                if not node.is_valid_final_answer_node():
+                    continue
+                outs = node.execution_outputs or []
+                if len(outs) < num_training + num_test:
+                    continue
+                for ti in range(num_test):
+                    pred = outs[num_training + ti]
+                    if pred is None:
+                        continue
+                    try:
+                        preds_per_test[ti].append(tuple(tuple(r) for r in pred))
+                    except Exception:
+                        # Skip malformed predictions
+                        continue
+
+            # If any test example has no predictions, cannot be correct by majority voting
+            if any(len(p) == 0 for p in preds_per_test):
+                return False
+
+            # Determine majority guess per test example
+            majority_guesses: list[tuple] = []
+            for preds in preds_per_test:
+                counts = Counter(preds)
+                guess, _ = counts.most_common(1)[0]
+                majority_guesses.append(guess)
+
+            # Compare majority guesses to expected outputs
+            for guess, exp in zip(majority_guesses, test_expected):
+                exp_t = tuple(tuple(r) for r in exp)
+                if guess != exp_t:
+                    return False
+            return True
+
+        # Update solved counter for stdout using majority voting, but do not change file content below
+        if _majority_vote_task_correct(nodelist):
             num_solved += 1
+
+        # Preserve original file content logic based on individually correct solutions
+        if correct_answer_nodes:
             task_result.append(
                 f"### Found {len(correct_answer_nodes)} correct solutions for task {correct_answer_nodes[0].task.name} ###")
             for i, node in enumerate(correct_answer_nodes):
