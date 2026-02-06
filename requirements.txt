@@ -2,7 +2,8 @@ antlr4-python3-runtime
 termcolor
 jsonlines
 pebble
-vllm
+# vLLM requires Linux with NVIDIA CUDA support.
+vllm; platform_system == "Linux" and platform_machine == "x86_64"
 matplotlib
 pyparsing
 word2number
