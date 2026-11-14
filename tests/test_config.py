@@ -14,7 +14,7 @@ def clean_cli(monkeypatch):
 
 @pytest.mark.parametrize(
     "path",
-    sorted((Path(PROJECT_PATH) / "configs").glob("*.yaml")),
+    sorted((Path(PROJECT_PATH) / "configs").rglob("*.yaml")),
     ids=lambda p: p.name,
 )
 def test_supplied_configurations_load(path):

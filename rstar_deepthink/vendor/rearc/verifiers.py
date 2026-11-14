@@ -1,5 +1,5 @@
 # Adapted from RE-ARC; see docs/sources.md for attribution and upstream terms.
-from rstar_deepthink.training.dsl import *
+from rstar_deepthink.vendor.rearc.dsl import *
 
 
 def verify_007bbfb7(I: Grid) -> Grid:

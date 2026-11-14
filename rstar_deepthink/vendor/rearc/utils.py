@@ -4,7 +4,7 @@ from random import uniform
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap, Normalize
 
-from rstar_deepthink.training.dsl import *
+from rstar_deepthink.vendor.rearc.dsl import *
 
 global rng
 rng = []

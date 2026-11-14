@@ -7,7 +7,7 @@ import sys
 
 from rstar_deepthink.config import Config
 from rstar_deepthink.utils import setup_logging
-from rstar_deepthink.training.data_utils import write_batch_data
+from rstar_deepthink.training.datasets.utils import write_batch_data
 
 logger = logging.getLogger(__name__)
 

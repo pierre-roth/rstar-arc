@@ -11,7 +11,7 @@ One-shot ARC SFT dataset preparation.
 
 Typical usage
 -------------
-python -m rstar_deepthink.training.prepare_dataset \
+python -m rstar_deepthink.training.datasets.prepare_dataset \
     --train_json /scratch/net_scratch/sft_data/round_0/train.jsonl \
     --val_json   /scratch/net_scratch/sft_data/round_0/val.jsonl \
     --policy_model meta-llama/Llama-3-8b \
@@ -47,7 +47,7 @@ from rstar_deepthink.constants import (
 from rstar_deepthink import Config
 from rstar_deepthink.arc_task import ARCTask
 from rstar_deepthink.arc_task.task_utils import task_to_prompt
-from rstar_deepthink.training.train_utils import renormalize_task_weights
+from rstar_deepthink.training.utils import renormalize_task_weights
 
 # -----------------------------------------------------------------------------
 

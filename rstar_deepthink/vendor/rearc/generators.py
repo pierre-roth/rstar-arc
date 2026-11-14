@@ -1,8 +1,8 @@
 # Adapted from RE-ARC; see docs/sources.md for attribution and upstream terms.
 from random import choice, sample, randint, shuffle
 
-from rstar_deepthink.training.dsl import *
-from rstar_deepthink.training.rearc_utils import unifint
+from rstar_deepthink.vendor.rearc.dsl import *
+from rstar_deepthink.vendor.rearc.utils import unifint
 
 
 def generate_dbc1a6ce(diff_lb: float, diff_ub: float) -> dict:

@@ -4,11 +4,12 @@ import logging
 import os
 import random
 import sys
+import json
 from functools import partial
 from typing import Any, Sequence, Dict, List
 
 import torch
-import torch.nn.functional as F  # Renamed for conventional alias
+import torch.nn.functional as F
 import wandb
 from datasets import DatasetDict
 from datasets import load_dataset
@@ -21,11 +22,12 @@ from transformers import (
     set_seed,
     PreTrainedTokenizerBase,
 )
+from transformers.trainer_utils import get_last_checkpoint
 
 # Ensure project root is in a path to import custom modules
 # This assumes the script is in a subdirectory like 'train/'
 
-from rstar_deepthink.training.train_utils import maybe_peft_wrap, renormalize_task_weights
+from rstar_deepthink.training.utils import renormalize_task_weights
 from rstar_deepthink.constants import (
     NET_SCRATCH_PATH,
     LOCAL_SCRATCH_PATH,
@@ -48,20 +50,15 @@ setup_logging(config.numeric_log_level)  # Configure logging verbosity
 
 base_model_name = config.reward_model.split('/')[-1]
 
-if not config.full_finetune:
-    dir_name_parts = [
-        f"ft-{base_model_name}",
-        str(config.max_seq_len),
-        str(config.learning_rate),
-        f"lora_r{config.lora_rank}",
-        f"lora_a{config.lora_alpha}",
-    ]
-else:
-    dir_name_parts = [
-        f"ft-{base_model_name}",
-        str(config.max_seq_len),
-        str(config.learning_rate),
-    ]
+dir_name_parts = [
+    f"ft-{base_model_name}",
+    str(config.max_seq_len),
+    str(config.learning_rate),
+    str(config.gradient_accumulation_steps),
+    str(config.weight_decay),
+    str(config.reward_value_head_dropout),
+    "barc"
+]
 
 OUT_DIR = os.path.join(
     NET_SCRATCH_PATH, "models", "fine_tuned", "reward", "-".join(dir_name_parts)
@@ -72,13 +69,6 @@ logger.info(f"Reward model output directory: {OUT_DIR}")
 # A more explicit run name for logging / experiment tracking.
 RUN_NAME = f"reward-{'-'.join(dir_name_parts)}"
 
-# Log hardware overview
-num_gpus = torch.cuda.device_count()
-logger.info(f"GPUs visible: {num_gpus}")
-if num_gpus > 0:
-    logger.info(f"Current CUDA device: {torch.cuda.current_device()}")
-
-# ------------------- tokenizer -------------------
 logger.info(f"Loading tokenizer for reward model: {config.reward_model}")
 tok: PreTrainedTokenizerBase = AutoTokenizer.from_pretrained(
     config.reward_model,
@@ -117,27 +107,19 @@ base_model.config.use_cache = False  # Disable cache for gradient checkpointing 
 base_model.gradient_checkpointing_enable()  # Enable gradient checkpointing for memory efficiency
 base_model.enable_input_require_grads()  # Enable input gradients, necessary for some PEFT methods
 
-# Wrap base model with LoRA adapters if not full fine-tuning
-peft_wrapped_model = maybe_peft_wrap(base_model, config)  # maybe_peft_wrap handles the config.full_finetune check
-
-# Instantiate the RewardModelModule with the (potentially PEFT-wrapped) backbone
+# Instantiate the RewardModelModule with the base_model as backbone
 model = RewardModelModule(
-    peft_wrapped_model,
-    dtype=dtype,  # Pass dtype explicitly
+    base_model,
+    dtype=dtype,
     dropout=config.reward_value_head_dropout
 )
 logger.info("RewardModelModule initialized with backbone and value head.")
 
-# Ensure the tokenizer used for data processing and the one saved with the model
-# are exactly the same instance and are configured for right-side padding.  This
-# guarantees consistency between training and the artefacts written to disk.
 model.tokenizer = tok  # Re-use the already configured tokenizer
 model.tokenizer.padding_side = "right"
 
 
 # ------------------- preprocessing -------------------
-
-
 def preprocess_for_pairwise_pref(
         examples: Dict[str, Sequence[Any]], *, tokenizer: PreTrainedTokenizerBase, max_len: int
 ) -> Dict[str, List[Any]]:
@@ -159,7 +141,6 @@ def preprocess_for_pairwise_pref(
         task_prompt_segment = task_to_prompt(task)
 
         # Construct full prompts
-        # Note: SFT_SYSTEM_PROMPT, SFT_IN_BETWEEN_PROMPT are global constants
         prompt_base = SFT_SYSTEM_PROMPT + task_prompt_segment + SFT_IN_BETWEEN_PROMPT + prefix
 
         chosen_text = prompt_base + chosen_completion
@@ -213,7 +194,7 @@ class PairwiseCollator(DataCollatorWithPadding):
         )
 
         # Add sample-wise weights for the pairwise loss (shape: B)
-        batch["weight"] = torch.tensor(weights, dtype=torch.float32)
+        batch["weight"] = torch.tensor(weights, dtype=torch.bfloat16)
 
         # Add dummy labels. These are required by the Hugging Face Trainer's infrastructure
         # for running evaluation loops and computing metrics, even if the custom loss
@@ -282,17 +263,11 @@ def compute_accuracy(eval_preds):
 
 
 # ------------------- dataset loading and tokenization -------------------
-trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-total_params = sum(p.numel() for p in model.parameters())
-logger.info(
-    f"Trainable params: {trainable_params / 1e6:.2f} M / {total_params / 1e6:.2f} M "
-    f"({trainable_params / total_params * 100:.2f}%)"
-)
-
 # Define paths to training and validation data
 # These paths are assumed to be configured via `config.round_number`
-TRAIN_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{config.round_number}", "reward_dataset_training.jsonl")
-VAL_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{config.round_number}", "reward_dataset_validation.jsonl")
+TRAIN_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{config.round_number}", config.training_dataset_name)
+VAL_PATH = os.path.join(NET_SCRATCH_PATH, "sft_data", f"round_{config.round_number}", config.validation_dataset_name)
+
 # Load and split training dataset by task for validation
 logger.info(f"Loading preference pairs for training from: {TRAIN_PATH}")
 raw_dataset = load_dataset(
@@ -303,55 +278,50 @@ raw_dataset = load_dataset(
 logger.info(f"Loaded {len(raw_dataset['train'])} examples from {TRAIN_PATH}")
 
 # Split dataset into training and validation
-if config.task_validation_fraction > 0 or config.example_validation_probability > 0:
-    rng = random.Random(config.seed or 42)
-    task_to_indices: dict[str, list[int]] = {}
-    for idx, ex in enumerate(raw_dataset["train"]):
-        task_to_indices.setdefault(ex["task_name"], []).append(idx)
+rng = random.Random(config.seed or 42)
+task_to_indices: dict[str, list[int]] = {}
+for idx, ex in enumerate(raw_dataset["train"]):
+    task_to_indices.setdefault(ex["task_name"], []).append(idx)
 
-    all_tasks = list(task_to_indices.keys())
-    rng.shuffle(all_tasks)
-    val_task_count = int(len(all_tasks) * config.task_validation_fraction)
-    val_tasks = set(all_tasks[:val_task_count])
+all_tasks = list(task_to_indices.keys())
+rng.shuffle(all_tasks)
+val_task_count = int(len(all_tasks) * config.task_validation_fraction)
+val_task_names = set(all_tasks[:val_task_count])
 
-    train_indices: list[int] = []
-    val_indices: list[int] = []
-    for task, indices in task_to_indices.items():
-        indices = list(indices)
-        rng.shuffle(indices)
-        if task in val_tasks:
-            val_indices.extend(indices)
-        else:
-            n_val = int(len(indices) * config.example_validation_probability)
-            val_indices.extend(indices[:n_val])
-            train_indices.extend(indices[n_val:])
+train_indices: list[int] = []
+val_task_indices: list[int] = []
+val_example_indices: list[int] = []
 
-    logger.info(
-        f"Split {len(all_tasks)} tasks with {len(val_tasks)} held-out tasks and {len(val_indices)} validation examples "
-        f"(task fraction={config.task_validation_fraction}, example fraction={config.example_validation_probability})"
-    )
+for task, indices in task_to_indices.items():
+    indices = list(indices)
+    rng.shuffle(indices)
+    if task in val_task_names:
+        val_task_indices.extend(indices)
+    else:
+        n_val = 0
+        if rng.random() < config.example_validation_probability and len(indices) >= config.example_validation_threshold:
+            n_val = config.example_validation_num
+        val_example_indices.extend(indices[:n_val])
+        train_indices.extend(indices[n_val:])
 
-    train_ds = renormalize_task_weights(raw_dataset["train"].select(train_indices))
-    val_ds = renormalize_task_weights(raw_dataset["train"].select(val_indices))
-    raw_datasets = DatasetDict({"train": train_ds, "validation": val_ds})
-else:
-    # Use static validation dataset as validation split, no test evaluation
-    logger.info(
-        "No validation split configured: using static validation dataset from %s and skipping test evaluation",
-        VAL_PATH,
-    )
-    train_ds = renormalize_task_weights(raw_dataset["train"])
-    raw_val = load_dataset(
-        "json",
-        data_files={"validation": VAL_PATH},
-        cache_dir=os.path.join(LOCAL_SCRATCH_PATH, ".cache/huggingface/datasets"),
-    )
-    val_ds = renormalize_task_weights(raw_val["validation"])
-    raw_datasets = DatasetDict({"train": train_ds, "validation": val_ds})
+logger.info(
+    f"Split {len(all_tasks)} tasks with {len(val_task_names)} held-out tasks, "
+    f"{len(val_task_indices)} task-based validation examples, and "
+    f"{len(val_example_indices)} sampled validation examples."
+)
+
+train_ds = renormalize_task_weights(raw_dataset["train"].select(train_indices))
+val_task_ds = renormalize_task_weights(raw_dataset["train"].select(val_task_indices))
+val_example_ds = renormalize_task_weights(raw_dataset["train"].select(val_example_indices))
+
+raw_datasets = DatasetDict({
+    "train": train_ds,
+    "val_task": val_task_ds,
+    "val_example": val_example_ds,
+})
 
 # Columns to remove after tokenization (original text columns)
-columns_to_remove = [c for c in ("task_json", "prefix", "chosen", "rejected") if
-                     c in raw_datasets["train"].column_names]
+columns_to_remove = ["task_json", "prefix", "chosen", "rejected"]
 preprocess_fn = partial(preprocess_for_pairwise_pref, tokenizer=tok, max_len=config.max_seq_len)
 
 logger.info("Tokenizing datasets...")
@@ -362,8 +332,28 @@ tokenized_datasets = raw_datasets.map(
     num_proc=max(1, config.cpus - 1 if config.cpus > 1 else config.cpus),
     desc="Running tokenizer on dataset",
 )
+
 logger.info(f"Dataset tokenization complete. Train examples: {len(tokenized_datasets['train'])}, "
-            f"Validation examples: {len(tokenized_datasets['validation'])}")
+            f"Task validation examples: {len(tokenized_datasets['val_task'])}, "
+            f"Example validation examples: {len(tokenized_datasets['val_example'])}")
+
+# ------------------- Load external validation dataset -------------------
+logger.info("Loading external validation preference pairs for evaluation from: %s", VAL_PATH)
+raw_val_val = load_dataset(
+    "json",
+    data_files={"validation": VAL_PATH},
+    cache_dir=os.path.join(LOCAL_SCRATCH_PATH, ".cache/huggingface/datasets"),
+)["validation"]
+logger.info(f"Loaded {len(raw_val_val)} examples for external validation from {VAL_PATH}")
+
+# Tokenize external validation dataset
+tokenized_val_val = raw_val_val.map(
+    preprocess_fn,
+    batched=True,
+    remove_columns=columns_to_remove,
+    num_proc=max(1, config.cpus - 1 if config.cpus > 1 else config.cpus),
+    desc="Running tokenizer on external validation dataset",
+)
 
 # ------------------- training args -------------------
 training_args = TrainingArguments(
@@ -383,125 +373,110 @@ training_args = TrainingArguments(
     logging_steps=config.logging_steps,
     eval_strategy="steps",
     eval_steps=config.eval_steps,
-    save_strategy="steps",  # Changed from "save_strategy"
+    save_strategy="steps",
     save_steps=config.save_steps,
     save_total_limit=config.save_total_limit,
-    save_safetensors=False,  # As per original, can be True for .safetensors format
+    max_grad_norm=config.max_grad_norm,
+    save_safetensors=False,
     # Precision
     bf16=config.use_bf16,
-    fp16=not config.use_bf16,  # Only use fp16 if not bf16 and CUDA available
+    fp16=not config.use_bf16,
     # Distributed Training (handled by Accelerate launcher)
     # Miscellaneous
     seed=config.seed,
-    run_name=RUN_NAME,  # Explicit run name with 'reward-' prefix
-    report_to=config.report_to,  # Default to "none" if not set
-    remove_unused_columns=False,  # Important: 'weight' column is used by collator/trainer
+    run_name=RUN_NAME,
+    report_to=config.report_to,
+    remove_unused_columns=False,
     load_best_model_at_end=True,
-    metric_for_best_model="eval_accuracy",  # Ensure this metric is returned by compute_metrics
+    metric_for_best_model="eval_val_val_accuracy",  # Use val_val accuracy for best model
     greater_is_better=True,
-    # ddp_find_unused_parameters=False, # Optionally set if facing DDP issues with PEFT
     weight_decay=config.weight_decay
 )
 
-# ------------------- weights & biases integration -------------------
-if config.report_to == "wandb":
-    logger.info("Initializing Weights & Biases for experiment tracking.")
-    os.environ["WANDB_SILENT"] = "true"  # Suppress W&B informational messages
-    os.environ["WANDB_CONSOLE"] = "off"  # Hide live updating console to reduce clutter
-    wandb.init(
-        project=config.wandb_project,
-        entity=config.wandb_entity,
-        name=training_args.run_name,  # Use run_name from TrainingArguments
-        config={  # Log key hyperparameters
-            "learning_rate": training_args.learning_rate,
-            "train_batch_size": training_args.per_device_train_batch_size * \
-                                training_args.gradient_accumulation_steps * \
-                                (num_gpus if num_gpus > 0 else 1),
-            "eval_batch_size": training_args.per_device_eval_batch_size * (num_gpus if num_gpus > 0 else 1),
-            "num_epochs": training_args.num_train_epochs,
-            "lora_rank": config.lora_rank if not config.full_finetune else "N/A",
-            "lora_alpha": config.lora_alpha if not config.full_finetune else "N/A",
-            "max_seq_len": config.max_seq_len,
-            "base_model": config.reward_model,
-            "output_dir": OUT_DIR,
-            "train_samples": len(tokenized_datasets["train"]),
-            "val_samples": len(tokenized_datasets["validation"]),
-        }
-    )
-
-# ------------------- trainer initialization and execution -------------------
+# ------------------- trainer initialization -------------------
 trainer = PairwiseTrainer(
     model=model,
     args=training_args,
     train_dataset=tokenized_datasets["train"],
-    eval_dataset=tokenized_datasets["validation"],
-    # tokenizer=tok, # Pass tokenizer if needed by Trainer internal (e.g. for generation during eval)
-    # Not strictly needed if only using compute_metrics and custom collator handles all tokenization.
-    data_collator=PairwiseCollator(tokenizer=tok, padding="longest"),  # Use the custom collator
-    compute_metrics=compute_accuracy,  # Function to compute metrics during evaluation
+    eval_dataset={
+        "val_task": tokenized_datasets["val_task"],
+        "val_example": tokenized_datasets["val_example"],
+        "val_val": tokenized_val_val,
+    },
+    data_collator=PairwiseCollator(tokenizer=tok, padding="longest"),
+    compute_metrics=compute_accuracy,
 )
 
-logger.info(
-    f"Starting training. Evaluation every {training_args.eval_steps} steps. Logging every {training_args.logging_steps} steps.")
-train_result = trainer.train()
-trainer.save_metrics("train", train_result.metrics)  # Save final training metrics
+# ------------------- checkpoint and wandb setup -------------------
+last_checkpoint = None
+if config.resume_from_checkpoint:
+    last_checkpoint = get_last_checkpoint(training_args.output_dir)
+    if last_checkpoint is None:
+        logger.warning(
+            f"`resume_from_checkpoint` was set to True, but no checkpoint was found in `{training_args.output_dir}`. "
+            f"Starting a new training run."
+        )
 
 if config.report_to == "wandb":
-    wandb.log({f"train/{k}": v for k, v in train_result.metrics.items()})  # Log final train metrics to W&B
+    logger.info("Initializing Weights & Biases for experiment tracking.")
+    os.environ["WANDB_SILENT"] = "true"
+    os.environ["WANDB_CONSOLE"] = "off"
+
+    wandb_run_id = None
+    if last_checkpoint:
+        trainer_state_path = os.path.join(last_checkpoint, "trainer_state.json")
+        if os.path.exists(trainer_state_path):
+            with open(trainer_state_path, "r") as f:
+                state = json.load(f)
+                wandb_run_id = state.get("wandb_id")
+                if wandb_run_id:
+                    logger.info(f"Found wandb run ID ({wandb_run_id}) to resume.")
+                else:
+                    logger.warning("Could not find wandb run ID in checkpoint state. Starting a new run.")
+        else:
+            logger.warning(f"trainer_state.json not found in {last_checkpoint}. Starting a new wandb run.")
+
+    wandb.init(
+        project=config.wandb_project,
+        entity=config.wandb_entity,
+        name=training_args.run_name,
+        id=wandb_run_id,
+        resume="allow",
+        config={
+            "learning_rate": training_args.learning_rate,
+            "train_batch_size": training_args.per_device_train_batch_size * \
+                                training_args.gradient_accumulation_steps * \
+                                training_args.world_size,
+            "eval_batch_size": training_args.per_device_eval_batch_size * training_args.world_size,
+            "num_epochs": training_args.num_train_epochs,
+            "max_seq_len": config.max_seq_len,
+            "base_model": config.reward_model,
+            "output_dir": OUT_DIR,
+            "train_samples": len(tokenized_datasets["train"]),
+            "val_samples_task": len(tokenized_datasets["val_task"]),
+            "val_samples_example": len(tokenized_datasets["val_example"]),
+            "val_samples_val": len(tokenized_val_val),
+        }
+    )
+
+# ------------------- training execution -------------------
+if last_checkpoint:
+    logger.info(f"Resuming training from {last_checkpoint}")
+else:
+    logger.info(f"Starting a new training run.")
+
+train_result = trainer.train(resume_from_checkpoint=last_checkpoint)
+trainer.save_metrics("train", train_result.metrics)
+
+
+if config.report_to == "wandb":
+    wandb.log({f"train/{k}": v for k, v in train_result.metrics.items()})
 
 logger.info(f"Training complete. Saving model to {OUT_DIR}")
 
-# A single call is sufficient because RewardModelModule implements its own
-# `save_pretrained` that handles saving the backbone, value head and tokenizer
-# in a cohesive manner.
 model.save_pretrained(OUT_DIR)
 
-# ------------------- final evaluation -------------------
-logger.info("Performing final evaluation on the validation set...")
-eval_metrics = trainer.evaluate(eval_dataset=tokenized_datasets["validation"])
-trainer.save_metrics("eval", eval_metrics)  # Save final evaluation metrics
-
-final_accuracy = eval_metrics.get("eval_accuracy", 0.0)
-logger.info(f"Final evaluation complete. Accuracy: {final_accuracy:.4f}")
-
-if config.report_to == "wandb":
-    wandb.log({"final_eval/accuracy": final_accuracy})  # Log final eval accuracy
-
-logger.info(f"Script finished. Model and validation metrics saved in {OUT_DIR}")
-
-if config.task_validation_fraction > 0 or config.example_validation_probability > 0:
-    # ------------------- final test evaluation -------------------
-    logger.info("Loading test preference pairs for evaluation from: %s", VAL_PATH)
-    raw_test = load_dataset(
-        "json",
-        data_files={"test": VAL_PATH},
-        cache_dir=os.path.join(LOCAL_SCRATCH_PATH, ".cache/huggingface/datasets"),
-    )
-    logger.info(f"Loaded {len(raw_test['test'])} examples for test evaluation from {VAL_PATH}")
-    # Tokenize test dataset
-    test_columns_to_remove = [
-        c for c in ("task_json", "prefix", "chosen", "rejected")
-        if c in raw_test["test"].column_names
-    ]
-    tokenized_test = raw_test["test"].map(
-        preprocess_fn,
-        batched=True,
-        remove_columns=test_columns_to_remove,
-        num_proc=max(1, config.cpus - 1 if config.cpus > 1 else config.cpus),
-        desc="Running tokenizer on test dataset",
-    )
-    logger.info("Running final evaluation on test set …")
-    # Use a distinct metric key prefix so test metrics are clearly separated
-    test_metrics = trainer.evaluate(eval_dataset=tokenized_test, metric_key_prefix="test")
-    trainer.save_metrics("test", test_metrics)
-    final_test_accuracy = test_metrics.get("test_accuracy", 0.0)
-    logger.info("Test evaluation complete. Accuracy: %.4f", final_test_accuracy)
-    if config.report_to == "wandb":
-        wandb.log({"test/accuracy": final_test_accuracy})
-
-    logger.info(f"Script finished. All metrics and model components saved in {OUT_DIR}")
-else:
-    logger.info("Skipping final test evaluation because no validation split was configured")
+logger.info(f"Script finished. Best model and metrics saved in {OUT_DIR}")
 
 # ------------------- wrap-up -------------------
 if config.report_to == "wandb":

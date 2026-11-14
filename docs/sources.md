@@ -6,13 +6,12 @@ Original rStar-ARC code is [MIT-licensed](../LICENSE).
   self-evolution methodology.
 - [ARC-AGI](https://github.com/fchollet/ARC-AGI) provides the benchmark and sample
   puzzle grids. Its [Apache 2.0 license](licenses/ARC-Apache-2.0.txt) is included.
-- `rstar_deepthink/training/dsl.py`, `rstar_deepthink/training/generators.py`, `rstar_deepthink/training/verifiers.py`, and
-  `rstar_deepthink/training/rearc_utils.py` are adapted from Michael Hodel's
-  [RE-ARC](https://github.com/michaelhodel/re-arc) and
-  [ARC-DSL](https://github.com/michaelhodel/arc-dsl).
+- [`rstar_deepthink/vendor/rearc/`](../rstar_deepthink/vendor/rearc/) contains
+  code adapted from Michael Hodel's [RE-ARC](https://github.com/michaelhodel/re-arc)
+  and [ARC-DSL](https://github.com/michaelhodel/arc-dsl).
   Their MIT notices are included in [licenses/](licenses/).
-- `rstar_deepthink/training/common.py` is adapted from
-  [BARC's grid helpers](https://github.com/xu3kev/BARC/blob/master/seeds/common.py).
+- [`rstar_deepthink/vendor/barc.py`](../rstar_deepthink/vendor/barc.py) is adapted
+  from [BARC's grid helpers](https://github.com/xu3kev/BARC/blob/master/seeds/common.py).
   BARC does not provide a top-level license for this file; rStar-ARC's MIT grant
   does not cover it.
 

@@ -20,18 +20,18 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 MODULES = [
     "rstar_deepthink",
-    "rstar_deepthink.training.augment_policy_data",
-    "rstar_deepthink.training.generate_policy_training_dataset",
-    "rstar_deepthink.training.generate_policy_validation_dataset",
-    "rstar_deepthink.training.train_policy",
-    "rstar_deepthink.training.train_policy_distributed",
+    "rstar_deepthink.training.datasets.augment_policy_data",
+    "rstar_deepthink.training.datasets.generate_policy_training_dataset",
+    "rstar_deepthink.training.datasets.generate_policy_validation_dataset",
+    "rstar_deepthink.training.policy.train",
+    "rstar_deepthink.training.policy.distributed",
     "scripts.merge_policy_lora",
     "scripts.simple_inference",
-    "rstar_deepthink.training.augment_reward_data",
-    "rstar_deepthink.training.generate_reward_training_dataset",
-    "rstar_deepthink.training.generate_reward_validation_dataset",
-    "rstar_deepthink.training.train_reward",
-    "rstar_deepthink.training.train_reward_full",
+    "rstar_deepthink.training.datasets.augment_reward_data",
+    "rstar_deepthink.training.datasets.generate_reward_training_dataset",
+    "rstar_deepthink.training.datasets.generate_reward_validation_dataset",
+    "rstar_deepthink.training.reward.train",
+    "rstar_deepthink.training.reward.full",
     "scripts.merge_reward_lora",
 ]
 
@@ -61,7 +61,7 @@ def find_yaml_configs(config_dir: Path) -> list[str]:
     """Finds YAML configuration files."""
     yaml_files = ["none"]  # Option to not use a config
     if config_dir.is_dir():
-        for item in config_dir.glob("*.yaml"):
+        for item in config_dir.rglob("*.yaml"):
             if item.is_file():
                 # Store relative path from project root
                 try:
@@ -164,7 +164,7 @@ def main():
     available_configs = find_yaml_configs(PROJECT_ROOT / "configs")
     if not config.get("yaml_config"):
         # Check if the script has a default config convention (e.g. script_name.yaml)
-        potential_default_config = f"configs/{config['module'].rsplit('.', 1)[-1]}.yaml"
+        potential_default_config = "configs/search/beam.yaml" if config["module"] == "rstar_deepthink" else "none"
         default_config = potential_default_config if potential_default_config in available_configs else "none"
 
         config["yaml_config"] = ask_question(
@@ -250,7 +250,7 @@ def main():
             validate=lambda text: text.isdigit() and int(text) > 0 or "Please enter a positive number",
         ))
 
-    command = "accelerate launch --module" if config["module"] == "rstar_deepthink.training.train_policy_distributed" else "python -m"
+    command = "accelerate launch --module" if config["module"] == "rstar_deepthink.training.policy.distributed" else "python -m"
 
     sbatch_script_content = f"""#!/bin/bash
 #SBATCH --mail-type=NONE # mail configuration: NONE, BEGIN, END, FAIL, REQUEUE, ALL

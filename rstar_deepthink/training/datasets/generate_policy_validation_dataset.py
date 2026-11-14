@@ -8,7 +8,7 @@ from rstar_deepthink.config import Config
 # remove_markers is specific to rstar_deepthink, keep it if solutions have markers
 # from rstar_deepthink.tools.python_tool import remove_markers
 from rstar_deepthink.utils import setup_logging
-from rstar_deepthink.training.data_utils import *
+from rstar_deepthink.training.datasets.utils import *
 
 logger = logging.getLogger(__name__)
 

@@ -5,7 +5,7 @@ import sys
 from rstar_deepthink.constants import NET_SCRATCH_TASK_DATA_DIR
 from rstar_deepthink.config import Config
 from rstar_deepthink.utils import setup_logging
-from rstar_deepthink.training.data_utils import *
+from rstar_deepthink.training.datasets.utils import *
 
 logger = logging.getLogger(__name__)
 

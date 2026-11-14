@@ -5,7 +5,7 @@ from datetime import datetime
 from rstar_deepthink.agents import BS, MCTS, Custom, Bootstrap
 from rstar_deepthink.arc_task import load_tasks, filter_tasks_by_length
 from rstar_deepthink.config import Config
-from rstar_deepthink.training.save_sft_data import save_sft_data
+from rstar_deepthink.training.datasets.traces import save_sft_data
 from rstar_deepthink.utils import setup_logging, batch, save_nodes, save_summary
 
 logger = logging.getLogger(__name__)

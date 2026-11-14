@@ -12,6 +12,10 @@ The implementation includes beam search, MCTS, bootstrapping, and task augmentat
 
 This research project is complete.
 
+The recorded policy experiments show a generalization gap: the 3B model reached
+14.4% training and 3% validation pass@128 in the [July notes](docs/research-notes.md#week-19-07072025).
+A final measurement of the reward model's contribution is not recorded there.
+
 ## Run
 
 Python 3.12. Search inference requires Linux and an NVIDIA GPU for vLLM.
@@ -20,17 +24,18 @@ Python 3.12. Search inference requires Linux and an NVIDIA GPU for vLLM.
 python3.12 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements/research.txt
-python -m rstar_deepthink --config-file configs/bs.yaml
+python -m rstar_deepthink --config-file configs/search/beam.yaml
 ```
 
 For CPU tests and visualization, install `requirements/core.txt` instead.
 
 ```bash
-python -m rstar_deepthink.visualization --input path/to/task_nodes.json --output tree.html
+python -m rstar_deepthink.demo
 python -m pytest -q
 ```
 
-The viewer supports `--theme light`, `--step-only`, and `--open`.
+The demo checks three handwritten programs on a bundled task and writes an
+interactive tree to `artifacts/demo/tree.html`. It needs no model or GPU.
 Hover for code; hold Shift for search metadata.
 
 ## Layout
@@ -44,8 +49,8 @@ Hover for code; hold Shift for search metadata.
 | [`tests/`](tests/) | CPU tests |
 | [`docs/`](docs/) | [Research notes](docs/research-notes.md), figures, and [sources](docs/sources.md) |
 
-Run training pipelines as `python -m rstar_deepthink.training.<module>`.
-The distributed policy trainer uses `accelerate launch --module`.
+See the [training guide](rstar_deepthink/training/README.md) for entry points.
+Imported ARC helpers are separated under `rstar_deepthink/vendor/`.
 `python -m scripts.submit` submits jobs to the ETH TIK cluster.
 
 ## Data and storage

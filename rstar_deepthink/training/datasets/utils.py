@@ -8,7 +8,7 @@ import sys
 from collections import defaultdict
 from typing import Optional, Any, Callable
 
-from rstar_deepthink.training import generators, verifiers
+from rstar_deepthink.vendor.rearc import generators, verifiers
 
 
 from rstar_deepthink.tools.python_tool import remove_markers, execute_code_with_task

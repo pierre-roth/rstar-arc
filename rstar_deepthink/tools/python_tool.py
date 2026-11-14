@@ -17,7 +17,7 @@ project_root = PROJECT_PATH
 logger = logging.getLogger(__name__)
 
 GLOBAL_IMPORTS = (
-    "from rstar_deepthink.training.common import *\n"
+    "from rstar_deepthink.vendor.barc import *\n"
     "import numpy as np\n"
     "from typing import *\n"
 )
