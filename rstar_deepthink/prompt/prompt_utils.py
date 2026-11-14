@@ -1,7 +1,7 @@
 import json
 import os
 
-from constants import EXAMPLE_DATA_FOLDER
+from rstar_deepthink.constants import EXAMPLE_DATA_FOLDER
 from rstar_deepthink.arc_task import ARCTask
 from rstar_deepthink.config import Config
 

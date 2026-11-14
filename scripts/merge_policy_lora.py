@@ -6,13 +6,10 @@ import torch
 from peft import PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
 
-from constants import NET_SCRATCH_PATH
+from rstar_deepthink.constants import NET_SCRATCH_PATH
 from rstar_deepthink.config import Config
-from utils import setup_logging
+from rstar_deepthink.utils import setup_logging
 
 logger = logging.getLogger(__name__)
 

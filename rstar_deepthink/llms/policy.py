@@ -2,7 +2,7 @@ import logging
 import os.path
 from datetime import datetime
 
-from constants import STEP_END, CODE_END
+from rstar_deepthink.constants import STEP_END, CODE_END
 from rstar_deepthink.config import Config
 
 logger = logging.getLogger(__name__)

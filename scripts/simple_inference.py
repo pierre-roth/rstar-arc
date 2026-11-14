@@ -13,11 +13,8 @@ from vllm import LLM, SamplingParams
 # ---------------------------------------------------------------------------
 # Project setup
 # ---------------------------------------------------------------------------
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
 
-from constants import (
+from rstar_deepthink.constants import (
     SFT_SYSTEM_PROMPT,
     SFT_IN_BETWEEN_PROMPT,
     CODE,
@@ -25,7 +22,7 @@ from constants import (
     CODE_PREFIX,
     WALL_TIMEOUT_SECONDS,
 )
-from utils import setup_logging
+from rstar_deepthink.utils import setup_logging
 from rstar_deepthink import Config
 from rstar_deepthink.arc_task.task_utils import load_tasks, task_to_prompt
 from rstar_deepthink.tools import verify_prefixes_and_code

@@ -7,9 +7,9 @@ from rstar_deepthink.config import Config
 from rstar_deepthink.arc_task import ARCTask, Grid, Example
 from rstar_deepthink.node import Node
 from rstar_deepthink.tools import python_tool
-import utils
-from utils import batch, serialize_nodes, load_nodes
-from constants import CODE_PREFIX, CODE_END, STEP_END
+from rstar_deepthink import utils
+from rstar_deepthink.utils import batch, serialize_nodes, load_nodes
+from rstar_deepthink.constants import CODE_PREFIX, CODE_END, STEP_END
 
 
 @pytest.fixture(autouse=True)

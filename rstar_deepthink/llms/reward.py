@@ -7,7 +7,7 @@ import torch
 from torch import nn
 
 # Heavy frameworks (PEFT, Transformers) are imported inside methods to keep module import light
-from constants import SPECIAL_TOKENS
+from rstar_deepthink.constants import SPECIAL_TOKENS
 from rstar_deepthink.config import Config
 
 logger = logging.getLogger(__name__)

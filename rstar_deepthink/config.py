@@ -7,7 +7,7 @@ from typing import Optional
 
 import yaml
 
-from constants import *
+from rstar_deepthink.constants import *
 
 
 @dataclass

@@ -1,7 +1,7 @@
 import logging
 from random import choice, random
 
-from constants import STEP_END
+from rstar_deepthink.constants import STEP_END
 from rstar_deepthink.agents import Agent
 from rstar_deepthink.agents.agent_utils import normalized_similarity_score, get_description
 from rstar_deepthink.arc_task import Grid

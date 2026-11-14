@@ -22,7 +22,7 @@ max-seq-len: 14336
 max-tokens: 512
 dtype: "bfloat16"
 
-data-folder: "data_sample/very_easy"
+data-folder: "data/very_easy"
 sort-by-length: false
 length-pre-filtering: true
 

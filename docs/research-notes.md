@@ -53,10 +53,10 @@
 
 - **Visuals**:
   - Tree visualization output for beam search with branching factor 3 and width 3  
-    ![img1.png](../images/week2_bs_visualization.png)
+    ![img1.png](images/week2_bs_visualization.png)
 
   - Tree visualization output for mcts 16 rollouts and branching factor 3  
-    ![img2.png](../images/week2_mcts_visualization.png)
+    ![img2.png](images/week2_mcts_visualization.png)
 
 ---
 
@@ -340,9 +340,9 @@
 - **Visuals**:
   - here are 2 histograms of task representation token counts:
     - ARC-AGI-1 tasks
-![arc_1.png](../images/arc_1.png)
+![arc_1.png](images/arc_1.png)
     - ARC-AGI-1 and ARC-AGI-2 tasks
-![arc_1_and_2.png](../images/arc_1_and_2.png)
+![arc_1_and_2.png](images/arc_1_and_2.png)
 
 
 ### Week 9 (28.04.2025)
@@ -493,7 +493,7 @@
 
 - **Visuals**:
   - here is a histogram of the step count distribution for the training set:
-![step_count_histogram_training.png](../images/step_count_histogram_training.png)
+![step_count_histogram_training.png](images/step_count_histogram_training.png)
 
 
 ### Week 19 (07.07.2025)
@@ -518,8 +518,8 @@
   - ??
 
 - **Visuals**:
-  - Tokens per step histogram for the training dataset: ![tokens_per_step_histogram.png](../images/tokens_per_step_histogram.png)
-  - Tokens per solution histogram for the training dataset: ![tokens_per_solution_histogram.png](../images/tokens_per_solution_histogram.png)
+  - Tokens per step histogram for the training dataset: ![tokens_per_step_histogram.png](images/tokens_per_step_histogram.png)
+  - Tokens per solution histogram for the training dataset: ![tokens_per_solution_histogram.png](images/tokens_per_solution_histogram.png)
 
 
 ### Week 20 (14.07.2025)

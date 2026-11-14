@@ -1,0 +1,20 @@
+-r core.txt
+
+# Search inference (Linux x86-64 with NVIDIA CUDA for vLLM).
+vllm; platform_system == "Linux" and platform_machine == "x86_64"
+pebble
+torch
+transformers
+tqdm
+
+# Training and dataset preparation.
+accelerate
+datasets
+matplotlib
+peft
+wandb
+
+# Cluster launcher and API-assisted dataset conversion.
+questionary
+openai
+pydantic

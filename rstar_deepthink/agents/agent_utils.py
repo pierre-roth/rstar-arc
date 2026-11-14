@@ -4,7 +4,7 @@ import os.path
 import scipy.stats
 
 from rstar_deepthink.arc_task import Grid
-from constants import DATA_SAMPLE_DIR
+from rstar_deepthink.constants import DATA_SAMPLE_DIR
 
 
 def get_description(config, task_name: str) -> str:

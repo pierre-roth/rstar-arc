@@ -7,16 +7,17 @@ import sys
 import textwrap
 
 
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-if project_root not in sys.path:
-    sys.path.append(project_root)
+from rstar_deepthink.constants import (
+    PROJECT_PATH, CPU_TIMEOUT_SECONDS, WALL_TIMEOUT_SECONDS, CODE, CODE_END,
+    STEP_END, MEMORY_LIMIT_BYTES,
+)
 
-from constants import CPU_TIMEOUT_SECONDS, WALL_TIMEOUT_SECONDS, CODE, CODE_END, STEP_END, MEMORY_LIMIT_BYTES
+project_root = PROJECT_PATH
 
 logger = logging.getLogger(__name__)
 
 GLOBAL_IMPORTS = (
-    "from train.common import *\n"
+    "from rstar_deepthink.training.common import *\n"
     "import numpy as np\n"
     "from typing import *\n"
 )

@@ -1,16 +1,15 @@
 import json
 import subprocess
 import sys
-from pathlib import Path
 
 import pytest
 
-from constants import CODE_END, CODE_PREFIX, PROJECT_PATH
+from rstar_deepthink.constants import CODE_END, CODE_PREFIX
 from rstar_deepthink.arc_task import ARCTask
 from rstar_deepthink.config import Config
 from rstar_deepthink.node import Node
-from tree_visualizer import build_graph_from_nodes, visualize_tree
-from utils import load_nodes, serialize_nodes
+from rstar_deepthink.visualization import build_graph_from_nodes, visualize_tree
+from rstar_deepthink.utils import load_nodes, serialize_nodes
 
 
 @pytest.fixture
@@ -60,7 +59,8 @@ def test_visualizer_directory_cli(trace, tmp_path):
     subprocess.run(
         [
             sys.executable,
-            str(Path(PROJECT_PATH) / "tree_visualizer.py"),
+            "-m",
+            "rstar_deepthink.visualization",
             "--input",
             str(trace.parent),
             "--output",
