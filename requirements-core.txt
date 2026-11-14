@@ -1,0 +1,7 @@
+# Task handling, search agents, candidate execution, visualization, and CPU tests.
+numpy
+scipy
+pyyaml
+plotly
+igraph
+pytest

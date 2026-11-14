@@ -44,9 +44,7 @@ class TrainingMetrics:
 
 
 class DataCollatorForSFT:
-    """
-    Efficient collator for supervised fine-tuning with proper tokenization and masking.
-    """
+    """Pad tokenized examples and preserve their labels and weights."""
 
     def __init__(self, tokenizer: PreTrainedTokenizerBase, max_len: int):
         self.tokenizer = tokenizer
@@ -83,7 +81,7 @@ class DataCollatorForSFT:
 
 
 class SFTTrainer:
-    """Encapsulates the training logic for better organization and testing."""
+    """Weighted policy training with Accelerate."""
 
     def __init__(
             self,
@@ -313,7 +311,7 @@ class SFTTrainer:
 
 
 def main(config: Config):
-    """Main training function with improved structure."""
+    """Train the policy model with Accelerate and prepared tokenized datasets."""
     # Setup
     processed_dataset_dir = Path(NET_SCRATCH_PATH) / "sft_data" / f"round_{config.round_number}"
 
@@ -321,9 +319,9 @@ def main(config: Config):
     setup_logging(config.numeric_log_level)
     os.environ["NCCL_DEBUG"] = "WARN"
 
-    run_name = config.run_name or f"policy-ft-{Path(config.policy_model).name}-new"
-    output_dir = Path("/scratch") / "net_scratch" / "models" / "fine_tuned" / "policy" / run_name
-    policy_model_dir = Path("/scratch") / "net_scratch" / "models" / "policy"
+    run_name = config.run_name or f"policy-ft-{Path(config.policy_model).name}"
+    output_dir = Path(NET_SCRATCH_PATH) / "models" / "fine_tuned" / "policy" / run_name
+    policy_model_dir = Path(config.net_scratch_model_base_path) / "policy"
 
     resume_from_checkpoint = None
     if config.resume_from_checkpoint and output_dir.exists():

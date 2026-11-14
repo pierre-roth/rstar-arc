@@ -8,8 +8,7 @@ import sys
 from collections import defaultdict
 from typing import Optional, Any, Callable
 
-import generators
-import verifiers
+from train import generators, verifiers
 
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if project_root not in sys.path:

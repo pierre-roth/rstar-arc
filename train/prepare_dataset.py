@@ -41,16 +41,16 @@ project_root = Path(__file__).parent.parent.absolute()
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-from constants import (  
+from constants import (
     SFT_IN_BETWEEN_PROMPT,
     SFT_SYSTEM_PROMPT,
     SPECIAL_TOKENS,
 )
 # --- project-specific bits ----------------------------------------------------
-from rstar_deepthink import Config  
-from rstar_deepthink.arc_task import ARCTask  
-from rstar_deepthink.arc_task.task_utils import task_to_prompt  
-from train_utils import renormalize_task_weights  
+from rstar_deepthink import Config
+from rstar_deepthink.arc_task import ARCTask
+from rstar_deepthink.arc_task.task_utils import task_to_prompt
+from train.train_utils import renormalize_task_weights
 
 # -----------------------------------------------------------------------------
 

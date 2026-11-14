@@ -1,16 +1,18 @@
+import argparse
 import os
-import traceback
+from html import escape
+from pathlib import Path
 import webbrowser
 
 import igraph
 import numpy as np
 import plotly.graph_objects as go
 
-from rstar_deepthink.tools.python_tool import comment_out_markers
+from rstar_deepthink.tools.python_tool import comment_out_markers, remove_markers
 from utils import load_nodes
 
 
-def build_graph_from_nodes(nodes):
+def build_graph_from_nodes(nodes, step_only=False):
     """
     Create an igraph.Graph from a list of nodes.
     It assumes that each node has a unique 'tag' attribute and that the
@@ -25,36 +27,20 @@ def build_graph_from_nodes(nodes):
     shift_hover_texts = []
 
     for node in nodes:
-        # Extract raw Python code and other data
-        try:
-            code = comment_out_markers(node.collect_code())
-            q_value = node.q_value() if node.visit_count > 0 else 0
-
-            # Handle the case when parent is None (root node)
-            if not node.parent:
-                puct = q_value  # For root node, PUCT is just the Q-value
-            else:
-                # Calculate PUCT only when parent exists
-                if node.parent.visit_count == 0 or node.visit_count == 0:
-                    u_value = 0
-                else:
-                    u_value = node.config["c_puct"] * np.sqrt(np.log(node.parent.visit_count) / node.visit_count)
-                puct = q_value + u_value
-
-            data = f"Tag: {node.tag}<br>Value: {node.value}<br>Visit count: {node.visit_count}<br>Value sum: {node.value_sum}<br>Q-Value: {q_value}<br>PUCT: {puct}"
-            if node.terminal_reason is not None:
-                data += f"<br>Terminal reason: {node.terminal_reason}"
-            if node.temperature is not None:
-                data += f"<br>Temperature: {node.temperature}"
-            if node.example_name is not None:
-                data += f"<br>Example name: {node.example_name}"
-        except Exception as e:
-            print(f"Error while extracting code for node {node.tag}: {e}")
-            traceback.print_exc()
-            code = "NO VALID CODE FOUND!"
-            data = "NO DATA FOUND!"
-        # Replace newlines with <br> tags for multi‑line hover text.
-        code = code.replace('\n', '<br>')
+        code = (remove_markers(node.state["code"]) if step_only
+                else comment_out_markers(node.collect_code()))
+        if step_only:
+            code = "\n".join(line for line in code.splitlines() if line.strip())
+        q_value = node.q_value()
+        data = (f"Tag: {node.tag}<br>Value: {node.value}<br>Visit count: {node.visit_count}"
+                f"<br>Value sum: {node.value_sum}<br>Q-Value: {q_value}<br>PUCT: {node.puct()}")
+        if node.terminal_reason is not None:
+            data += f"<br>Terminal reason: {escape(node.terminal_reason)}"
+        if node.temperature is not None:
+            data += f"<br>Temperature: {node.temperature}"
+        if node.example_name is not None:
+            data += f"<br>Example name: {escape(str(node.example_name))}"
+        code = escape(code).replace('\n', '<br>')
         normal_hover_texts.append(code)
         shift_hover_texts.append(data)
 
@@ -147,8 +133,9 @@ def _add_scatter_nodes(fig, G, nodes, Xn, Yn):
     fig.add_trace(shift_node_trace)
 
 
-def create_figure(G, nodes, Xn, Yn, Xe, Ye):
+def create_figure(G, nodes, Xn, Yn, Xe, Ye, theme="dark"):
     """Create Plotly figure for the given tree graph."""
+    light = theme == "light"
     fig = go.Figure()
 
     fig.add_trace(
@@ -156,7 +143,7 @@ def create_figure(G, nodes, Xn, Yn, Xe, Ye):
             x=Xe,
             y=Ye,
             mode="lines",
-            line=dict(color="rgb(210,210,210)", width=1),
+            line=dict(color="rgb(150,150,150)" if light else "rgb(210,210,210)", width=1),
             hoverinfo="none",
             name="edges",
         )
@@ -173,16 +160,16 @@ def create_figure(G, nodes, Xn, Yn, Xe, Ye):
         yaxis=axis,
         margin=dict(l=40, r=40, b=85, t=100),
         hovermode="closest",
-        plot_bgcolor="rgb(30,30,30)",
-        paper_bgcolor="rgb(30,30,30)",
-        font_color="white",
+        plot_bgcolor="white" if light else "rgb(30,30,30)",
+        paper_bgcolor="white" if light else "rgb(30,30,30)",
+        font_color="black" if light else "white",
         hoverlabel=dict(
-            bgcolor="black",
+            bgcolor="white" if light else "black",
             font_size=12,
             font_family="monospace",
-            font_color="white",
+            font_color="black" if light else "white",
             align="left",
-            bordercolor="#333333",
+            bordercolor="#cccccc" if light else "#333333",
             namelength=-1,
         ),
     )
@@ -190,17 +177,17 @@ def create_figure(G, nodes, Xn, Yn, Xe, Ye):
     return fig
 
 
-def visualize_tree(json_filename, open_website=True):
+def visualize_tree(json_filename, open_website=False, output_html=None, theme="dark", step_only=False):
     """Visualize a serialized node tree using Plotly."""
     nodes = load_nodes(json_filename)
     if not nodes:
         print("No nodes loaded.")
         return
 
-    graph = build_graph_from_nodes(nodes)
+    graph = build_graph_from_nodes(nodes, step_only=step_only)
     Xn, Yn, Xe, Ye = compute_layout(graph)
 
-    fig = create_figure(graph, nodes, Xn, Yn, Xe, Ye)
+    fig = create_figure(graph, nodes, Xn, Yn, Xe, Ye, theme=theme)
 
     # Add a custom JavaScript to switch trace visibility on shift key press
     custom_js = """
@@ -209,12 +196,10 @@ def visualize_tree(json_filename, open_website=True):
         var isShiftPressed = false;
         var plotlyDiv = document.getElementById('plotly-div');
 
-        console.log("Shift key handler initialized");
 
         // Add event listeners for shift key
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Shift' && !isShiftPressed) {
-                console.log("Shift key pressed down");
                 isShiftPressed = true;
 
                 // Hide normal nodes, show shift nodes
@@ -225,7 +210,6 @@ def visualize_tree(json_filename, open_website=True):
 
         document.addEventListener('keyup', function(e) {
             if (e.key === 'Shift') {
-                console.log("Shift key released");
                 isShiftPressed = false;
 
                 // Show normal nodes, hide shift nodes
@@ -237,7 +221,6 @@ def visualize_tree(json_filename, open_website=True):
         // Safeguard: Handle cases where shift key is released outside the window
         window.addEventListener('blur', function() {
             if (isShiftPressed) {
-                console.log("Window blur - resetting shift state");
                 isShiftPressed = false;
 
                 // Show normal nodes, hide shift nodes
@@ -250,7 +233,8 @@ def visualize_tree(json_filename, open_website=True):
     """
 
     json_dir = os.path.dirname(os.path.abspath(json_filename))
-    output_html = os.path.join(json_dir, f"tree_{nodes[0].task}_visualization.html")
+    output_html = Path(output_html) if output_html else Path(json_dir) / f"tree_{nodes[0].task}_visualization.html"
+    output_html.parent.mkdir(parents=True, exist_ok=True)
 
     # Generate the HTML file with custom div ID and our JS script
     with open(output_html, 'w') as f:
@@ -263,16 +247,37 @@ def visualize_tree(json_filename, open_website=True):
         f.write(modified_html)
 
     if open_website:
-        webbrowser.open('file://' + os.path.realpath(output_html))
+        webbrowser.open(output_html.resolve().as_uri())
+    return output_html
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Render saved rStar-ARC search trees as interactive HTML.")
+    parser.add_argument("--input", required=True, type=Path, help="Saved node JSON file or directory of *_nodes.json files")
+    parser.add_argument("--output", type=Path, help="HTML file, or output directory when rendering a directory")
+    parser.add_argument("--theme", choices=["dark", "light"], default="dark")
+    parser.add_argument("--step-only", action="store_true", help="Show each node's own code instead of the full trajectory")
+    parser.add_argument("--open", action="store_true", help="Open the generated HTML in a browser")
+    args = parser.parse_args()
+
+    if args.input.is_file():
+        inputs = [args.input]
+    elif args.input.is_dir():
+        inputs = sorted(args.input.glob("*_nodes.json"))
+        if not inputs:
+            parser.error(f"No *_nodes.json files in {args.input}")
+    else:
+        parser.error(f"Input does not exist: {args.input}")
+
+    for path in inputs:
+        output = args.output
+        if output and args.input.is_dir():
+            output = output / f"{path.stem}.html"
+        result = visualize_tree(path, open_website=args.open, output_html=output,
+                                theme=args.theme, step_only=args.step_only)
+        if result:
+            print(result)
 
 
 if __name__ == "__main__":
-    input_path = input("Enter the path to the JSON file: ")
-
-    if os.path.isfile(input_path):
-        visualize_tree(input_path)
-    else:
-        open_all = input("Do you want to open all visualizations? (y/n): ")
-        for filename in os.listdir(input_path):
-            if filename.endswith(".json"):
-                visualize_tree(os.path.join(input_path, filename), open_website=open_all.strip().lower() == "y")
+    main()

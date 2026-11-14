@@ -1,9 +1,8 @@
 import argparse
 import logging
 import os
-import sys
 from dataclasses import dataclass, field
-from random import shuffle, sample
+from random import Random
 from typing import Optional
 
 import yaml
@@ -38,7 +37,7 @@ class Config:
     run_name: str | None = None
     policy_model: str = "Qwen/Qwen2.5-Coder-7B-Instruct"  # Model that generates reasoning steps
     reward_model: str = "Qwen/Qwen2.5-Coder-7B-Instruct"  # Reward Model for evaluating steps
-    model_initialization_times = {"policy": None, "reward": None}  # Time taken to initialize models
+    model_initialization_times: dict = field(default_factory=lambda: {"policy": None, "reward": None})  # Time taken to initialize models
     enforce_eager: bool = False
     policy_vram_percentage: float = 0.45  # Percentage of VRAM to use for the policy model
 
@@ -69,7 +68,7 @@ class Config:
     num_tasks: int = -1  # Number of tasks to process (-1 means all tasks)
     data_folder: str = DEFAULT_DATA_FOLDER  # Path to ARC task data
     task_names: list[str] | None = None  # List of task names to process
-    sort_by_length = False  # Whether to sort tasks by length
+    sort_by_length: bool = False  # Whether to sort tasks by length
     length_pre_filtering: bool = False  # Drop tasks that cannot fit in context
 
     search_mode: str = "bs"  # Search algorithm - "bs" for beam search, "mcts" for Monte Carlo Tree Search
@@ -92,7 +91,7 @@ class Config:
     skip_batches: int = 0  # Number of batches to skip
     num_batches: int = -1  # Number of batches to process (-1 means all batches)
 
-    job_id: int = int(os.getenv("SLURM_JOB_ID", 0))  # Job ID (read from environment variable)
+    job_id: int = int(os.getenv("SLURM_JOB_ID", os.getpid()))  # Job ID (read from environment variable)
     cpus: int = int(os.getenv("SLURM_CPUS_PER_TASK", 72))  # Number of CPUs available
     gpus: int = int(os.getenv("SLURM_GPUS", 1))  # Number of GPUs available
     mem: int = int(os.getenv("SLURM_MEM_PER_NODE", 32768))  # Memory per node in MB
@@ -196,14 +195,14 @@ class Config:
         """
 
         # Parse command line arguments to get config file path
-        parser = argparse.ArgumentParser(description='rSTAR meets ARC')
+        parser = argparse.ArgumentParser(description='rStar-ARC search and training configuration')
         parser.add_argument('--config-file', type=str, help='Path to YAML config file')
         args, _ = parser.parse_known_args()
 
         # If config file path is provided via command line, update the config_file field
         if args.config_file:
             self.config_file = args.config_file
-            # Load configuration from file
+        if self.config_file:
             self._load_from_file()
 
         # Set computed model directories and other derived values
@@ -214,17 +213,17 @@ class Config:
             self.policy_model_dir = os.path.join(self.local_scratch_model_base_path, "policy")
             self.reward_model_dir = os.path.join(self.local_scratch_model_base_path, "reward")
 
-        self.local_job_dir = os.path.join(LOCAL_SCRATCH_PATH, f"job_{self.job_id}")
+        self.local_job_dir = self.local_job_dir or os.path.join(LOCAL_SCRATCH_PATH, f"job_{self.job_id}")
         self.final_job_dir = os.path.join(self.output_dir, "detailed_logs", f"job_{self.job_id}")
         self.numeric_log_level = getattr(logging, self.log_level.upper(), logging.DEBUG)
 
         self.search_mode = self.search_mode.lower()
 
-        # limit the number of examples and choose them randomly (with replacement)
+        # Select and order prompt examples reproducibly.
+        rng = Random(self.seed)
         if self.num_examples > 0:
-            self.example_names = sample(self.example_names, k=self.num_examples)
-
-        shuffle(self.example_names)
+            self.example_names = rng.sample(self.example_names, k=self.num_examples)
+        rng.shuffle(self.example_names)
 
         # Handle search mode specific settings
         if self.search_mode == "bs":
@@ -241,31 +240,21 @@ class Config:
             os.environ["RSTAR_SUBPROCESS_EXECUTION"] = "0"
 
     def _load_from_file(self):
-        """
-        Load configuration settings from a YAML file
+        """Load YAML options relative to the checkout, accepting kebab-case keys."""
+        with open(os.path.join(PROJECT_PATH, self.config_file)) as f:
+            config_data = yaml.safe_load(f) or {}
 
-        This method:
-        1. Checks if the file exists (in configs/ or tmp_configs/ subfolder)
-        2. Loads and parses the YAML content
-        3. Updates the instance with values from the config file
-        """
-        try:
-            # Read and parse the YAML file
-            with open(os.path.join(PROJECT_PATH, self.config_file), 'r') as f:
-                config_data = yaml.safe_load(f) or {}
-
-            # Convert kebab-case keys to snake_case for Python compatibility
-            config_data = {k.replace('-', '_'): v for k, v in config_data.items()}
-
-            # Update instance attributes with values from config file
-            for key, value in config_data.items():
-                if hasattr(self, key):
-                    setattr(self, key, value)
-                    logging.debug(f"Loaded from {self.config_file}: {key}={value}")
-
-        except FileNotFoundError:
-            logging.error(f"Config file not found: {self.config_file}")
-            sys.exit(1)
-
-        except Exception as e:
-            logging.error(f"Error loading config file: {e}")
+        path_fields = {
+            "data_folder", "output_dir", "sft_data_dir", "task_dir",
+            "net_scratch_model_base_path", "local_scratch_model_base_path",
+            "local_job_dir",
+        }
+        for key, value in config_data.items():
+            key = key.replace("-", "_")
+            if key not in self.__dataclass_fields__:
+                raise ValueError(f"Unknown configuration option {key!r} in {self.config_file}")
+            if key in path_fields:
+                value = value.replace("${RSTAR_DATA_DIR}", NET_SCRATCH_TASK_DATA_DIR)
+                value = os.path.expanduser(os.path.expandvars(value))
+                value = os.path.join(PROJECT_PATH, value)
+            setattr(self, key, value)

@@ -22,7 +22,7 @@ max-seq-len: 18432
 max-tokens: 512
 dtype: "bfloat16"
 
-data-folder: "/itet-stor/piroth/net_scratch/task_data/training"
+data-folder: "${RSTAR_DATA_DIR}/training"
 sort-by-length: false
 length-pre-filtering: true
 
@@ -38,4 +38,3 @@ branching-factor: 8
 max-depth: 16
 
 batch-size: 40
-

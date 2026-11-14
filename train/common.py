@@ -1,3 +1,4 @@
+# Adapted from BARC; see THIRD_PARTY.md for attribution and upstream terms.
 """Common library for ARC"""
 
 import random
@@ -1058,7 +1059,6 @@ def _score_symmetry(grid, symmetry, ignore_colors, background=None):
     else:
         occupied_locations = np.argwhere((~np.isin(grid, ignore_colors)) & (grid != background))
 
-    n_occupied = occupied_locations.shape[0]
     transformed_x, transformed_y = symmetry.apply(occupied_locations[:, 0], occupied_locations[:, 1])
 
     # Check if the transformed locations are within the canvas
@@ -1076,19 +1076,6 @@ def _score_symmetry(grid, symmetry, ignore_colors, background=None):
 
     bad_mapping = np.sum((original_colors != transformed_colors) & (~np.isin(transformed_colors, ignore_colors)))
     perfect_mapping = np.sum(original_colors == transformed_colors)
-
-    # show the transformed canvas
-    transformed_grid = np.zeros_like(grid)
-    transformed_grid[transformed_x, transformed_y] = original_colors
-    # transformed_grid[occupied_locations[:,0], occupied_locations[:,0]] = original_colors
-
-    if False and bad_mapping == 0:
-        show_colored_grid(grid)
-        show_colored_grid(transformed_grid)
-        print("zero bad mapping, perfect ", perfect_mapping, "out of", n_occupied, "but this many off canvas",
-              off_canvas, "using", symmetry)
-        import pdb;
-        pdb.set_trace()
 
     return perfect_mapping, off_canvas, bad_mapping
 
@@ -1515,30 +1502,18 @@ def detect_objects(grid, _=None, predicate=None, background=Color.BLACK, monochr
                         candidate_object[i:i + n, j:j + m] = candidate_sprite
                         if not any(np.all(candidate_object == obj) for obj in objects):
                             scan_objects.append(candidate_object)
-        # print("scanning produced", len(scan_objects), "objects")
         objects.extend(scan_objects)
 
     if not can_overlap:
-        import time
-        start = time.time()
         # sort objects by size, breaking ties by mass
         objects.sort(key=lambda obj: (crop(obj, background).shape[0] * crop(obj, background).shape[1],
                                       np.sum(obj != background)), reverse=True)
         overlap_matrix = np.full((len(objects), len(objects)), False)
         object_masks = [obj != background for obj in objects]
-        object_bounding_boxes = [bounding_box(obj, background=background) for obj in object_masks]
         for i, obj1 in enumerate(object_masks):
-            for j, obj2 in enumerate(object_masks):
-                if i < j:
-                    # check if the bounding boxes overlap
-                    # FIXME: this doesn't work
-                    x1, y1, n1, m1 = object_bounding_boxes[i]
-                    x2, y2, n2, m2 = object_bounding_boxes[j]
-                    if True or x1 + n1 <= x2 or x2 + n2 <= x1 or y1 + m1 <= y2 or y2 + m2 <= y1:
-                        overlap_matrix[i, j] = np.any(obj1 & obj2)
-                        overlap_matrix[j, i] = overlap_matrix[i, j]
-        # print("time to compute overlaps", time.time() - start)
-        start = time.time()
+            for j in range(i + 1, len(object_masks)):
+                overlap_matrix[i, j] = np.any(obj1 & object_masks[j])
+                overlap_matrix[j, i] = overlap_matrix[i, j]
 
         # Pick a subset of objects that don't overlap and which cover as many pixels as possible
         # First, we definitely pick everything that doesn't have any overlaps
@@ -1584,7 +1559,6 @@ def detect_objects(grid, _=None, predicate=None, background=Color.BLACK, monochr
                 return without_index, without_goodness
 
         solution, _ = pick_objects(remaining_indices, [], np.zeros_like(grid, dtype=bool))
-        # print("time to pick objects", time.time() - start)
 
         objects = keep_objects + solution
 

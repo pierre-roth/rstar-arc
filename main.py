@@ -1,7 +1,7 @@
 import logging
+import os
 from datetime import datetime
 
-from rstar_deepthink import Solver
 from rstar_deepthink.agents import BS, MCTS, Custom, Bootstrap
 from rstar_deepthink.arc_task import load_tasks, filter_tasks_by_length
 from rstar_deepthink.config import Config
@@ -15,6 +15,11 @@ if __name__ == '__main__':
 
     # Create config object
     config = Config()
+
+    from rstar_deepthink import Solver
+
+    os.makedirs(config.local_job_dir, exist_ok=True)
+    os.makedirs(config.final_job_dir, exist_ok=True)
 
     # Setup logging
     setup_logging(config.numeric_log_level)

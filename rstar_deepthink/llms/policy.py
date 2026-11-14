@@ -2,8 +2,6 @@ import logging
 import os.path
 from datetime import datetime
 
-"""Removed static import of vllm. Import LLM and SamplingParams locally when needed."""
-
 from constants import STEP_END, CODE_END
 from rstar_deepthink.config import Config
 

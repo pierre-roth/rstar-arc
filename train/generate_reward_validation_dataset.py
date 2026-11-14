@@ -2,7 +2,6 @@ import os
 import sys
 
 # --- Project Setup ---
-# Assuming these imports work in the target environment
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if project_root not in sys.path:
     sys.path.append(project_root)
@@ -12,7 +11,7 @@ from rstar_deepthink.config import Config
 # remove_markers is specific to rstar_deepthink, keep it if solutions have markers
 # from rstar_deepthink.tools.python_tool import remove_markers
 from utils import setup_logging
-from data_utils import *
+from train.data_utils import *
 
 logger = logging.getLogger(__name__)
 

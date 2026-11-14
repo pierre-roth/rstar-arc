@@ -17,7 +17,7 @@ max-seq-len: 14336
 max-tokens: 512
 dtype: "bfloat16"
 
-data-folder: "/itet-stor/piroth/net_scratch/task_data/training_synthetic/training_synthetic_1"
+data-folder: "${RSTAR_DATA_DIR}/training_synthetic/training_synthetic_1"
 sort-by-length: false
 length-pre-filtering: true
 
@@ -30,4 +30,3 @@ branching-factor: 8
 max-depth: 16
 
 batch-size: 40
-

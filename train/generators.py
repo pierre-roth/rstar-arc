@@ -1,7 +1,8 @@
+# Adapted from RE-ARC; see THIRD_PARTY.md for attribution and upstream terms.
 from random import choice, sample, randint, shuffle
 
-from dsl import *
-from rearc_utils import unifint
+from train.dsl import *
+from train.rearc_utils import unifint
 
 
 def generate_dbc1a6ce(diff_lb: float, diff_ub: float) -> dict:

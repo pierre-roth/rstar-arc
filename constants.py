@@ -1,20 +1,20 @@
-ETH_USERNAME = "piroth"
+"""Research prompts, execution limits, and paths shared by the experiments."""
 
-HOME_PATH = f"/home/{ETH_USERNAME}"  # home directory
-PROJECT_PATH = f"{HOME_PATH}/rstar-arc"  # project root directory
+import os
+from pathlib import Path
 
-NET_SCRATCH_PATH = f"/itet-stor/{ETH_USERNAME}/net_scratch"  # net-scratch directory
-LOCAL_SCRATCH_PATH = f"/scratch/{ETH_USERNAME}"  # local scratch directory
-SECOND_LOCAL_SCRATCH_PATH = f"/scratch-second/{ETH_USERNAME}"  # second local scratch directory (doesn't exist on all nodes)
+PROJECT_PATH = str(Path(__file__).resolve().parent)
+NET_SCRATCH_PATH = os.path.expanduser(os.getenv("RSTAR_STORAGE_DIR", f"{PROJECT_PATH}/artifacts"))
+LOCAL_SCRATCH_PATH = os.path.expanduser(os.getenv("RSTAR_SCRATCH_DIR", f"{NET_SCRATCH_PATH}/scratch"))
 
-DATA_SAMPLE_DIR = f"{PROJECT_PATH}/data_sample"  # path for sample data in git repo
+DATA_SAMPLE_DIR = f"{PROJECT_PATH}/data_sample"
 DEFAULT_DATA_FOLDER = f"{DATA_SAMPLE_DIR}/default"
-EXAMPLE_DATA_FOLDER = f"{DATA_SAMPLE_DIR}/examples"  # path to prompt examples
+EXAMPLE_DATA_FOLDER = f"{DATA_SAMPLE_DIR}/examples"
 
-NET_SCRATCH_MODEL_DIR = f"{NET_SCRATCH_PATH}/models"  # path for model in net-scratch
-NET_SCRATCH_SFT_DATA_DIR = f"{NET_SCRATCH_PATH}/sft_data"  # path for sft data in net-scratch
-NET_SCRATCH_TASK_DATA_DIR = f"{NET_SCRATCH_PATH}/task_data"  # path for task data in net-scratch
-NET_SCRATCH_RE_ARC_DATA = f"{NET_SCRATCH_PATH}/re_arc"  # path to the re_arc directory
+NET_SCRATCH_MODEL_DIR = f"{NET_SCRATCH_PATH}/models"
+NET_SCRATCH_SFT_DATA_DIR = f"{NET_SCRATCH_PATH}/sft_data"
+NET_SCRATCH_TASK_DATA_DIR = os.path.expanduser(os.getenv("RSTAR_DATA_DIR", f"{NET_SCRATCH_PATH}/task_data"))
+NET_SCRATCH_RE_ARC_DATA = f"{NET_SCRATCH_PATH}/re_arc"
 
 CPU_TIMEOUT_SECONDS = 10  # Maximum cpu time allowed for code execution
 WALL_TIMEOUT_SECONDS = 60  # Maximum wall time allowed for code execution

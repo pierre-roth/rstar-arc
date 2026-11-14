@@ -1,4 +1,5 @@
-from dsl import *
+# Adapted from RE-ARC; see THIRD_PARTY.md for attribution and upstream terms.
+from train.dsl import *
 
 
 def verify_007bbfb7(I: Grid) -> Grid:

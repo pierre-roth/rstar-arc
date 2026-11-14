@@ -6,7 +6,7 @@ Filter a JSON‑Lines task file, keeping only rows whose `solution_code` passes
 Usage
 -----
 ```bash
-python filter_tasks_to_jsonl.py \
+python train/filter_dataset.py \
        --input  /path/to/input_dataset.jsonl \
        --output /path/to/filtered_dataset.jsonl \
        --max-workers 16
@@ -24,7 +24,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Tuple
 
 from datasets import Dataset  # Used only to leverage renormalize_task_weights
-# Assume this helper is available in the environment as requested.
 
 # ------------------- project imports -------------------
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -32,7 +31,7 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from rstar_deepthink.tools import verify_prefixes_and_code
-from train_utils import renormalize_task_weights
+from train.train_utils import renormalize_task_weights
 
 logger = logging.getLogger(__name__)
 

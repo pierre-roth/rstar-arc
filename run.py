@@ -1,4 +1,8 @@
+"""Interactive SLURM launcher for the ETH TIK research environment."""
+
 import argparse
+import getpass
+import shlex
 import os
 import subprocess
 import sys
@@ -9,27 +13,26 @@ from typing import Any, Optional
 import questionary
 import yaml
 
-# Dynamically find python scripts that are likely targets for sbatch
+from constants import NET_SCRATCH_PATH
+
+# Entry points available to the interactive launcher.
 PROJECT_ROOT = Path(__file__).parent.resolve()
 
-# Add scripts explicitly found in the run_*.sh files (even if not found dynamically)
-# Add more here if needed
 SCRIPTS = [
     "main.py",
     "train/augment_policy_data.py",
     "train/generate_policy_training_dataset.py",
     "train/generate_policy_validation_dataset.py",
     "train/train_policy.py",
-    "train/better_policy_training.py",
-    "test/merge_policy_lora.py",
-    "test/simple_inference.py",
+    "train/train_policy_distributed.py",
+    "scripts/merge_policy_lora.py",
+    "scripts/simple_inference.py",
     "train/augment_reward_data.py",
     "train/generate_reward_training_dataset.py",
     "train/generate_reward_validation_dataset.py",
     "train/train_reward.py",
-    "train/train_reward_2.py",
-    "train/better_reward_training.py",
-    "test/merge_reward_lora.py"
+    "train/train_reward_full.py",
+    "scripts/merge_reward_lora.py"
 ]
 
 # --- SLURM Defaults ---
@@ -127,7 +130,6 @@ def main():
             with open(args.config_file, "r") as f:
                 yaml_config = yaml.safe_load(f)
                 # Simple merge: YAML values override defaults
-                # More sophisticated merging could be added here if needed
                 if 'script' in yaml_config:
                     config['script'] = yaml_config['script']
                 if 'slurm' in yaml_config:
@@ -248,10 +250,12 @@ def main():
             validate=lambda text: text.isdigit() and int(text) > 0 or "Please enter a positive number",
         ))
 
+    command = "accelerate launch" if config["script"] == "train/train_policy_distributed.py" else "python"
+
     sbatch_script_content = f"""#!/bin/bash
 #SBATCH --mail-type=NONE # mail configuration: NONE, BEGIN, END, FAIL, REQUEUE, ALL
-#SBATCH --output=/itet-stor/piroth/net_scratch/outputs/jobs/%j.out # Keep minimal SLURM logging
-#SBATCH --error=/itet-stor/piroth/net_scratch/outputs/jobs/%j.err # Keep minimal SLURM logging
+#SBATCH --output={NET_SCRATCH_PATH}/outputs/jobs/%j.out # Keep minimal SLURM logging
+#SBATCH --error={NET_SCRATCH_PATH}/outputs/jobs/%j.err # Keep minimal SLURM logging
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task={config['slurm']['cpus_per_task']}
 #SBATCH --mem={config['slurm']['mem']}
@@ -263,11 +267,12 @@ def main():
         sbatch_script_content += f"#SBATCH --constraint='{config['slurm']['gpu_type']}'\n"
 
     sbatch_script_content += f"""
-ETH_USERNAME=piroth
-PROJECT_NAME=rstar-arc
-DIRECTORY=/home/${{ETH_USERNAME}}/${{PROJECT_NAME}}
+ETH_USERNAME={shlex.quote(getpass.getuser())}
+DIRECTORY={shlex.quote(str(PROJECT_ROOT))}
 CONDA_ENVIRONMENT={config['env']['conda_env']}
-NET_SCRATCH_PATH=/itet-stor/${{ETH_USERNAME}}/net_scratch
+NET_SCRATCH_PATH={shlex.quote(NET_SCRATCH_PATH)}
+export RSTAR_STORAGE_DIR="$NET_SCRATCH_PATH"
+export RSTAR_SCRATCH_DIR="/scratch/${{ETH_USERNAME}}"
 """
 
     if config["env"]["install_python"]:
@@ -304,7 +309,7 @@ echo "Base scratch directory OK."
 # Set up local scratch directories for job output and models
 local_models_dir="/scratch/${{ETH_USERNAME}}/models"
 local_job_dir="/scratch/${{ETH_USERNAME}}/job_${{SLURM_JOB_ID}}" # Node-local ephemeral job data
-final_job_dir="/itet-stor/${{ETH_USERNAME}}/net_scratch/outputs/detailed_logs/job_${{SLURM_JOB_ID}}" # Persistent logs
+final_job_dir="${{NET_SCRATCH_PATH}}/outputs/detailed_logs/job_${{SLURM_JOB_ID}}" # Persistent logs
 
 # Create local scratch model directory
 if ! mkdir -p "${{local_models_dir}}"; then
@@ -336,8 +341,8 @@ echo "Transferring logs and cleaning up..."; \\
 mkdir -p "${{final_job_dir}}"; \\
 rsync -av --inplace "${{local_job_dir}}/" "${{final_job_dir}}/"; \\
 \\
-slurm_out_file="/itet-stor/piroth/net_scratch/outputs/jobs/${{SLURM_JOB_ID}}.out"; \\
-slurm_err_file="/itet-stor/piroth/net_scratch/outputs/jobs/${{SLURM_JOB_ID}}.err"; \\
+slurm_out_file="${{NET_SCRATCH_PATH}}/outputs/jobs/${{SLURM_JOB_ID}}.out"; \\
+slurm_err_file="${{NET_SCRATCH_PATH}}/outputs/jobs/${{SLURM_JOB_ID}}.err"; \\
 if [[ -f "$slurm_out_file" && -f "$slurm_err_file" ]]; then \\
     if cp "$slurm_out_file" "${{final_job_dir}}/slurm.out" && \\
        cp "$slurm_err_file" "${{final_job_dir}}/slurm.err"; then \\
@@ -532,7 +537,7 @@ export HF_DATASETS_CACHE="/scratch/${{ETH_USERNAME}}/.cache/huggingface/datasets
 export VLLM_NO_USAGE_STATS=1
 
 # Execute the Python application with output redirected to local scratch
-echo "Running: python {config["script"]} {f"--config-file {config['yaml_config']}" if config['yaml_config'] != 'none' else ""} {config['script_args']}" | tee -a "${{local_job_dir}}/job_info.log"
+echo "Running: {command} {config["script"]} {f"--config-file {config['yaml_config']}" if config['yaml_config'] != 'none' else ""} {config['script_args']}" | tee -a "${{local_job_dir}}/job_info.log"
 
 # Setting relevant environment variables for the main application
 export VLLM_LOGGING_LEVEL=INFO
@@ -540,7 +545,7 @@ export TOKENIZERS_PARALLELISM=true
 
 # Run the program with output going to local scratch
 # The main program will use the SUBPROCESS_PYTHON_EXEC environment variable internally
-python {config["script"]} {f"--config-file {config['yaml_config']}" if config['yaml_config'] != 'none' else ""} {config['script_args']} > "${{local_job_dir}}/program_output.log" 2> "${{local_job_dir}}/program_error.log"
+{command} {config["script"]} {f"--config-file {config['yaml_config']}" if config['yaml_config'] != 'none' else ""} {config['script_args']} > "${{local_job_dir}}/program_output.log" 2> "${{local_job_dir}}/program_error.log"
 EXIT_CODE=$?
 
 # Send completion information to both SLURM log and our detailed log
@@ -566,6 +571,7 @@ exit ${{EXIT_CODE}}
     submit_job = ask_question("confirm", "Submit this job to SLURM?", default=True)
 
     if submit_job:
+        os.makedirs(os.path.join(NET_SCRATCH_PATH, "outputs", "jobs"), exist_ok=True)
         temp_script_path = None
         try:
             # Use a temporary file for the sbatch script

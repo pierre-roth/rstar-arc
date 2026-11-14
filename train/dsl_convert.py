@@ -13,24 +13,23 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if project_root not in sys.path:
     sys.path.append(project_root)
 
-from constants import CODE, CODE_END, STEP_END
+from constants import CODE, CODE_END, STEP_END, NET_SCRATCH_SFT_DATA_DIR
 from utils import setup_logging
-from data_utils import write_batch_data
+from train.data_utils import write_batch_data
 from rstar_deepthink.tools import verify_prefixes_and_code
 
 logger = logging.getLogger(__name__)
 
 # --- CONFIGURATION ---
 # Hardcode configuration variables for easy modification.
-# DATASET_PATH = "/Users/piroth/Downloads/round_2_2/policy_dataset_validation.jsonl"
-DATASET_PATH = "/Users/piroth/Downloads/dsl_convertable.jsonl"
+DATASET_PATH = os.path.join(NET_SCRATCH_SFT_DATA_DIR, "dsl_convertable.jsonl")
 MODEL_NAME = "o4-mini"
 # MODEL_NAME = "gpt-4.1"
 # MODEL_NAME = "google/gemini-2.5-flash-preview-05-20"
 REASONING_EFFORT = "high"  # "low", "medium", or "high"
 MAX_WORKERS = 1  # Number of parallel requests to the API
-OUTPUT_FILE = "/Users/piroth/Downloads/additional_dsl_dataset.jsonl"
-PROCESSED_TASKS_FILE = "/Users/piroth/Downloads/additional_dsl_processed_tasks.txt"
+OUTPUT_FILE = os.path.join(NET_SCRATCH_SFT_DATA_DIR, "additional_dsl_dataset.jsonl")
+PROCESSED_TASKS_FILE = os.path.join(NET_SCRATCH_SFT_DATA_DIR, "additional_dsl_processed_tasks.txt")
 
 OPENAI_MODELS = ["o4-mini", "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano", "o3"]
 
@@ -239,7 +238,6 @@ def process_item(args: Tuple[int, Dict], client: OpenAI, processed_tasks: Set[st
 
     except Exception as e:
         # Catch any other exception during processing
-        # print(f"Error processing task {task_name}: {e}")
         # traceback.print_exc()
         return False, {"index": str(index), "task_name": task_name, "error": str(e)}
 
@@ -252,6 +250,8 @@ def main():
     """
     setup_logging(logging.INFO)
     logger.info("--- Starting Dataset Reformatting Script ---")
+
+    os.makedirs(NET_SCRATCH_SFT_DATA_DIR, exist_ok=True)
 
     # Load API key from environment
     openai_api_key = os.getenv("OPENAI_API_KEY")
@@ -303,7 +303,6 @@ def main():
                         attempted_count += 1
                         success, result_data = fut.result()
                         if success:
-                            # print(success, result_data['original_task_name'], result_data['solution_code'])
                             success_count += 1
                             processed_lines.add(result_data['index'])
                             save_processed_task(result_data['index'], PROCESSED_TASKS_FILE)
@@ -331,7 +330,6 @@ def main():
                     attempted_count += 1
                     success, result_data = fut.result()
                     if success:
-                        # print(success, result_data['original_task_name'], result_data['solution_code'])
                         success_count += 1
                         processed_lines.add(result_data['index'])
                         save_processed_task(result_data['index'], PROCESSED_TASKS_FILE)

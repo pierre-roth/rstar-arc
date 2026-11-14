@@ -1,7 +1,6 @@
 import logging
 from random import choice
 
-# Removed static import of RequestOutput to avoid heavy dependency at module import.
 
 from constants import SFT_SYSTEM_PROMPT, SFT_IN_BETWEEN_PROMPT, CODE_PREFIX, BOOTSTRAP_SYSTEM_PROMPT, \
     BOOTSTRAP_TASK_PROMPT

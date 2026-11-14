@@ -6,7 +6,6 @@ import subprocess
 import sys
 import textwrap
 
-# import numpy as np
 
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if project_root not in sys.path:
@@ -23,17 +22,7 @@ GLOBAL_IMPORTS = (
 )
 
 
-# --- Get the path for the subprocess python ---
-SUBPROCESS_PYTHON_PATH = os.environ.get("SUBPROCESS_PYTHON_EXEC")
-
-if SUBPROCESS_PYTHON_PATH:
-    logger.info(f"Using subprocess Python executable: {SUBPROCESS_PYTHON_PATH}")
-else:
-    SUBPROCESS_PYTHON_PATH = "python3"
-    logger.info(
-        "SUBPROCESS_PYTHON_EXEC environment variable not set. "
-        f"Falling back to '{SUBPROCESS_PYTHON_PATH}'. Subprocess performance might be suboptimal."
-    )
+SUBPROCESS_PYTHON_PATH = os.environ.get("SUBPROCESS_PYTHON_EXEC", sys.executable)
 
 
 def remove_markers(code):
@@ -107,7 +96,6 @@ def execute_code_in_subprocess(code_str, input_grids, expected_outputs):
                     # Convert numpy arrays to lists for JSON serialization
                     if hasattr(grid_result, 'tolist'):
                         grid_result = grid_result.tolist()
-                    # Basic grid validation could be added here if needed
                     
                     if grid_result is not None:
                         if not (isinstance(grid_result, list) and all(isinstance(row, list) for row in grid_result)):

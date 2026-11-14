@@ -15,7 +15,7 @@ max-seq-len: 14336
 max-tokens: 512
 dtype: "bfloat16"
 
-data-folder: "/home/piroth/rstar-arc/data_sample/easy"
+data-folder: "data_sample/easy"
 sort-by-length: false
 length-pre-filtering: true
 
@@ -28,4 +28,3 @@ branching-factor: 8
 max-depth: 16
 
 batch-size: 40
-

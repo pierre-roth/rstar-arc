@@ -28,7 +28,7 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from train_utils import maybe_peft_wrap, renormalize_task_weights
+from train.train_utils import maybe_peft_wrap, renormalize_task_weights
 from constants import (
     NET_SCRATCH_PATH,
     LOCAL_SCRATCH_PATH,
@@ -36,8 +36,8 @@ from constants import (
     SFT_IN_BETWEEN_PROMPT,
     SPECIAL_TOKENS,
 )
-from rstar_deepthink import Config  # Project-specific Config class
-from utils import setup_logging  # Project-specific logging setup
+from rstar_deepthink import Config
+from utils import setup_logging
 from rstar_deepthink.llms.reward import RewardModelModule  # The model being trained
 from rstar_deepthink.arc_task import ARCTask  # Project-specific task representation
 from rstar_deepthink.arc_task.task_utils import task_to_prompt  # Utility for task formatting
@@ -158,7 +158,7 @@ def preprocess_for_pairwise_pref(
     for task_json, prefix, chosen_completion, rejected_completion, weight_val in zip(
             examples["task_json"], examples["prefix"], examples["chosen"], examples["rejected"], examples["weight"]
     ):
-        task = ARCTask.from_dict(task_json)  # Assuming task_json is a string needing parsing
+        task = ARCTask.from_dict(task_json)
         task_prompt_segment = task_to_prompt(task)
 
         # Construct full prompts

@@ -1,9 +1,10 @@
+# Adapted from RE-ARC; see THIRD_PARTY.md for attribution and upstream terms.
 from random import uniform
 
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap, Normalize
 
-from dsl import *
+from train.dsl import *
 
 global rng
 rng = []

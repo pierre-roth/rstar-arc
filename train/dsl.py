@@ -1,3 +1,4 @@
+# Adapted from RE-ARC / ARC-DSL; see THIRD_PARTY.md for attribution and upstream terms.
 # types
 
 

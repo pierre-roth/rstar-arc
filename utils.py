@@ -141,6 +141,10 @@ def load_nodes(filename):
         # Create a new instance without calling __init__
         node_instance = Node.__new__(Node)
         node_instance.__dict__.update(state)
+        # Rehydrate configuration without parsing CLI arguments or changing the environment.
+        config = Config.__new__(Config)
+        config.__dict__.update(state["config"])
+        node_instance.config = config
         nodes_by_tag[tag] = node_instance
 
     # Second pass: fix up parent and children references.

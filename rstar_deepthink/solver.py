@@ -2,7 +2,6 @@ import logging
 
 from pebble import ProcessPool
 from tqdm import tqdm
-# Removed static import of RequestOutput to avoid heavy dependency at module import.
 
 # noinspection PyUnresolvedReferences
 from rstar_deepthink.agents import Agent, temperature_lerp, temperature_beta_cdf

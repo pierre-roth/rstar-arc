@@ -6,11 +6,10 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if project_root not in sys.path:
     sys.path.append(project_root)
 
-# Assuming these imports work in the target environment
 from constants import NET_SCRATCH_TASK_DATA_DIR
 from rstar_deepthink.config import Config
 from utils import setup_logging
-from data_utils import *
+from train.data_utils import *
 
 logger = logging.getLogger(__name__)
 

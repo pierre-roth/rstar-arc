@@ -19,7 +19,7 @@ from constants import NET_SCRATCH_TASK_DATA_DIR, NET_SCRATCH_RE_ARC_DATA
 from rstar_deepthink.config import Config
 # remove_markers is specific to rstar_deepthink, keep it if solutions have markers
 from utils import setup_logging
-from data_utils import *
+from train.data_utils import *
 
 logger = logging.getLogger(__name__)
 # Disable subprocess execution to verify examples a lot faster!
